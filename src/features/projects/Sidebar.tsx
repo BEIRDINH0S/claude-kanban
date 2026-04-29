@@ -1,4 +1,18 @@
 import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   Eye,
   EyeOff,
   Lock,
@@ -37,10 +51,29 @@ export function Sidebar() {
   const projects = useProjectsStore((s) => s.projects);
   const remove = useProjectsStore((s) => s.remove);
   const rename = useProjectsStore((s) => s.rename);
+  const reorder = useProjectsStore((s) => s.reorder);
   const activeId = useUiStore((s) => s.activeProjectId);
   const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
+
+  // Local sensors for the sidebar's own DndContext — Board has its own
+  // (cards), they don't overlap because their useSortable items live in
+  // disjoint regions of the screen.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const ids = projects.map((p) => p.id);
+    const fromIdx = ids.indexOf(String(active.id));
+    const toIdx = ids.indexOf(String(over.id));
+    if (fromIdx === -1 || toIdx === -1) return;
+    ids.splice(toIdx, 0, ids.splice(fromIdx, 1)[0]);
+    void reorder(ids);
+  };
   const [createOpen, setCreateOpen] = useState(false);
   const [hideArchived, setHideArchived] = useState(readHideArchived);
   const visibleProjects = hideArchived
@@ -105,22 +138,31 @@ export function Sidebar() {
       </header>
 
       <div className="flex flex-1 flex-col overflow-y-auto px-2 pb-2">
-        <ul className="flex flex-col gap-0.5">
-          {visibleProjects.map((p) => (
-            <li key={p.id}>
-              <ProjectRow
-                project={p}
-                active={view === "board" && p.id === activeId}
-                onSelect={() => setActiveProjectId(p.id)}
-                onRename={(next) => rename(p.id, next)}
-                onDelete={() => handleDelete(p)}
-              />
-            </li>
-          ))}
-          <li>
-            <NewProjectRow onClick={() => setCreateOpen(true)} />
-          </li>
-        </ul>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={visibleProjects.map((p) => p.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <ul className="flex flex-col gap-0.5">
+              {visibleProjects.map((p) => (
+                <li key={p.id}>
+                  <SortableProjectRow
+                    project={p}
+                    active={view === "board" && p.id === activeId}
+                    onSelect={() => setActiveProjectId(p.id)}
+                    onRename={(next) => rename(p.id, next)}
+                    onDelete={() => handleDelete(p)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
+        <NewProjectRow onClick={() => setCreateOpen(true)} />
       </div>
 
       {/* Bottom nav: app-level destinations and small actions, separated by
@@ -155,6 +197,24 @@ interface ProjectRowProps {
   onSelect: () => void;
   onRename: (next: string) => Promise<void> | void;
   onDelete: () => void;
+}
+
+/** Wraps ProjectRow in dnd-kit's useSortable so the user can drag projects to
+ * reorder them. The drag listener is bound to the row root; click still
+ * works because PointerSensor needs 4px of movement before activating. */
+function SortableProjectRow(props: ProjectRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.project.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition ?? "transform 200ms ease-out",
+    opacity: isDragging ? 0.4 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <ProjectRow {...props} />
+    </div>
+  );
 }
 
 function ProjectRow({

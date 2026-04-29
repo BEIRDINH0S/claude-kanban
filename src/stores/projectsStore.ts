@@ -5,6 +5,7 @@ import {
   deleteProject,
   listProjects,
   renameProject,
+  reorderProjects,
 } from "../ipc/projects";
 import type { Project } from "../types/project";
 
@@ -17,6 +18,7 @@ interface ProjectsState {
   create: (name: string) => Promise<Project>;
   rename: (id: string, name: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  reorder: (ids: string[]) => Promise<void>;
 }
 
 export const useProjectsStore = create<ProjectsState>((set, get) => ({
@@ -57,6 +59,25 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
     } catch (e) {
       set({ projects: previous, error: String(e) });
       throw e;
+    }
+  },
+
+  reorder: async (ids) => {
+    const previous = get().projects;
+    // Optimistic: rewrite the in-memory list in the new order with dense
+    // positions so the sidebar feels instant.
+    const byId = new Map(previous.map((p) => [p.id, p]));
+    const next = ids
+      .map((id, idx) => {
+        const p = byId.get(id);
+        return p ? { ...p, position: idx } : null;
+      })
+      .filter((p): p is Project => p !== null);
+    set({ projects: next });
+    try {
+      await reorderProjects(ids);
+    } catch (e) {
+      set({ projects: previous, error: String(e) });
     }
   },
 }));

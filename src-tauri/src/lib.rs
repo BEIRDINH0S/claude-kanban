@@ -48,6 +48,7 @@ pub fn run() {
             commands::projects::create_project,
             commands::projects::rename_project,
             commands::projects::delete_project,
+            commands::projects::reorder_projects,
             commands::backup::export_project_to_file,
             commands::backup::import_project_from_file,
             commands::sessions::start_session,

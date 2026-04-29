@@ -5,4 +5,6 @@ export interface Project {
   updatedAt: number;
   /** Imported / read-only project: UI hides creation/drag affordances. */
   archived: boolean;
+  /** User-controlled order in the sidebar (dense, 0..n-1). */
+  position: number;
 }

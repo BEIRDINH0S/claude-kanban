@@ -49,6 +49,18 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
     "#,
+
+    // v4 — manual ordering of projects in the sidebar. Existing rows are
+    // backfilled in creation order so the visual order is preserved on
+    // first run after migration.
+    r#"
+    ALTER TABLE projects ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+    UPDATE projects SET position = (
+        SELECT COUNT(*) FROM projects p2
+         WHERE p2.created_at < projects.created_at
+            OR (p2.created_at = projects.created_at AND p2.id < projects.id)
+    );
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {

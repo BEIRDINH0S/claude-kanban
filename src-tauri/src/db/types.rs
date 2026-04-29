@@ -60,4 +60,6 @@ pub struct Project {
     /// Imported projects land archived: read-only snapshots. The UI hides
     /// creation/drag affordances; the Rust mutation commands refuse to act.
     pub archived: bool,
+    /// Manual sidebar ordering. Dense 0..n-1, set by `reorder_projects`.
+    pub position: i64,
 }

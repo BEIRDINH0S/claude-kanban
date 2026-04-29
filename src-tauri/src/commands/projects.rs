@@ -21,6 +21,7 @@ fn map_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         archived: archived_int != 0,
+        position: row.get("position").unwrap_or(0),
     })
 }
 
@@ -29,15 +30,37 @@ pub fn list_projects(state: State<DbState>) -> Result<Vec<Project>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, created_at, updated_at, archived
+            "SELECT id, name, created_at, updated_at, archived, position
                FROM projects
-              ORDER BY archived, created_at, id",
+              ORDER BY position, created_at, id",
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], map_project)
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+/// Persist the user's drag-reorder of the sidebar. The full list of project
+/// ids in their new order is sent so we can rewrite positions densely
+/// (0..n-1) in a single transaction without juggling deltas.
+#[tauri::command]
+pub fn reorder_projects(
+    state: State<DbState>,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    let mut conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let now = now_ms();
+    for (idx, id) in ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE projects SET position = ?1, updated_at = ?2 WHERE id = ?3",
+            params![idx as i64, now, id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -56,12 +79,29 @@ pub fn create_project(state: State<DbState>, name: String) -> Result<Project, St
     )
     .map_err(|e| e.to_string())?;
 
+    // Append to the end of the sidebar order. Skipping a separate query
+    // for MAX(position) here is fine since INSERT defaults position to 0;
+    // we patch it up below.
+    let next_pos: i64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(position) + 1, 0) FROM projects",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    conn.execute(
+        "UPDATE projects SET position = ?1 WHERE id = ?2",
+        params![next_pos, &id],
+    )
+    .map_err(|e| e.to_string())?;
+
     Ok(Project {
         id,
         name,
         created_at: now,
         updated_at: now,
         archived: false,
+        position: next_pos,
     })
 }
 

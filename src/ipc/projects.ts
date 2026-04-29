@@ -17,3 +17,7 @@ export function renameProject(id: string, name: string): Promise<void> {
 export function deleteProject(id: string): Promise<void> {
   return invoke<void>("delete_project", { id });
 }
+
+export function reorderProjects(ids: string[]): Promise<void> {
+  return invoke<void>("reorder_projects", { ids });
+}

@@ -139,13 +139,22 @@ pub fn import_project_from_file(
     let new_project_id = uuid::Uuid::new_v4().to_string();
     let imported_name = format!("{} (importé)", dump.project.name);
 
+    // Append to the end of the sidebar so existing user ordering survives.
+    let next_pos: i64 = tx
+        .query_row(
+            "SELECT COALESCE(MAX(position) + 1, 0) FROM projects",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+
     // archived = 1 → read-only snapshot. The mutation commands and the UI
     // both honor this flag so the imported board can be inspected but not
     // acted on (no new cards, no drag, no Claude session).
     tx.execute(
-        "INSERT INTO projects (id, name, created_at, updated_at, archived) \
-         VALUES (?1, ?2, ?3, ?3, 1)",
-        params![&new_project_id, &imported_name, now],
+        "INSERT INTO projects (id, name, created_at, updated_at, archived, position) \
+         VALUES (?1, ?2, ?3, ?3, 1, ?4)",
+        params![&new_project_id, &imported_name, now, next_pos],
     )
     .map_err(|e| e.to_string())?;
 
@@ -187,5 +196,6 @@ pub fn import_project_from_file(
         created_at: now,
         updated_at: now,
         archived: true,
+        position: next_pos,
     })
 }
