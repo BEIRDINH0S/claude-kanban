@@ -29,6 +29,7 @@ async function ensureNotifPermission(): Promise<boolean> {
 }
 
 import { Board } from "./features/kanban/Board";
+import { CommandPalette } from "./features/palette/CommandPalette";
 import { ZoomView } from "./features/session/ZoomView";
 import { ToastStack } from "./features/toasts/ToastStack";
 import { useCardsStore } from "./stores/cardsStore";
@@ -72,6 +73,18 @@ interface BinaryStatusPayload {
 }
 
 function App() {
+  // Cmd+K (or Ctrl+K) opens the command palette from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        useUiStore.getState().togglePalette();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Boot sequence: load projects, settle on an active one, let the cardsStore
   // subscription kick off the cards fetch for that project.
   useEffect(() => {
@@ -208,6 +221,7 @@ function App() {
     <main className="h-full w-full">
       <Board />
       <ZoomView />
+      <CommandPalette />
       <ToastStack />
     </main>
   );

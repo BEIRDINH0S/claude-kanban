@@ -53,6 +53,8 @@ interface UiState {
   view: CentralView;
   /** Sidebar collapsed = icon-only. Persisted in localStorage. */
   sidebarCollapsed: boolean;
+  /** Cmd+K palette open state. Not persisted. */
+  paletteOpen: boolean;
 
   openZoom: (cardId: string) => void;
   closeZoom: () => void;
@@ -61,6 +63,8 @@ interface UiState {
   setActiveProjectId: (id: string | null) => void;
   setView: (view: CentralView) => void;
   toggleSidebar: () => void;
+  setPaletteOpen: (open: boolean) => void;
+  togglePalette: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -69,6 +73,7 @@ export const useUiStore = create<UiState>((set) => ({
   activeProjectId: readActiveProject(),
   view: "board",
   sidebarCollapsed: readSidebarCollapsed(),
+  paletteOpen: false,
 
   openZoom: (cardId) => set({ zoomedCardId: cardId }),
   closeZoom: () => set({ zoomedCardId: null }),
@@ -103,4 +108,7 @@ export const useUiStore = create<UiState>((set) => ({
       writeSidebarCollapsed(next);
       return { sidebarCollapsed: next };
     }),
+
+  setPaletteOpen: (open) => set({ paletteOpen: open }),
+  togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
 }));

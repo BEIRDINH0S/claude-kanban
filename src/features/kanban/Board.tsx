@@ -10,7 +10,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { CreateCardModal } from "../card-create/CreateCardModal";
 import { Sidebar } from "../projects/Sidebar";
@@ -32,6 +32,14 @@ export function Board() {
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Bus event from the command palette ("Nouvelle tâche") — opens the same
+  // modal the BoardHeader button does, so all entry points converge.
+  useEffect(() => {
+    const onOpen = () => setCreateOpen(true);
+    window.addEventListener("claude-kanban:new-task", onOpen);
+    return () => window.removeEventListener("claude-kanban:new-task", onOpen);
+  }, []);
 
   // Cards loading is driven by the active-project subscription in cardsStore,
   // and by the boot sequence in App.tsx. No effect needed here.
