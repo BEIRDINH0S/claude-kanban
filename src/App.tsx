@@ -32,6 +32,7 @@ import { Board } from "./features/kanban/Board";
 import { CommandPalette } from "./features/palette/CommandPalette";
 import { ZoomView } from "./features/session/ZoomView";
 import { ToastStack } from "./features/toasts/ToastStack";
+import { readNotifyOnTurnEnd } from "./lib/prefs";
 import { useCardsStore } from "./stores/cardsStore";
 import { useCostsStore } from "./stores/costsStore";
 import { useErrorsStore } from "./stores/errorsStore";
@@ -51,6 +52,13 @@ interface SessionEventPayload {
 
 interface PermissionRequestPayload {
   requestId: string;
+  sessionId: string | null;
+  cardId: string | null;
+  toolName: string;
+  input: unknown;
+}
+
+interface PermissionAutoApprovedPayload {
   sessionId: string | null;
   cardId: string | null;
   toolName: string;
@@ -130,7 +138,43 @@ function App() {
           if (typeof cost === "number" && cost > 0) {
             useCostsStore.getState().add(cardId, cost);
           }
+          // Tell the user a turn finished — but only if they're not already
+          // looking at this card, and they haven't opted out.
+          if (
+            useUiStore.getState().zoomedCardId !== cardId &&
+            readNotifyOnTurnEnd()
+          ) {
+            const card = useCardsStore
+              .getState()
+              .cards.find((c) => c.id === cardId);
+            const title = card
+              ? `Claude a fini · ${card.title}`
+              : "Claude a fini";
+            const body =
+              typeof cost === "number" && cost > 0
+                ? `Tour terminé · $${cost.toFixed(4)}`
+                : "Tour terminé.";
+            void ensureNotifPermission().then((ok) => {
+              if (ok) sendNotification({ title, body });
+            });
+          }
         }
+      },
+    );
+
+    // Auto-approve hits: Rust matched the call against a user rule and
+    // already responded `allow` to the sidecar. We synthesize a transcript
+    // entry so the user sees what was let through.
+    const unlistenAutoApproved = listen<PermissionAutoApprovedPayload>(
+      "permission-auto-approved",
+      (e) => {
+        const { cardId, toolName, input } = e.payload;
+        if (!cardId) return;
+        useMessagesStore.getState().appendSdkEvent(cardId, {
+          type: "auto_approved",
+          tool_name: toolName,
+          input,
+        } as SdkEvent);
       },
     );
 
@@ -209,6 +253,7 @@ function App() {
     return () => {
       void unlistenCards.then((fn) => fn());
       void unlistenEvents.then((fn) => fn());
+      void unlistenAutoApproved.then((fn) => fn());
       void unlistenPerms.then((fn) => fn());
       void unlistenStarted.then((fn) => fn());
       void unlistenEnded.then((fn) => fn());

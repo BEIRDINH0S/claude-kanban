@@ -139,7 +139,11 @@ class SessionHandle {
   askPermission(toolName, input) {
     return new Promise((resolve) => {
       const requestId = `perm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      pendingPermissions.set(requestId, resolve);
+      // Stash the original input alongside resolve: when Rust replies with
+      // `allow` it doesn't (need to) echo the input back, but the SDK still
+      // expects an `updatedInput` to forward to the tool — falling back to
+      // `{}` would silently break Bash/Edit/etc.
+      pendingPermissions.set(requestId, { resolve, input });
       log(`canUseTool ${toolName} req=${requestId}`);
       send({
         type: "permission_request",
@@ -293,18 +297,19 @@ rl.on("line", (line) => {
       return;
     }
     case "permission_response": {
-      const resolve = pendingPermissions.get(msg.requestId);
-      if (!resolve) {
+      const entry = pendingPermissions.get(msg.requestId);
+      if (!entry) {
         log(`permission_response with unknown requestId=${msg.requestId}`);
         return;
       }
       pendingPermissions.delete(msg.requestId);
+      const { resolve, input: originalInput } = entry;
       if (msg.decision === "allow") {
         // updatedInput defaults to whatever the SDK originally proposed; we
         // pass it through unchanged unless Rust supplied a new one.
         resolve({
           behavior: "allow",
-          updatedInput: msg.updatedInput ?? msg.input ?? {},
+          updatedInput: msg.updatedInput ?? originalInput ?? {},
         });
       } else {
         resolve({

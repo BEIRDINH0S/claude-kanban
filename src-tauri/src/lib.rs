@@ -3,6 +3,7 @@
 // is needed when iterating on host.mjs.
 mod commands;
 mod db;
+mod permissions;
 mod session_host;
 
 use std::sync::Mutex;
@@ -58,6 +59,9 @@ pub fn run() {
             commands::sessions::respond_permission,
             commands::sessions::resume_session,
             commands::sessions::read_session_history,
+            commands::permissions::list_permission_rules,
+            commands::permissions::add_permission_rule,
+            commands::permissions::remove_permission_rule,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

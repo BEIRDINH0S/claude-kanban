@@ -61,6 +61,17 @@ const MIGRATIONS: &[&str] = &[
             OR (p2.created_at = projects.created_at AND p2.id < projects.id)
     );
     "#,
+
+    // v5 — user-defined auto-approve rules for tool permissions. Pattern is
+    // either a bare tool name ("Read") or "Tool(arg-glob)" ("Bash(npm *)").
+    // UNIQUE so duplicate inserts are no-ops.
+    r#"
+    CREATE TABLE permission_rules (
+        id TEXT PRIMARY KEY,
+        pattern TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL
+    );
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {

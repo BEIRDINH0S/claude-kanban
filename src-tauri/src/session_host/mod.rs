@@ -236,6 +236,37 @@ async fn handle_outbound(app: &AppHandle, line: &str) {
             tool_name,
             input,
         } => {
+            // Auto-approve check: if any user rule matches this tool call, we
+            // respond directly to the sidecar and skip the Review parking.
+            // The transcript still gets a notice via `permission-auto-approved`.
+            let auto_allow = {
+                let db = app.state::<DbState>();
+                let conn = db.conn.lock().unwrap();
+                let rules = crate::permissions::list(&conn).unwrap_or_default();
+                crate::permissions::is_allowed(&rules, &tool_name, &input)
+            };
+            if auto_allow {
+                let host = app.state::<SessionHost>();
+                let _ = host.send(
+                    crate::session_host::protocol::SidecarInbound::PermissionResponse {
+                        request_id: request_id.clone(),
+                        decision:
+                            crate::session_host::protocol::PermissionDecision::Allow,
+                        message: None,
+                    },
+                );
+                let _ = app.emit(
+                    "permission-auto-approved",
+                    json!({
+                        "sessionId": session_id,
+                        "cardId": card_id,
+                        "toolName": tool_name,
+                        "input": input,
+                    }),
+                );
+                return;
+            }
+
             // Move the owning card to Review while we wait on the user.
             if let Some(cid) = &card_id {
                 let db = app.state::<DbState>();

@@ -1,11 +1,16 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { Download, Upload } from "lucide-react";
-import { useState } from "react";
+import { Bell, Download, Plus, ShieldCheck, Trash2, Upload } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import {
   exportProjectToFile,
   importProjectFromFile,
 } from "../../ipc/backup";
+import {
+  readNotifyOnTurnEnd,
+  writeNotifyOnTurnEnd,
+} from "../../lib/prefs";
+import { usePermissionRulesStore } from "../../stores/permissionRulesStore";
 import { useProjectsStore } from "../../stores/projectsStore";
 import { useUiStore } from "../../stores/uiStore";
 import {
@@ -168,8 +173,173 @@ export function SettingsPage() {
             {message.text}
           </p>
         )}
+
+        <NotificationsSection />
+        <PermissionRulesSection />
       </div>
     </div>
+  );
+}
+
+function NotificationsSection() {
+  const [enabled, setEnabled] = useState(readNotifyOnTurnEnd);
+  const toggle = () => {
+    setEnabled((v) => {
+      const next = !v;
+      writeNotifyOnTurnEnd(next);
+      return next;
+    });
+  };
+  return (
+    <section className="mt-4 rounded-xl border border-[var(--glass-stroke)] px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <Bell
+              className="size-3.5 shrink-0 text-[var(--text-muted)]"
+              strokeWidth={1.75}
+            />
+            <p className="text-[12.5px] font-medium text-[var(--text-primary)]">
+              Notifier à la fin d'un tour
+            </p>
+          </div>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
+            Notification système quand Claude termine un tour, sauf si la
+            carte est ouverte en zoom. Permet de lancer plusieurs sessions et
+            d'aller faire autre chose.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-pressed={enabled}
+          className={[
+            "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+            enabled
+              ? "bg-[var(--color-accent)]"
+              : "bg-[var(--glass-stroke)]",
+          ].join(" ")}
+          aria-label={enabled ? "Désactiver" : "Activer"}
+        >
+          <span
+            className={[
+              "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
+              enabled ? "translate-x-[18px]" : "translate-x-0.5",
+            ].join(" ")}
+          />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function PermissionRulesSection() {
+  const rules = usePermissionRulesStore((s) => s.rules);
+  const loaded = usePermissionRulesStore((s) => s.loaded);
+  const load = usePermissionRulesStore((s) => s.load);
+  const add = usePermissionRulesStore((s) => s.add);
+  const remove = usePermissionRulesStore((s) => s.remove);
+
+  const [draft, setDraft] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!loaded) void load();
+  }, [loaded, load]);
+
+  const handleAdd = async () => {
+    const pattern = draft.trim();
+    if (!pattern || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await add(pattern);
+      setDraft("");
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="mt-4 rounded-xl border border-[var(--glass-stroke)] px-4 py-3">
+      <div className="flex items-center gap-2">
+        <ShieldCheck
+          className="size-3.5 shrink-0 text-emerald-300/80"
+          strokeWidth={1.75}
+        />
+        <p className="text-[12.5px] font-medium text-[var(--text-primary)]">
+          Permissions auto-approuvées
+        </p>
+      </div>
+      <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--text-muted)]">
+        Règles qui laissent passer un tool sans demander confirmation. Format
+        :{" "}
+        <code className="font-mono text-[11px]">Read</code>,{" "}
+        <code className="font-mono text-[11px]">Bash(npm *)</code>,{" "}
+        <code className="font-mono text-[11px]">
+          Edit(/Users/erwan/code/**)
+        </code>{" "}
+        — <code className="font-mono text-[11px]">*</code> matche n'importe
+        quoi.
+      </p>
+
+      <div className="mt-3 flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleAdd();
+          }}
+          placeholder="Bash(npm *)"
+          className="flex-1 rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 font-mono text-[11.5px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-accent-ring)] dark:bg-white/5"
+        />
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={busy || !draft.trim()}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Plus className="size-3.5" strokeWidth={1.75} />
+          Ajouter
+        </button>
+      </div>
+
+      {err && (
+        <p className="mt-2 font-mono text-[11px] text-red-400 break-words">
+          {err}
+        </p>
+      )}
+
+      <ul className="mt-3 flex flex-col gap-1">
+        {rules.length === 0 && (
+          <li className="font-mono text-[11px] text-[var(--text-muted)]">
+            Aucune règle — chaque tool demande confirmation.
+          </li>
+        )}
+        {rules.map((r) => (
+          <li
+            key={r.id}
+            className="group flex items-center gap-2 rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 dark:bg-white/5"
+          >
+            <span className="flex-1 truncate font-mono text-[11.5px] text-[var(--text-secondary)]">
+              {r.pattern}
+            </span>
+            <button
+              type="button"
+              onClick={() => void remove(r.id)}
+              aria-label="Supprimer la règle"
+              className="rounded-md p-1 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-black/5 hover:text-red-400 group-hover:opacity-100 dark:hover:bg-white/5"
+            >
+              <Trash2 className="size-3" strokeWidth={1.75} />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

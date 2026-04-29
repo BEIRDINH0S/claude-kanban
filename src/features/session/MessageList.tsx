@@ -1,10 +1,13 @@
-import { ChevronRight, Wrench } from "lucide-react";
+import { ChevronRight, ShieldCheck, Wrench } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import type { DisplayItem, SdkEvent } from "../../types/chat";
+import { DiffBlock } from "./Diff";
 import { asBlocks, formatToolUse } from "./format";
+
+const DIFFABLE_TOOLS = new Set(["Edit", "MultiEdit", "Write"]);
 
 const REMARK_PLUGINS = [remarkGfm];
 
@@ -43,7 +46,8 @@ type Row =
   | { kind: "user-text"; key: string; text: string }
   | { kind: "assistant-text"; key: string; text: string }
   | { kind: "tool-use"; key: string; name: string; input: unknown }
-  | { kind: "tool-result"; key: string; content: string; isError: boolean };
+  | { kind: "tool-result"; key: string; content: string; isError: boolean }
+  | { kind: "auto-approved"; key: string; name: string; input: unknown };
 
 /**
  * Turn a DisplayItem into 0..N rendered rows. We:
@@ -60,6 +64,17 @@ function toRenderable(item: DisplayItem): Row[] {
 }
 
 function fromSdk(id: string, event: SdkEvent): Row[] {
+  if (event.type === "auto_approved") {
+    const e = event as { tool_name?: string; input?: unknown };
+    return [
+      {
+        kind: "auto-approved",
+        key: id,
+        name: String(e.tool_name ?? ""),
+        input: e.input,
+      },
+    ];
+  }
   if (event.type === "assistant") {
     const blocks = asBlocks(event.message?.content);
     const rows: Row[] = [];
@@ -150,6 +165,25 @@ function RenderedRow({ row }: { row: Row }) {
   if (row.kind === "tool-result") {
     return <ToolResultRow content={row.content} isError={row.isError} />;
   }
+  if (row.kind === "auto-approved") {
+    return (
+      <div
+        className="flex items-center gap-2 self-start rounded-lg border border-emerald-400/25 bg-emerald-400/8 px-2.5 py-1.5"
+        title="Auto-approuvé par une règle"
+      >
+        <ShieldCheck
+          className="size-3 shrink-0 text-emerald-300/90"
+          strokeWidth={1.75}
+        />
+        <span className="font-mono text-[11.5px] text-emerald-200/80">
+          {formatToolUse(row.name, row.input)}
+        </span>
+      </div>
+    );
+  }
+  if (DIFFABLE_TOOLS.has(row.name)) {
+    return <ToolUseEditRow name={row.name} input={row.input} />;
+  }
   return (
     <div className="flex items-center gap-2 self-start rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 dark:bg-white/5">
       <Wrench className="size-3 shrink-0 text-[var(--text-muted)]" strokeWidth={1.5} />
@@ -158,6 +192,79 @@ function RenderedRow({ row }: { row: Row }) {
       </span>
     </div>
   );
+}
+
+/** Edit/MultiEdit/Write tool_use renders as a collapsible chip with an inline
+ *  diff inside. Closed by default — large edits would otherwise blow the
+ *  scroll. */
+function ToolUseEditRow({ name, input }: { name: string; input: unknown }) {
+  const [open, setOpen] = useState(false);
+  const i = (input ?? {}) as Record<string, unknown>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="inline-flex w-fit items-center gap-2 self-start rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 transition-colors hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10"
+      >
+        <ChevronRight
+          className={`size-3 shrink-0 transition-transform ${
+            open ? "rotate-90" : ""
+          }`}
+          strokeWidth={1.75}
+        />
+        <Wrench
+          className="size-3 shrink-0 text-[var(--text-muted)]"
+          strokeWidth={1.5}
+        />
+        <span className="font-mono text-[11.5px] text-[var(--text-secondary)]">
+          {formatToolUse(name, input)}
+        </span>
+      </button>
+      {open && (
+        <div className="max-h-[420px] overflow-auto rounded-lg border border-[var(--glass-stroke)] bg-black/5 dark:bg-white/5">
+          {renderEditDiff(name, i)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function renderEditDiff(name: string, i: Record<string, unknown>) {
+  if (name === "Write") {
+    return <DiffBlock oldText="" newText={String(i.content ?? "")} />;
+  }
+  if (name === "Edit") {
+    return (
+      <DiffBlock
+        oldText={String(i.old_string ?? "")}
+        newText={String(i.new_string ?? "")}
+      />
+    );
+  }
+  // MultiEdit — render each edit, separated by a hairline.
+  const edits = Array.isArray(i.edits)
+    ? (i.edits as Array<{ old_string?: string; new_string?: string }>)
+    : [];
+  if (edits.length === 0) {
+    return (
+      <p className="px-3 py-2 font-mono text-[11px] text-[var(--text-muted)]">
+        (aucun edit)
+      </p>
+    );
+  }
+  return edits.map((e, idx) => (
+    <div
+      key={idx}
+      className={idx > 0 ? "border-t border-[var(--glass-stroke)]" : ""}
+    >
+      <DiffBlock
+        oldText={String(e.old_string ?? "")}
+        newText={String(e.new_string ?? "")}
+      />
+    </div>
+  ));
 }
 
 /** Collapsible tool result. Closed by default — most of the time the
