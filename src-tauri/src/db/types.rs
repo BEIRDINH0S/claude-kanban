@@ -57,4 +57,7 @@ pub struct Project {
     pub name: String,
     pub created_at: i64,
     pub updated_at: i64,
+    /// Imported projects land archived: read-only snapshots. The UI hides
+    /// creation/drag affordances; the Rust mutation commands refuse to act.
+    pub archived: bool,
 }

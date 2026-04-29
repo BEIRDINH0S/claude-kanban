@@ -20,6 +20,37 @@ pub enum DbError {
     Io(#[from] std::io::Error),
 }
 
+/// Look up a card's owning project archived flag in one shot. Used by the
+/// mutation commands as a guard so imported snapshots stay read-only even
+/// if the front-end protections are bypassed.
+pub fn is_card_project_archived(
+    conn: &Connection,
+    card_id: &str,
+) -> Result<bool, DbError> {
+    let archived: i64 = conn.query_row(
+        r#"SELECT p.archived
+             FROM cards c
+             JOIN projects p ON p.id = c.project_id
+            WHERE c.id = ?1"#,
+        [card_id],
+        |r| r.get(0),
+    )?;
+    Ok(archived != 0)
+}
+
+/// Same lookup but keyed by `project_id` directly — for `create_card` where
+/// we don't have a card row yet.
+pub fn is_project_archived(
+    conn: &Connection,
+    project_id: &str,
+) -> Result<bool, DbError> {
+    let archived: i64 =
+        conn.query_row("SELECT archived FROM projects WHERE id = ?1", [project_id], |r| {
+            r.get(0)
+        })?;
+    Ok(archived != 0)
+}
+
 pub fn open(path: &Path) -> Result<Connection, DbError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;

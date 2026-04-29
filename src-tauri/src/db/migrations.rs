@@ -41,6 +41,14 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE cards ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default';
     CREATE INDEX idx_cards_project ON cards(project_id);
     "#,
+
+    // v3 — `archived` flag on projects. Imported projects land here as
+    // read-only snapshots: the UI hides creation/drag affordances and the
+    // Rust commands refuse mutations. Existing rows default to 0 (active),
+    // so the migration is non-destructive.
+    r#"
+    ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {

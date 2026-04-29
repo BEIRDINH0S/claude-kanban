@@ -14,11 +14,13 @@ fn now_ms() -> i64 {
 }
 
 fn map_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
+    let archived_int: i64 = row.get("archived").unwrap_or(0);
     Ok(Project {
         id: row.get("id")?,
         name: row.get("name")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
+        archived: archived_int != 0,
     })
 }
 
@@ -26,7 +28,11 @@ fn map_project(row: &rusqlite::Row) -> rusqlite::Result<Project> {
 pub fn list_projects(state: State<DbState>) -> Result<Vec<Project>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT id, name, created_at, updated_at FROM projects ORDER BY created_at, id")
+        .prepare(
+            "SELECT id, name, created_at, updated_at, archived
+               FROM projects
+              ORDER BY archived, created_at, id",
+        )
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], map_project)
@@ -55,6 +61,7 @@ pub fn create_project(state: State<DbState>, name: String) -> Result<Project, St
         name,
         created_at: now,
         updated_at: now,
+        archived: false,
     })
 }
 
