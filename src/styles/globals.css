@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Design tokens — exposed to Tailwind via @theme so utilities like
+ *  `font-sans`, `font-mono`, `text-accent`, `bg-glass`, etc. resolve to these.
+ * ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, monospace;
+
+  --color-accent: oklch(0.74 0.16 295);
+  --color-accent-soft: oklch(0.74 0.16 295 / 0.18);
+  --color-accent-ring: oklch(0.74 0.16 295 / 0.45);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Theme variables — light by default, overridden by prefers-color-scheme.
+ *  The whole app reads from these so we never hard-code colours in components.
+ * ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg-grad-from: oklch(0.985 0.006 270);
+  --bg-grad-via: oklch(0.97 0.012 280);
+  --bg-grad-to: oklch(0.955 0.018 295);
+
+  --text-primary: oklch(0.22 0.02 280);
+  --text-secondary: oklch(0.45 0.015 280);
+  --text-muted: oklch(0.6 0.01 280);
+
+  --glass-bg: rgb(255 255 255 / 0.55);
+  --glass-bg-strong: rgb(255 255 255 / 0.85);
+  --glass-stroke: rgb(0 0 0 / 0.08);
+  --glass-shadow: 0 1px 1px rgb(0 0 0 / 0.04),
+    0 8px 24px -8px rgb(20 20 40 / 0.08),
+    0 24px 48px -16px rgb(20 20 40 / 0.06);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-grad-from: oklch(0.18 0.03 275);
+    --bg-grad-via: oklch(0.15 0.035 280);
+    --bg-grad-to: oklch(0.12 0.04 290);
+
+    --text-primary: oklch(0.96 0.005 270);
+    --text-secondary: oklch(0.78 0.012 280);
+    --text-muted: oklch(0.6 0.015 280);
+
+    --glass-bg: rgb(255 255 255 / 0.05);
+    --glass-bg-strong: rgb(40 40 56 / 0.78);
+    --glass-stroke: rgb(255 255 255 / 0.1);
+    --glass-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset,
+      0 8px 32px -8px rgb(0 0 0 / 0.5),
+      0 24px 64px -16px rgb(0 0 0 / 0.4);
+
+    color-scheme: dark;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Base — gradient lives on body, fixed so it never re-renders on scroll.
+ * ────────────────────────────────────────────────────────────────────────── */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+    background: linear-gradient(
+      135deg,
+      var(--bg-grad-from) 0%,
+      var(--bg-grad-via) 50%,
+      var(--bg-grad-to) 100%
+    );
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-synthesis: none;
+    overflow: hidden;
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+    color: var(--text-primary);
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Component primitives — glass surface used by panels, cards, top bar.
+ * ────────────────────────────────────────────────────────────────────────── */
+@layer components {
+  .glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-stroke);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    box-shadow: var(--glass-shadow);
+  }
+
+  /* For surfaces that need to feel "above" cards — modals, top bar, popovers.
+     Stronger fill so the panel reads as a discrete object even when stacked
+     over a dark backdrop. */
+  .glass-strong {
+    background: var(--glass-bg-strong);
+    border: 1px solid var(--glass-stroke);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    box-shadow: var(--glass-shadow);
+  }
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes zoom-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-overlay-in {
+  animation: overlay-in 180ms ease-out;
+}
+.animate-zoom-in {
+  animation: zoom-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}

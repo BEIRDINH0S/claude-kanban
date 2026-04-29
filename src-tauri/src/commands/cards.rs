@@ -1,0 +1,254 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use rusqlite::{params, Connection, Transaction};
+use tauri::State;
+
+use crate::db::{Card, CardColumn, DbState};
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn map_card(row: &rusqlite::Row) -> rusqlite::Result<Card> {
+    let col_str: String = row.get("column")?;
+    let column = CardColumn::from_db(&col_str).ok_or_else(|| {
+        rusqlite::Error::FromSqlConversionFailure(
+            0,
+            rusqlite::types::Type::Text,
+            format!("unknown column variant: {col_str}").into(),
+        )
+    })?;
+    Ok(Card {
+        id: row.get("id")?,
+        title: row.get("title")?,
+        column,
+        position: row.get("position")?,
+        session_id: row.get("session_id")?,
+        project_path: row.get("project_path")?,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+        last_state: row.get("last_state")?,
+    })
+}
+
+fn fetch_all(conn: &Connection) -> rusqlite::Result<Vec<Card>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT id, title, "column", position, session_id, project_path,
+                  created_at, updated_at, last_state
+             FROM cards
+            ORDER BY "column", position, id"#,
+    )?;
+    let rows = stmt.query_map([], map_card)?;
+    rows.collect()
+}
+
+#[tauri::command]
+pub fn list_cards(state: State<DbState>) -> Result<Vec<Card>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    fetch_all(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn create_card(
+    state: State<DbState>,
+    title: String,
+    project_path: String,
+) -> Result<Card, String> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err("title is required".into());
+    }
+    if project_path.trim().is_empty() {
+        return Err("project_path is required".into());
+    }
+
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let now = now_ms();
+    let id = uuid::Uuid::new_v4().to_string();
+
+    // New cards land at the end of the Todo column.
+    let next_pos: i64 = conn
+        .query_row(
+            r#"SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE "column" = 'todo'"#,
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    conn.execute(
+        r#"INSERT INTO cards (id, title, "column", position, project_path,
+                              created_at, updated_at)
+           VALUES (?1, ?2, 'todo', ?3, ?4, ?5, ?5)"#,
+        params![&id, title, next_pos, &project_path, now],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.query_row(
+        r#"SELECT id, title, "column", position, session_id, project_path,
+                  created_at, updated_at, last_state
+             FROM cards WHERE id = ?1"#,
+        [&id],
+        map_card,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Renumber a column so positions are dense 0..n-1. If `insert_id` is provided,
+/// it gets inserted at `insert_at` (clamped) and the existing card with that id
+/// is removed from its old slot first.
+fn renumber_column(
+    tx: &Transaction,
+    column: &str,
+    insert_id: Option<&str>,
+    insert_at: usize,
+    now: i64,
+) -> rusqlite::Result<()> {
+    let mut stmt = tx.prepare(
+        r#"SELECT id FROM cards WHERE "column" = ?1 ORDER BY position, id"#,
+    )?;
+    let mut ids: Vec<String> = stmt
+        .query_map([column], |r| r.get::<_, String>(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    drop(stmt);
+
+    if let Some(id) = insert_id {
+        if let Some(existing) = ids.iter().position(|x| x == id) {
+            ids.remove(existing);
+        }
+        let clamped = insert_at.min(ids.len());
+        ids.insert(clamped, id.to_string());
+    }
+
+    for (pos, card_id) in ids.iter().enumerate() {
+        tx.execute(
+            r#"UPDATE cards SET position = ?1, updated_at = ?2 WHERE id = ?3"#,
+            params![pos as i64, now, card_id],
+        )?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_card(
+    state: tauri::State<DbState>,
+    host: tauri::State<crate::session_host::SessionHost>,
+    id: String,
+) -> Result<(), String> {
+    // Look up the live session before nuking the row, so we can ask the
+    // sidecar to free it instead of leaving an orphaned conversation alive.
+    let session_id: Option<String> = {
+        let conn = state.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row(
+            "SELECT session_id FROM cards WHERE id = ?1",
+            [&id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("card not found: {e}"))?
+    };
+
+    {
+        let conn = state.conn.lock().map_err(|e| e.to_string())?;
+        let n = conn
+            .execute("DELETE FROM cards WHERE id = ?1", [&id])
+            .map_err(|e| e.to_string())?;
+        if n == 0 {
+            return Err("card already gone".into());
+        }
+    }
+
+    if let Some(sid) = session_id {
+        // Best-effort: if the sidecar dropped the session already, fine.
+        let _ = host.send(
+            crate::session_host::protocol::SidecarInbound::StopSession {
+                session_id: sid,
+            },
+        );
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn move_card(
+    state: State<DbState>,
+    id: String,
+    column: CardColumn,
+    target_index: i64,
+) -> Result<Vec<Card>, String> {
+    let mut conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let now = now_ms();
+    let target_str = column.as_str();
+    let target_idx = target_index.max(0) as usize;
+
+    let from_column: String = tx
+        .query_row(
+            r#"SELECT "column" FROM cards WHERE id = ?1"#,
+            [&id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("card not found: {e}"))?;
+
+    if from_column != target_str {
+        // Cross-column: flip the card's column first, then renumber both.
+        tx.execute(
+            r#"UPDATE cards SET "column" = ?1, updated_at = ?2 WHERE id = ?3"#,
+            params![target_str, now, &id],
+        )
+        .map_err(|e| e.to_string())?;
+        renumber_column(&tx, &from_column, None, 0, now).map_err(|e| e.to_string())?;
+    }
+
+    renumber_column(&tx, target_str, Some(&id), target_idx, now)
+        .map_err(|e| e.to_string())?;
+
+    let cards = fetch_all(&tx).map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(cards)
+}
+
+/// First-boot demo data so the empty board has something to drag around.
+/// Removed at step 4 once the "+" button takes over.
+pub fn seed_if_empty(conn: &Connection) -> rusqlite::Result<u32> {
+    let count: u32 = conn.query_row("SELECT COUNT(*) FROM cards", [], |r| r.get(0))?;
+    if count > 0 {
+        return Ok(0);
+    }
+
+    let now = now_ms();
+    let seed = [
+        ("Set up auth middleware", "todo"),
+        ("Refactor billing webhook", "todo"),
+        ("Investigate flaky e2e test", "in_progress"),
+        ("Migrate to SDK v2", "review"),
+        ("Improve onboarding copy", "idle"),
+        ("Ship dark mode toggle", "done"),
+    ];
+
+    // Per-column position counter so each entry lands at index 0, 1, 2…
+    let mut position_in_column: std::collections::HashMap<&str, i64> =
+        std::collections::HashMap::new();
+
+    for (title, col) in seed {
+        let pos = position_in_column.entry(col).or_insert(0);
+        conn.execute(
+            r#"INSERT INTO cards (id, title, "column", position, project_path,
+                                  created_at, updated_at)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
+            params![
+                uuid::Uuid::new_v4().to_string(),
+                title,
+                col,
+                *pos,
+                "/tmp/seed",
+                now,
+                now,
+            ],
+        )?;
+        *pos += 1;
+    }
+
+    Ok(seed.len() as u32)
+}

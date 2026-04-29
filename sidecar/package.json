@@ -1,0 +1,13 @@
+{
+  "name": "claude-kanban-sidecar",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Node host that runs Claude Agent SDK sessions on behalf of the Tauri app over stdio JSON-lines.",
+  "scripts": {
+    "start": "node src/host.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "latest"
+  }
+}
