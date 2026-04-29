@@ -15,7 +15,16 @@ import {
 } from "../ipc/sessions";
 import type { Card, CardColumn } from "../types/card";
 import { useMessagesStore } from "./messagesStore";
+import { useToastsStore } from "./toastsStore";
 import { useUiStore } from "./uiStore";
+
+const COLUMN_LABEL: Record<CardColumn, string> = {
+  todo: "Todo",
+  in_progress: "En cours",
+  review: "Review",
+  idle: "Idle",
+  done: "Done",
+};
 
 // Stable empty array for the case where no project is active yet.
 const NO_CARDS: readonly Card[] = [];
@@ -146,11 +155,25 @@ export const useCardsStore = create<CardsState>((set, get) => ({
 
   move: async (id, column, targetIndex) => {
     const previous = get().cards;
+    const card = previous.find((c) => c.id === id);
+    const fromColumn = card?.column;
+    const fromIndex = card?.position ?? 0;
     const optimistic = applyOptimisticMove(previous, id, column, targetIndex);
     set({ cards: optimistic });
     try {
       const fresh = await moveCard(id, column, targetIndex);
       set({ cards: fresh });
+      // Toast undo only for cross-column moves — same-column reorders are
+      // less likely to be regretted and would generate too many toasts.
+      if (card && fromColumn && fromColumn !== column) {
+        useToastsStore.getState().push({
+          message: `Carte déplacée vers ${COLUMN_LABEL[column]}`,
+          action: {
+            label: "Annuler",
+            handler: () => get().move(id, fromColumn, fromIndex),
+          },
+        });
+      }
     } catch (e) {
       set({ cards: previous, error: String(e) });
     }

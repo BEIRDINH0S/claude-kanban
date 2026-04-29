@@ -21,6 +21,22 @@ function writeActiveProject(id: string | null) {
 
 export type CentralView = "board" | "settings";
 
+const SIDEBAR_COLLAPSED_KEY = "claude-kanban-sidebar-collapsed";
+function readSidebarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeSidebarCollapsed(v: boolean) {
+  try {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, v ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
+
 interface UiState {
   zoomedCardId: string | null;
   /** Session ids whose SDK query is currently alive in the sidecar process.
@@ -35,6 +51,8 @@ interface UiState {
    *  states; only the right side toggles between the kanban and the
    *  settings panel. */
   view: CentralView;
+  /** Sidebar collapsed = icon-only. Persisted in localStorage. */
+  sidebarCollapsed: boolean;
 
   openZoom: (cardId: string) => void;
   closeZoom: () => void;
@@ -42,6 +60,7 @@ interface UiState {
   markSessionDead: (sessionId: string) => void;
   setActiveProjectId: (id: string | null) => void;
   setView: (view: CentralView) => void;
+  toggleSidebar: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -49,6 +68,7 @@ export const useUiStore = create<UiState>((set) => ({
   liveSessionIds: new Set<string>(),
   activeProjectId: readActiveProject(),
   view: "board",
+  sidebarCollapsed: readSidebarCollapsed(),
 
   openZoom: (cardId) => set({ zoomedCardId: cardId }),
   closeZoom: () => set({ zoomedCardId: null }),
@@ -76,4 +96,11 @@ export const useUiStore = create<UiState>((set) => ({
   },
 
   setView: (view) => set({ view }),
+
+  toggleSidebar: () =>
+    set((s) => {
+      const next = !s.sidebarCollapsed;
+      writeSidebarCollapsed(next);
+      return { sidebarCollapsed: next };
+    }),
 }));

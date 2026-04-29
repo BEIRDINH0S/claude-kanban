@@ -13,6 +13,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  ChevronsLeft,
+  ChevronsRight,
   Eye,
   EyeOff,
   Lock,
@@ -56,6 +58,8 @@ export function Sidebar() {
   const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
+  const collapsed = useUiStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
   // Local sensors for the sidebar's own DndContext — Board has its own
   // (cards), they don't overlap because their useSortable items live in
@@ -106,34 +110,56 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="glass-strong z-30 flex w-[180px] shrink-0 flex-col border-r border-[var(--glass-stroke)]">
+    <aside
+      className={[
+        "glass-strong z-30 flex shrink-0 flex-col border-r border-[var(--glass-stroke)] transition-[width] duration-200",
+        collapsed ? "w-[52px]" : "w-[180px]",
+      ].join(" ")}
+    >
       {/* Projects: section header + scrollable list + "new project" trailing entry. */}
-      <header className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
-        <p className="text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-          Projets
-        </p>
-        {archivedCount > 0 && (
-          <button
-            type="button"
-            onClick={toggleHideArchived}
-            title={
-              hideArchived
-                ? `Afficher les projets archivés (${archivedCount})`
-                : "Masquer les projets archivés"
-            }
-            aria-label={
-              hideArchived
-                ? "Afficher les archivés"
-                : "Masquer les archivés"
-            }
-            className="rounded p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-          >
-            {hideArchived ? (
-              <EyeOff className="size-3" strokeWidth={1.75} />
-            ) : (
-              <Eye className="size-3" strokeWidth={1.75} />
+      <header className="flex items-center gap-2 px-2 pt-2.5 pb-2">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? "Déplier la sidebar" : "Replier la sidebar"}
+          title={collapsed ? "Déplier la sidebar" : "Replier la sidebar"}
+          className="grid size-7 shrink-0 place-items-center rounded text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+        >
+          {collapsed ? (
+            <ChevronsRight className="size-3.5" strokeWidth={1.75} />
+          ) : (
+            <ChevronsLeft className="size-3.5" strokeWidth={1.75} />
+          )}
+        </button>
+        {!collapsed && (
+          <>
+            <p className="flex-1 text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
+              Projets
+            </p>
+            {archivedCount > 0 && (
+              <button
+                type="button"
+                onClick={toggleHideArchived}
+                title={
+                  hideArchived
+                    ? `Afficher les projets archivés (${archivedCount})`
+                    : "Masquer les projets archivés"
+                }
+                aria-label={
+                  hideArchived
+                    ? "Afficher les archivés"
+                    : "Masquer les archivés"
+                }
+                className="rounded p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+              >
+                {hideArchived ? (
+                  <EyeOff className="size-3" strokeWidth={1.75} />
+                ) : (
+                  <Eye className="size-3" strokeWidth={1.75} />
+                )}
+              </button>
             )}
-          </button>
+          </>
         )}
       </header>
 
@@ -224,6 +250,7 @@ function ProjectRow({
   onRename,
   onDelete,
 }: ProjectRowProps) {
+  const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(project.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -252,7 +279,10 @@ function ProjectRow({
   return (
     <div
       onClick={editing ? undefined : onSelect}
-      onDoubleClick={() => !project.archived && setEditing(true)}
+      onDoubleClick={() =>
+        !project.archived && !collapsed && setEditing(true)
+      }
+      title={collapsed ? project.name : undefined}
       className={[
         "group flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors",
         editing ? "" : "cursor-pointer",
@@ -268,7 +298,7 @@ function ProjectRow({
           }`}
         />
       </span>
-      {editing ? (
+      {collapsed ? null : editing ? (
         <input
           ref={inputRef}
           type="text"
@@ -300,7 +330,7 @@ function ProjectRow({
           <span className="truncate">{project.name}</span>
         </span>
       )}
-      {!editing && (
+      {!editing && !collapsed && (
         <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           {!project.archived && (
             <button
@@ -335,16 +365,18 @@ function ProjectRow({
 /** Trailing entry of the projects list — visually consistent with rows above
  * but signals "create" via a + glyph and dimmed label. */
 function NewProjectRow({ onClick }: { onClick: () => void }) {
+  const collapsed = useUiStore((s) => s.sidebarCollapsed);
   return (
     <button
       type="button"
       onClick={onClick}
+      title={collapsed ? "Nouveau projet" : undefined}
       className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[var(--text-muted)] transition-colors hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
     >
       <span className="flex w-3.5 shrink-0 justify-center">
         <Plus className="size-3" strokeWidth={1.75} />
       </span>
-      Nouveau projet
+      {!collapsed && "Nouveau projet"}
     </button>
   );
 }
@@ -384,11 +416,13 @@ function NavRow({
   active: boolean;
   onClick: () => void;
 }) {
+  const collapsed = useUiStore((s) => s.sidebarCollapsed);
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      title={collapsed ? label : undefined}
       className={[
         "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors",
         active
@@ -399,7 +433,7 @@ function NavRow({
       <span className="flex w-3.5 shrink-0 justify-center text-[var(--text-muted)]">
         {icon}
       </span>
-      {label}
+      {!collapsed && label}
     </button>
   );
 }

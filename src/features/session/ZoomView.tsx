@@ -15,6 +15,7 @@ import {
   sendMessage as ipcSendMessage,
 } from "../../ipc/sessions";
 import { useCardsStore } from "../../stores/cardsStore";
+import { useCostsStore } from "../../stores/costsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
 import { useMessagesStore } from "../../stores/messagesStore";
 import { useProjectsStore } from "../../stores/projectsStore";
@@ -68,6 +69,7 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   const archived = useProjectsStore((s) =>
     s.projects.find((p) => p.id === card.projectId)?.archived ?? false,
   );
+  const cost = useCostsStore((s) => s.byCard[card.id] ?? 0);
 
   const handleArchive = () => {
     // Move to Done. The store's optimistic move + Rust commit handles
@@ -94,6 +96,14 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
               ? `session ${card.sessionId.slice(0, 8)}…`
               : "no session"}
           </span>
+          {cost > 0 && (
+            <>
+              {" · "}
+              <span className="font-mono normal-case tracking-normal">
+                ${cost.toFixed(4)}
+              </span>
+            </>
+          )}
         </p>
         <EditableTitle
           value={card.title}

@@ -3,7 +3,9 @@ import { useEffect } from "react";
 
 import { Board } from "./features/kanban/Board";
 import { ZoomView } from "./features/session/ZoomView";
+import { ToastStack } from "./features/toasts/ToastStack";
 import { useCardsStore } from "./stores/cardsStore";
+import { useCostsStore } from "./stores/costsStore";
 import { useErrorsStore } from "./stores/errorsStore";
 import { useMessagesStore } from "./stores/messagesStore";
 import { usePermissionsStore } from "./stores/permissionsStore";
@@ -71,8 +73,8 @@ function App() {
     });
 
     // Each SDK event the sidecar produces flows here. We push it under the
-    // owning card so the zoom view can render the conversation live, and
-    // skim rate-limit events into the usage store for the top bar meters.
+    // owning card so the zoom view can render the conversation live, skim
+    // rate-limit events into the usage store, and accumulate per-turn cost.
     const unlistenEvents = listen<SessionEventPayload>(
       "session-event",
       (e) => {
@@ -82,6 +84,12 @@ function App() {
           const info = (event as { rate_limit_info?: RateLimitInfo })
             .rate_limit_info;
           if (info) useUsageStore.getState().ingest(info);
+        }
+        if (cardId && event?.type === "result") {
+          const cost = (event as { total_cost_usd?: number }).total_cost_usd;
+          if (typeof cost === "number" && cost > 0) {
+            useCostsStore.getState().add(cardId, cost);
+          }
         }
       },
     );
@@ -159,6 +167,7 @@ function App() {
     <main className="h-full w-full">
       <Board />
       <ZoomView />
+      <ToastStack />
     </main>
   );
 }
