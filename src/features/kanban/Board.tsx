@@ -8,9 +8,10 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { CreateCardModal } from "../card-create/CreateCardModal";
+import { Sidebar } from "../projects/Sidebar";
 import { BinaryBanner } from "../usage/BinaryBanner";
 import { TopBar } from "../usage/TopBar";
 import { selectByColumn, useCardsStore } from "../../stores/cardsStore";
@@ -22,15 +23,13 @@ import { COLUMNS, isColumnId } from "./columns";
 export function Board() {
   const cards = useCardsStore((s) => s.cards);
   const move = useCardsStore((s) => s.move);
-  const load = useCardsStore((s) => s.load);
   const error = useCardsStore((s) => s.error);
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Cards loading is driven by the active-project subscription in cardsStore,
+  // and by the boot sequence in App.tsx. No effect needed here.
 
   // 4px activation distance so click-to-open (zoom view, step 6) keeps working
   // without competing with drag.
@@ -83,23 +82,26 @@ export function Board() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full w-full flex-col">
-        <TopBar onCreate={() => setCreateOpen(true)} />
-        <BinaryBanner />
+      <div className="flex h-full w-full">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <TopBar onCreate={() => setCreateOpen(true)} />
+          <BinaryBanner />
 
-        {error && (
-          <div className="mx-6 mt-3 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-xs text-red-300">
-            {error}
+          {error && (
+            <div className="mx-6 mt-3 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-xs text-red-300">
+              {error}
+            </div>
+          )}
+          <div className="flex flex-1 gap-5 overflow-x-auto overflow-y-hidden px-6 pt-4 pb-6">
+            {COLUMNS.map((col) => (
+              <Column
+                key={col.id}
+                def={col}
+                cards={selectByColumn(cards, col.id)}
+              />
+            ))}
           </div>
-        )}
-        <div className="flex flex-1 gap-5 overflow-x-auto overflow-y-hidden px-6 pt-4 pb-6">
-          {COLUMNS.map((col) => (
-            <Column
-              key={col.id}
-              def={col}
-              cards={selectByColumn(cards, col.id)}
-            />
-          ))}
         </div>
       </div>
 

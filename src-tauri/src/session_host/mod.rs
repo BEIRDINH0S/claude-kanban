@@ -46,26 +46,50 @@ fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
+/// Resolve the Node binary and the host.mjs script path, picking the bundled
+/// (production) layout if it exists and falling back to dev paths otherwise.
+///
+///   prod : `<resource_dir>/node[.exe]` + `<resource_dir>/sidecar/src/host.mjs`
+///   dev  : `node` (from PATH) + `<repo>/sidecar/src/host.mjs`
+fn resolve_paths(app: &AppHandle) -> (std::path::PathBuf, std::path::PathBuf) {
+    if let Ok(dir) = app.path().resource_dir() {
+        let bundled_script = dir.join("sidecar").join("src").join("host.mjs");
+        if bundled_script.exists() {
+            let bin_name = if cfg!(windows) { "node.exe" } else { "node" };
+            let bundled_node = dir.join(bin_name);
+            if bundled_node.exists() {
+                return (bundled_node, bundled_script);
+            }
+        }
+    }
+    let dev_script = std::path::PathBuf::from(format!(
+        "{}/../sidecar/src/host.mjs",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    (std::path::PathBuf::from("node"), dev_script)
+}
+
 /// Spawn the Node sidecar and start the reader/writer tasks. Must run inside
 /// a Tokio runtime context — call from `tauri::async_runtime::block_on(...)`
 /// in `setup`, since the Tauri setup callback itself is sync and not yet on
 /// the async runtime.
 pub async fn spawn(app: AppHandle) -> Result<SessionHost, String> {
-    // CARGO_MANIFEST_DIR resolves to <repo>/src-tauri at build time.
-    // Sidecar lives at <repo>/sidecar.
-    let host_path = format!(
-        "{}/../sidecar/src/host.mjs",
-        env!("CARGO_MANIFEST_DIR")
-    );
+    let (node_path, host_path) = resolve_paths(&app);
 
-    let mut child = Command::new("node")
+    let mut child = Command::new(&node_path)
         .arg(&host_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| format!("spawn `node {host_path}`: {e}"))?;
+        .map_err(|e| {
+            format!(
+                "spawn `{} {}`: {e}",
+                node_path.display(),
+                host_path.display()
+            )
+        })?;
 
     let stdin = child.stdin.take().ok_or("sidecar: stdin missing")?;
     let stdout = child.stdout.take().ok_or("sidecar: stdout missing")?;

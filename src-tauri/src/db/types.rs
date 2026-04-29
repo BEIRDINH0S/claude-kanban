@@ -44,7 +44,17 @@ pub struct Card {
     pub position: i64,
     pub session_id: Option<String>,
     pub project_path: String,
+    pub project_id: String,
     pub created_at: i64,
     pub updated_at: i64,
     pub last_state: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Project {
+    pub id: String,
+    pub name: String,
+    pub created_at: i64,
+    pub updated_at: i64,
 }

@@ -13,6 +13,9 @@ dist
 dist-ssr
 *.local
 
+# Sidecar Node binaries — fetched per platform via scripts/fetch-sidecar-bin.mjs
+src-tauri/binaries/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

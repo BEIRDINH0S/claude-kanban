@@ -1,7 +1,7 @@
 pub mod migrations;
 pub mod types;
 
-pub use types::{Card, CardColumn};
+pub use types::{Card, CardColumn, Project};
 
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};

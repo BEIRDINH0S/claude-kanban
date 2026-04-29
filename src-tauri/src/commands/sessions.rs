@@ -19,22 +19,31 @@ fn now_ms() -> i64 {
 }
 
 #[tauri::command]
-pub async fn start_session(app: AppHandle, card_id: String) -> Result<String, String> {
-    // 1. Look up the card; reject if it already has a session (resume = step 9).
-    let (title, project_path) = {
+pub async fn start_session(
+    app: AppHandle,
+    card_id: String,
+    prompt: String,
+) -> Result<String, String> {
+    let prompt = prompt.trim().to_string();
+    if prompt.is_empty() {
+        return Err("first message is required".into());
+    }
+
+    // 1. Look up the card; reject if it already has a session.
+    let project_path = {
         let db = app.state::<DbState>();
         let conn = db.conn.lock().unwrap();
-        let (title, project_path, existing): (String, String, Option<String>) = conn
+        let (project_path, existing): (String, Option<String>) = conn
             .query_row(
-                "SELECT title, project_path, session_id FROM cards WHERE id = ?1",
+                "SELECT project_path, session_id FROM cards WHERE id = ?1",
                 [&card_id],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .map_err(|e| format!("card not found: {e}"))?;
         if existing.is_some() {
-            return Err("card already has a session (resume comes in step 9)".into());
+            return Err("card already has a session — use send_message".into());
         }
-        (title, project_path)
+        project_path
     };
 
     // 2. Move the card to In Progress immediately so the user gets feedback
@@ -67,7 +76,9 @@ pub async fn start_session(app: AppHandle, card_id: String) -> Result<String, St
         host.send(SidecarInbound::StartSession {
             request_id: request_id.clone(),
             card_id: card_id.clone(),
-            title,
+            // Title field on the wire doubles as the first user prompt for
+            // both fresh starts (typed in the chat) and resumes.
+            title: prompt,
             project_path,
             resume_session_id: None,
         })

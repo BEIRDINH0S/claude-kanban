@@ -1,0 +1,72 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest # Apple Silicon (aarch64)
+            label: macOS Apple Silicon
+          - platform: macos-13 # Intel (x86_64)
+            label: macOS Intel
+          - platform: windows-latest # x86_64
+            label: Windows x64
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # `npm install` triggers postinstall which:
+      #   - installs sidecar dependencies (sidecar/node_modules)
+      #   - downloads the Node binary for the host arch into
+      #     src-tauri/binaries/node-<target-triple>
+      # Each platform job gets exactly the binary it needs to bundle.
+      - name: Install JS dependencies
+        run: npm install
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: claude-kanban ${{ github.ref_name }}
+          releaseBody: |
+            Build automatique non signé.
+
+            ## Téléchargement
+
+            - **macOS Apple Silicon (M1+)** : `.dmg` aarch64
+            - **macOS Intel** : `.dmg` x64
+            - **Windows** : `.msi` x64
+
+            Premier lancement (binaire non signé) :
+            - macOS : clic-droit sur l'app → **Ouvrir** la première fois pour bypasser Gatekeeper
+            - Windows : SmartScreen → **More info** → **Run anyway**
+
+            ## Pré-requis runtime
+
+            - **Claude Code** : `claude` doit être installé et accessible sur le PATH (`which claude` doit renvoyer un chemin)
+            - **Node** : pas besoin, il est bundlé dans l'app
+          releaseDraft: true
+          prerelease: false

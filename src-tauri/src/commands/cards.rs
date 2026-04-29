@@ -28,27 +28,32 @@ fn map_card(row: &rusqlite::Row) -> rusqlite::Result<Card> {
         position: row.get("position")?,
         session_id: row.get("session_id")?,
         project_path: row.get("project_path")?,
+        project_id: row.get("project_id")?,
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         last_state: row.get("last_state")?,
     })
 }
 
-fn fetch_all(conn: &Connection) -> rusqlite::Result<Vec<Card>> {
+fn fetch_all(conn: &Connection, project_id: &str) -> rusqlite::Result<Vec<Card>> {
     let mut stmt = conn.prepare(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  created_at, updated_at, last_state
+                  project_id, created_at, updated_at, last_state
              FROM cards
+            WHERE project_id = ?1
             ORDER BY "column", position, id"#,
     )?;
-    let rows = stmt.query_map([], map_card)?;
+    let rows = stmt.query_map([project_id], map_card)?;
     rows.collect()
 }
 
 #[tauri::command]
-pub fn list_cards(state: State<DbState>) -> Result<Vec<Card>, String> {
+pub fn list_cards(
+    state: State<DbState>,
+    project_id: String,
+) -> Result<Vec<Card>, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    fetch_all(&conn).map_err(|e| e.to_string())
+    fetch_all(&conn, &project_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -56,6 +61,7 @@ pub fn create_card(
     state: State<DbState>,
     title: String,
     project_path: String,
+    project_id: String,
 ) -> Result<Card, String> {
     let title = title.trim();
     if title.is_empty() {
@@ -64,31 +70,35 @@ pub fn create_card(
     if project_path.trim().is_empty() {
         return Err("project_path is required".into());
     }
+    if project_id.trim().is_empty() {
+        return Err("project_id is required".into());
+    }
 
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     let now = now_ms();
     let id = uuid::Uuid::new_v4().to_string();
 
-    // New cards land at the end of the Todo column.
+    // New cards land at the end of the Todo column within their project.
     let next_pos: i64 = conn
         .query_row(
-            r#"SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE "column" = 'todo'"#,
-            [],
+            r#"SELECT COALESCE(MAX(position) + 1, 0) FROM cards
+                WHERE "column" = 'todo' AND project_id = ?1"#,
+            [&project_id],
             |r| r.get(0),
         )
         .map_err(|e| e.to_string())?;
 
     conn.execute(
         r#"INSERT INTO cards (id, title, "column", position, project_path,
-                              created_at, updated_at)
-           VALUES (?1, ?2, 'todo', ?3, ?4, ?5, ?5)"#,
-        params![&id, title, next_pos, &project_path, now],
+                              project_id, created_at, updated_at)
+           VALUES (?1, ?2, 'todo', ?3, ?4, ?5, ?6, ?6)"#,
+        params![&id, title, next_pos, &project_path, &project_id, now],
     )
     .map_err(|e| e.to_string())?;
 
     conn.query_row(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  created_at, updated_at, last_state
+                  project_id, created_at, updated_at, last_state
              FROM cards WHERE id = ?1"#,
         [&id],
         map_card,
@@ -96,21 +106,22 @@ pub fn create_card(
     .map_err(|e| e.to_string())
 }
 
-/// Renumber a column so positions are dense 0..n-1. If `insert_id` is provided,
-/// it gets inserted at `insert_at` (clamped) and the existing card with that id
-/// is removed from its old slot first.
+/// Renumber a column so positions are dense 0..n-1 within a single project.
+/// If `insert_id` is provided, it gets inserted at `insert_at` (clamped) and
+/// the existing card with that id is removed from its old slot first.
 fn renumber_column(
     tx: &Transaction,
+    project_id: &str,
     column: &str,
     insert_id: Option<&str>,
     insert_at: usize,
     now: i64,
 ) -> rusqlite::Result<()> {
     let mut stmt = tx.prepare(
-        r#"SELECT id FROM cards WHERE "column" = ?1 ORDER BY position, id"#,
+        r#"SELECT id FROM cards WHERE "column" = ?1 AND project_id = ?2 ORDER BY position, id"#,
     )?;
     let mut ids: Vec<String> = stmt
-        .query_map([column], |r| r.get::<_, String>(0))?
+        .query_map(params![column, project_id], |r| r.get::<_, String>(0))?
         .collect::<rusqlite::Result<_>>()?;
     drop(stmt);
 
@@ -183,11 +194,11 @@ pub fn move_card(
     let target_str = column.as_str();
     let target_idx = target_index.max(0) as usize;
 
-    let from_column: String = tx
+    let (from_column, project_id): (String, String) = tx
         .query_row(
-            r#"SELECT "column" FROM cards WHERE id = ?1"#,
+            r#"SELECT "column", project_id FROM cards WHERE id = ?1"#,
             [&id],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .map_err(|e| format!("card not found: {e}"))?;
 
@@ -198,57 +209,21 @@ pub fn move_card(
             params![target_str, now, &id],
         )
         .map_err(|e| e.to_string())?;
-        renumber_column(&tx, &from_column, None, 0, now).map_err(|e| e.to_string())?;
+        renumber_column(&tx, &project_id, &from_column, None, 0, now).map_err(|e| e.to_string())?;
     }
 
-    renumber_column(&tx, target_str, Some(&id), target_idx, now)
+    renumber_column(&tx, &project_id, target_str, Some(&id), target_idx, now)
         .map_err(|e| e.to_string())?;
 
-    let cards = fetch_all(&tx).map_err(|e| e.to_string())?;
+    let cards = fetch_all(&tx, &project_id).map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     Ok(cards)
 }
 
 /// First-boot demo data so the empty board has something to drag around.
-/// Removed at step 4 once the "+" button takes over.
-pub fn seed_if_empty(conn: &Connection) -> rusqlite::Result<u32> {
-    let count: u32 = conn.query_row("SELECT COUNT(*) FROM cards", [], |r| r.get(0))?;
-    if count > 0 {
-        return Ok(0);
-    }
-
-    let now = now_ms();
-    let seed = [
-        ("Set up auth middleware", "todo"),
-        ("Refactor billing webhook", "todo"),
-        ("Investigate flaky e2e test", "in_progress"),
-        ("Migrate to SDK v2", "review"),
-        ("Improve onboarding copy", "idle"),
-        ("Ship dark mode toggle", "done"),
-    ];
-
-    // Per-column position counter so each entry lands at index 0, 1, 2…
-    let mut position_in_column: std::collections::HashMap<&str, i64> =
-        std::collections::HashMap::new();
-
-    for (title, col) in seed {
-        let pos = position_in_column.entry(col).or_insert(0);
-        conn.execute(
-            r#"INSERT INTO cards (id, title, "column", position, project_path,
-                                  created_at, updated_at)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
-            params![
-                uuid::Uuid::new_v4().to_string(),
-                title,
-                col,
-                *pos,
-                "/tmp/seed",
-                now,
-                now,
-            ],
-        )?;
-        *pos += 1;
-    }
-
-    Ok(seed.len() as u32)
+/// Now a no-op once the user has any cards or a non-default project.
+pub fn seed_if_empty(_conn: &Connection) -> rusqlite::Result<u32> {
+    // Seed disabled: the multi-project rollout makes the empty-board flow
+    // (`+ Nouvelle tâche` inside the active project) self-explanatory.
+    Ok(0)
 }

@@ -9,6 +9,9 @@ import type { Card, CardColumn } from "../types/card";
 import { useMessagesStore } from "./messagesStore";
 import { useUiStore } from "./uiStore";
 
+// Stable empty array for the case where no project is active yet.
+const NO_CARDS: readonly Card[] = [];
+
 interface CardsState {
   cards: Card[];
   loading: boolean;
@@ -16,15 +19,15 @@ interface CardsState {
   /** Cards that have a `start_session` IPC call in flight. */
   startingCardIds: ReadonlySet<string>;
 
-  load: () => Promise<void>;
-  create: (title: string, projectPath: string) => Promise<Card>;
+  load: (projectId: string) => Promise<void>;
+  create: (title: string, projectPath: string, projectId: string) => Promise<Card>;
   remove: (id: string) => Promise<void>;
   /**
    * Optimistically reorder locally, then call Rust which returns the
    * canonical state. Rolls back on failure.
    */
   move: (id: string, column: CardColumn, targetIndex: number) => Promise<void>;
-  startSession: (cardId: string) => Promise<void>;
+  startSession: (cardId: string, prompt: string) => Promise<void>;
   resumeSession: (cardId: string, prompt: string) => Promise<void>;
 }
 
@@ -83,18 +86,18 @@ export const useCardsStore = create<CardsState>((set, get) => ({
   error: null,
   startingCardIds: new Set<string>(),
 
-  load: async () => {
+  load: async (projectId) => {
     set({ loading: true, error: null });
     try {
-      const cards = await listCards();
+      const cards = await listCards(projectId);
       set({ cards, loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
     }
   },
 
-  create: async (title, projectPath) => {
-    const card = await createCard(title, projectPath);
+  create: async (title, projectPath, projectId) => {
+    const card = await createCard(title, projectPath, projectId);
     set((s) => ({ cards: [...s.cards, card] }));
     return card;
   },
@@ -127,21 +130,19 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     }
   },
 
-  startSession: async (cardId) => {
+  startSession: async (cardId, prompt) => {
     set((s) => {
       const next = new Set(s.startingCardIds);
       next.add(cardId);
       return { startingCardIds: next, error: null };
     });
     try {
-      await invokeStartSession(cardId);
-      // Rust already emitted `cards-changed`; the App-level listener will
-      // refetch. Nothing else to do here.
+      await invokeStartSession(cardId, prompt);
     } catch (e) {
       set({ error: String(e) });
-      // Refresh anyway so the optimistic In Progress move gets reverted
-      // if the start failed before any DB update.
-      void get().load();
+      // Refresh against the active project so optimistic moves revert.
+      const pid = useUiStore.getState().activeProjectId;
+      if (pid) void get().load(pid);
     } finally {
       set((s) => {
         const next = new Set(s.startingCardIds);
@@ -161,7 +162,8 @@ export const useCardsStore = create<CardsState>((set, get) => ({
       await invokeResumeSession(cardId, prompt);
     } catch (e) {
       set({ error: String(e) });
-      void get().load();
+      const pid = useUiStore.getState().activeProjectId;
+      if (pid) void get().load(pid);
     } finally {
       set((s) => {
         const next = new Set(s.startingCardIds);
@@ -171,6 +173,18 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     }
   },
 }));
+
+// Reload cards every time the active project changes. Subscribing here keeps
+// the cards <-> project link in one place and avoids duplicating the boot
+// logic in App.tsx.
+useUiStore.subscribe((state, prev) => {
+  if (state.activeProjectId === prev.activeProjectId) return;
+  if (!state.activeProjectId) {
+    useCardsStore.setState({ cards: NO_CARDS as Card[] });
+    return;
+  }
+  void useCardsStore.getState().load(state.activeProjectId);
+});
 
 export function selectByColumn(cards: Card[], column: CardColumn): Card[] {
   return cards

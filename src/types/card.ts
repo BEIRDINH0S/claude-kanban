@@ -12,6 +12,7 @@ export interface Card {
   position: number;
   sessionId: string | null;
   projectPath: string;
+  projectId: string;
   createdAt: number;
   updatedAt: number;
   lastState: string | null;

@@ -2,8 +2,11 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type { SdkEvent } from "../types/chat";
 
-export function startSession(cardId: string): Promise<string> {
-  return invoke<string>("start_session", { cardId });
+export function startSession(
+  cardId: string,
+  prompt: string,
+): Promise<string> {
+  return invoke<string>("start_session", { cardId, prompt });
 }
 
 export function resumeSession(cardId: string, prompt: string): Promise<string> {

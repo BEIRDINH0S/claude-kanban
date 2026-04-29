@@ -122,6 +122,112 @@
   }
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Markdown — Claude's assistant text often comes as Markdown (bold, lists,
+ *  code, links). We render it via react-markdown but keep the mono content
+ *  font; this gives a "terminal-rendered markdown" feel that fits the style.
+ * ────────────────────────────────────────────────────────────────────────── */
+.md-prose > * + * {
+  margin-top: 0.6em;
+}
+.md-prose strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.md-prose em {
+  font-style: italic;
+}
+.md-prose code {
+  background: rgb(0 0 0 / 0.06);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.92em;
+}
+:root[data-theme="dark"] .md-prose code {
+  background: rgb(255 255 255 / 0.08);
+}
+.md-prose pre {
+  background: rgb(0 0 0 / 0.05);
+  border: 1px solid var(--glass-stroke);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: 0.92em;
+  line-height: 1.55;
+}
+:root[data-theme="dark"] .md-prose pre {
+  background: rgb(255 255 255 / 0.04);
+}
+.md-prose pre code {
+  background: transparent;
+  padding: 0;
+}
+.md-prose ul,
+.md-prose ol {
+  padding-left: 1.4em;
+}
+.md-prose ul {
+  list-style: disc;
+}
+.md-prose ol {
+  list-style: decimal;
+}
+.md-prose li + li {
+  margin-top: 0.25em;
+}
+.md-prose h1,
+.md-prose h2,
+.md-prose h3 {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0.8em;
+}
+.md-prose h1 { font-size: 1.15em; }
+.md-prose h2 { font-size: 1.08em; }
+.md-prose h3 { font-size: 1.02em; }
+.md-prose a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+.md-prose blockquote {
+  border-left: 2px solid var(--glass-stroke);
+  padding-left: 0.8em;
+  color: var(--text-secondary);
+}
+.md-prose hr {
+  border: 0;
+  border-top: 1px solid var(--glass-stroke);
+  margin: 0.8em 0;
+}
+.md-prose table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.94em;
+}
+.md-prose th,
+.md-prose td {
+  border: 1px solid var(--glass-stroke);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.md-prose th {
+  font-weight: 600;
+  background: rgb(0 0 0 / 0.04);
+}
+:root[data-theme="dark"] .md-prose th {
+  background: rgb(255 255 255 / 0.04);
+}
+.md-prose del {
+  opacity: 0.6;
+}
+.md-prose input[type="checkbox"] {
+  margin-right: 0.4em;
+}
+
 @keyframes overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }

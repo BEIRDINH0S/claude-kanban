@@ -1,4 +1,4 @@
-import { LoaderCircle, CirclePlay, TriangleAlert, X } from "lucide-react";
+import { LoaderCircle, TriangleAlert, X } from "lucide-react";
 import { useEffect } from "react";
 
 import {
@@ -126,40 +126,23 @@ function Body({ card }: { card: Card }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card.id]);
 
-  // Case 1: brand-new card, no session yet.
-  if (!card.sessionId && !isStarting) {
-    return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6">
-        <p className="max-w-[460px] text-center text-sm text-[var(--text-secondary)]">
-          Aucune session pour cette carte. Le titre sera envoyé comme premier
-          prompt à Claude dans{" "}
-          <span className="font-mono text-[12px]">{card.projectPath}</span>.
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            appendUserInput(card.id, card.title);
-            void startSession(card.id);
-          }}
-          className="flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-4 py-2.5 text-sm font-medium text-white shadow-[0_0_24px_var(--color-accent-ring)]"
-        >
-          <CirclePlay className="size-4" strokeWidth={1.75} />
-          Démarrer la session
-        </button>
-      </div>
-    );
-  }
-
   const isWorking = card.column === "in_progress" || isStarting;
-  // Sending while the sidecar has no live query for this session means we
-  // need a resume — the first new message bootstraps the SDK with the
-  // existing JSONL as context.
-  const needsResume = !!card.sessionId && !isLive && !isStarting;
+  // What does "send" mean for this card right now?
+  //   no session yet → start a fresh session with the typed text as prompt
+  //   has session, sidecar query dead → resume with the typed text
+  //   has session, sidecar query live → just push as another message
+  const mode: "fresh" | "resume" | "live" = !card.sessionId
+    ? "fresh"
+    : isLive
+    ? "live"
+    : "resume";
 
   const handleSend = async (text: string) => {
     appendUserInput(card.id, text);
     try {
-      if (needsResume) {
+      if (mode === "fresh") {
+        await startSession(card.id, text);
+      } else if (mode === "resume") {
         await resumeSession(card.id, text);
       } else {
         await ipcSendMessage(card.id, text);
@@ -168,6 +151,15 @@ function Body({ card }: { card: Card }) {
       appendUserInput(card.id, `❌ ${String(e)}`);
     }
   };
+
+  const placeholder =
+    isStarting
+      ? "La session démarre…"
+      : mode === "fresh"
+      ? "Premier message à Claude…"
+      : mode === "resume"
+      ? "Reprends la conversation avec un message…"
+      : "Réponds à Claude…";
 
   return (
     <>
@@ -183,13 +175,7 @@ function Body({ card }: { card: Card }) {
       <MessageInput
         onSend={handleSend}
         disabled={isStarting}
-        placeholder={
-          isStarting
-            ? "La session démarre…"
-            : needsResume
-            ? "Reprends la conversation avec un message…"
-            : "Réponds à Claude…"
-        }
+        placeholder={placeholder}
       />
     </>
   );

@@ -7,6 +7,7 @@ import { useCardsStore } from "./stores/cardsStore";
 import { useErrorsStore } from "./stores/errorsStore";
 import { useMessagesStore } from "./stores/messagesStore";
 import { usePermissionsStore } from "./stores/permissionsStore";
+import { useProjectsStore } from "./stores/projectsStore";
 import { useUiStore } from "./stores/uiStore";
 import { useUsageStore } from "./stores/usageStore";
 import type { SdkEvent } from "./types/chat";
@@ -42,11 +43,31 @@ interface BinaryStatusPayload {
 }
 
 function App() {
+  // Boot sequence: load projects, settle on an active one, let the cardsStore
+  // subscription kick off the cards fetch for that project.
+  useEffect(() => {
+    void (async () => {
+      const projects = await useProjectsStore.getState().load();
+      const ui = useUiStore.getState();
+      const stillExists =
+        ui.activeProjectId &&
+        projects.some((p) => p.id === ui.activeProjectId);
+      if (!stillExists) {
+        ui.setActiveProjectId(projects[0]?.id ?? null);
+      } else if (ui.activeProjectId) {
+        // Same project as last session — kick the initial fetch since the
+        // store subscription only fires on changes.
+        void useCardsStore.getState().load(ui.activeProjectId);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     // Cards changed on the Rust side (session lifecycle, errors, background
-    // state moves) → just refetch the canonical list.
+    // state moves) → refetch for the active project only.
     const unlistenCards = listen("cards-changed", () => {
-      void useCardsStore.getState().load();
+      const pid = useUiStore.getState().activeProjectId;
+      if (pid) void useCardsStore.getState().load(pid);
     });
 
     // Each SDK event the sidecar produces flows here. We push it under the

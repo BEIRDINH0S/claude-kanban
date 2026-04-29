@@ -21,25 +21,58 @@ Todo  →  En cours  →  Review  →  Idle  →  Done
 - dnd-kit pour le kanban
 - Lecture native des JSONL `~/.claude/projects/**` pour la reprise de sessions
 
-## Prérequis
+## Télécharger l'app
 
-- macOS ou Windows (testé sur macOS — Windows n'a pas été vérifié)
-- **Node** 18+ (`node --version`) — utilisé par le sidecar
-- **Rust** stable (installé via `rustup`)
-- **Claude Code** : `claude` doit être sur ton `PATH` (`which claude`). L'app
-  le détecte au démarrage et affiche une bannière sinon.
+Va dans la page [Releases](https://github.com/BEIRDINH0S/claude-kanban/releases),
+prends l'asset qui correspond à ta machine :
 
-## Démarrer
+- **macOS Apple Silicon (M1+)** : `.dmg` aarch64
+- **macOS Intel** : `.dmg` x64
+- **Windows** : `.msi` x64
+
+Les builds ne sont pas signés, donc le premier lancement nécessite un détour :
+
+- **macOS** : clic-droit sur l'app dans Applications → **Ouvrir** → confirme
+  dans le dialog Gatekeeper. Une seule fois, ensuite double-clic normal.
+- **Windows** : SmartScreen affiche « unrecognized app » → clique sur
+  **More info** → **Run anyway**.
+
+**Pré-requis runtime :** `claude` (Claude Code CLI) doit être installé et
+accessible sur ton PATH (`which claude` doit renvoyer un chemin). Node est
+**bundlé dans l'app**, pas besoin de l'installer.
+
+## Lancer en dev (depuis les sources)
 
 ```bash
-git clone https://github.com/<user>/claude-kanban.git
+git clone https://github.com/BEIRDINH0S/claude-kanban.git
 cd claude-kanban
-npm install                # installe aussi les deps du sidecar via postinstall
+npm install        # installe les deps + télécharge le binaire Node sidecar
+                   # pour ta plateforme (~40MB, voir scripts/fetch-sidecar-bin.mjs)
 npm run tauri dev
 ```
 
+Pré-requis dev :
+
+- **Node** 18+ (`node --version`)
+- **Rust** stable (installé via `rustup`)
+- **Claude Code** : idem que pour l'app installée — `claude` doit être sur ton PATH
+
 La première compilation Rust prend quelques minutes (rusqlite bundle SQLite,
 plus toute la stack Tauri). Les rebuilds incrémentaux sont rapides.
+
+## Publier une nouvelle version
+
+Le workflow `release.yml` se déclenche sur le push d'un tag `v*` :
+
+```bash
+git tag v0.1.0
+git push --tags
+```
+
+Ça lance les 3 builds en matrix (macOS arm64, macOS x64, Windows x64). Chaque
+build télécharge son propre binaire Node, le bundle dans l'app, produit le
+`.dmg` ou `.msi` correspondant et l'attache à une **GitHub Release en draft**.
+Tu reviews, tu publies, c'est terminé.
 
 ## État du MVP
 

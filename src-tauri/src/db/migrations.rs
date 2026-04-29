@@ -21,6 +21,26 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX idx_cards_column_position ON cards("column", position);
     "#,
+
+    // v2 — projects table + cards.project_id (existing cards inherit a
+    // 'default' project so the migration is non-destructive).
+    r#"
+    CREATE TABLE projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+    );
+    INSERT INTO projects (id, name, created_at, updated_at)
+    VALUES (
+        'default',
+        'Tâches',
+        CAST(strftime('%s','now') AS INTEGER) * 1000,
+        CAST(strftime('%s','now') AS INTEGER) * 1000
+    );
+    ALTER TABLE cards ADD COLUMN project_id TEXT NOT NULL DEFAULT 'default';
+    CREATE INDEX idx_cards_project ON cards(project_id);
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {

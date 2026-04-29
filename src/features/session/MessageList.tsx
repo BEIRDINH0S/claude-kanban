@@ -1,8 +1,12 @@
 import { Wrench } from "lucide-react";
 import { useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 import type { DisplayItem, SdkEvent } from "../../types/chat";
 import { asBlocks, formatToolUse } from "./format";
+
+const REMARK_PLUGINS = [remarkGfm];
 
 interface Props {
   items: DisplayItem[];
@@ -105,8 +109,10 @@ function RenderedRow({ row }: { row: Row }) {
   }
   if (row.kind === "assistant-text") {
     return (
-      <div className="font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap text-[var(--text-primary)]">
-        {row.text}
+      <div className="md-prose font-mono text-[12.5px] leading-relaxed text-[var(--text-primary)]">
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>
+          {row.text}
+        </ReactMarkdown>
       </div>
     );
   }

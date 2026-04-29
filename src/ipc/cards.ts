@@ -1,12 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Card, CardColumn } from "../types/card";
 
-export function listCards(): Promise<Card[]> {
-  return invoke<Card[]>("list_cards");
+export function listCards(projectId: string): Promise<Card[]> {
+  return invoke<Card[]>("list_cards", { projectId });
 }
 
-export function createCard(title: string, projectPath: string): Promise<Card> {
-  return invoke<Card>("create_card", { title, projectPath });
+export function createCard(
+  title: string,
+  projectPath: string,
+  projectId: string,
+): Promise<Card> {
+  return invoke<Card>("create_card", { title, projectPath, projectId });
 }
 
 export function deleteCard(id: string): Promise<void> {
