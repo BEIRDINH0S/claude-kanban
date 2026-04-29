@@ -5,11 +5,13 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
 
 
-use crate::db::DbState;
+use crate::db::{is_card_project_archived, DbState};
 use crate::session_host::{
     protocol::{PermissionDecision, SidecarInbound},
     SessionHost,
 };
+
+const ARCHIVED_ERR: &str = "Ce projet est archivé en lecture seule.";
 
 fn now_ms() -> i64 {
     SystemTime::now()
@@ -29,10 +31,14 @@ pub async fn start_session(
         return Err("first message is required".into());
     }
 
-    // 1. Look up the card; reject if it already has a session.
+    // 1. Look up the card; reject if it already has a session, or if its
+    //    owning project is an imported snapshot (read-only).
     let project_path = {
         let db = app.state::<DbState>();
         let conn = db.conn.lock().unwrap();
+        if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
+            return Err(ARCHIVED_ERR.into());
+        }
         let (project_path, existing): (String, Option<String>) = conn
             .query_row(
                 "SELECT project_path, session_id FROM cards WHERE id = ?1",
@@ -134,6 +140,9 @@ pub async fn send_message(
     let (session_id, column) = {
         let db = app.state::<DbState>();
         let conn = db.conn.lock().unwrap();
+        if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
+            return Err(ARCHIVED_ERR.into());
+        }
         conn.query_row::<(Option<String>, String), _, _>(
             r#"SELECT session_id, "column" FROM cards WHERE id = ?1"#,
             [&card_id],
@@ -188,6 +197,9 @@ pub async fn resume_session(
     let (project_path, session_id) = {
         let db = app.state::<DbState>();
         let conn = db.conn.lock().unwrap();
+        if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
+            return Err(ARCHIVED_ERR.into());
+        }
         let row: (String, Option<String>) = conn
             .query_row(
                 "SELECT project_path, session_id FROM cards WHERE id = ?1",
@@ -313,6 +325,13 @@ pub async fn respond_permission(
     decision: PermissionDecision,
     message: Option<String>,
 ) -> Result<(), String> {
+    {
+        let db = app.state::<DbState>();
+        let conn = db.conn.lock().unwrap();
+        if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
+            return Err(ARCHIVED_ERR.into());
+        }
+    }
     // Send the user's choice to the sidecar; it unblocks the SDK's canUseTool
     // promise and Claude either runs the tool or gets the denial.
     let host = app.state::<SessionHost>();

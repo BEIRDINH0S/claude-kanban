@@ -4,6 +4,7 @@ import { LoaderCircle, Trash2 } from "lucide-react";
 
 import { useCardsStore } from "../../stores/cardsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
+import { useProjectsStore } from "../../stores/projectsStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Card } from "../../types/card";
 
@@ -18,6 +19,11 @@ export function CardItem({ card, overlay }: Props) {
   const remove = useCardsStore((s) => s.remove);
   const openZoom = useUiStore((s) => s.openZoom);
   const error = useErrorsStore((s) => s.byCard[card.id]);
+  // A card inherits its project's archived flag — drag and delete are
+  // neutered for read-only snapshots. Click still opens the zoom (read-only).
+  const archived = useProjectsStore((s) =>
+    s.projects.find((p) => p.id === card.projectId)?.archived ?? false,
+  );
 
   const {
     attributes,
@@ -26,14 +32,20 @@ export function CardItem({ card, overlay }: Props) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: card.id, disabled: overlay });
+  } = useSortable({ id: card.id, disabled: overlay || archived });
 
   const style: React.CSSProperties = overlay
     ? { cursor: "grabbing" }
     : {
         transform: CSS.Transform.toString(transform),
         transition: transition ?? "transform 200ms ease-out",
-        opacity: isDragging ? 0.35 : card.column === "idle" ? 0.85 : 1,
+        opacity: isDragging
+          ? 0.35
+          : archived
+          ? 0.7
+          : card.column === "idle"
+          ? 0.85
+          : 1,
       };
 
   const handleClick = () => {
@@ -58,7 +70,11 @@ export function CardItem({ card, overlay }: Props) {
       onClick={handleClick}
       className={[
         "group glass relative select-none rounded-xl p-3.5",
-        overlay ? "cursor-grabbing shadow-2xl" : "cursor-grab active:cursor-grabbing",
+        overlay
+          ? "cursor-grabbing shadow-2xl"
+          : archived
+          ? "cursor-default"
+          : "cursor-grab active:cursor-grabbing",
         error ? "ring-1 ring-red-400/40" : "",
       ].join(" ")}
     >
@@ -72,7 +88,7 @@ export function CardItem({ card, overlay }: Props) {
             strokeWidth={2}
           />
         )}
-        {!overlay && !isWorking && (
+        {!overlay && !isWorking && !archived && (
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}

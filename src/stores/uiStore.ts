@@ -19,6 +19,8 @@ function writeActiveProject(id: string | null) {
   }
 }
 
+export type CentralView = "board" | "settings";
+
 interface UiState {
   zoomedCardId: string | null;
   /** Session ids whose SDK query is currently alive in the sidecar process.
@@ -29,18 +31,24 @@ interface UiState {
   /** Currently selected project. The board, the create-card modal and
    *  cardsStore.load all key off this. Persisted in localStorage. */
   activeProjectId: string | null;
+  /** What the central pane is showing. The sidebar stays the same in both
+   *  states; only the right side toggles between the kanban and the
+   *  settings panel. */
+  view: CentralView;
 
   openZoom: (cardId: string) => void;
   closeZoom: () => void;
   markSessionLive: (sessionId: string) => void;
   markSessionDead: (sessionId: string) => void;
   setActiveProjectId: (id: string | null) => void;
+  setView: (view: CentralView) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
   zoomedCardId: null,
   liveSessionIds: new Set<string>(),
   activeProjectId: readActiveProject(),
+  view: "board",
 
   openZoom: (cardId) => set({ zoomedCardId: cardId }),
   closeZoom: () => set({ zoomedCardId: null }),
@@ -62,6 +70,10 @@ export const useUiStore = create<UiState>((set) => ({
 
   setActiveProjectId: (id) => {
     writeActiveProject(id);
-    set({ activeProjectId: id, zoomedCardId: null });
+    // Switching projects always means "go look at this project's board",
+    // never "open settings, then have a side-effect on the kanban".
+    set({ activeProjectId: id, zoomedCardId: null, view: "board" });
   },
+
+  setView: (view) => set({ view }),
 }));

@@ -3,7 +3,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rusqlite::{params, Connection, Transaction};
 use tauri::State;
 
-use crate::db::{Card, CardColumn, DbState};
+use crate::db::{
+    is_card_project_archived, is_project_archived, Card, CardColumn, DbState,
+};
+
+const ARCHIVED_ERR: &str = "Ce projet est archivé en lecture seule.";
 
 fn now_ms() -> i64 {
     SystemTime::now()
@@ -75,6 +79,9 @@ pub fn create_card(
     }
 
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    if is_project_archived(&conn, &project_id).unwrap_or(false) {
+        return Err(ARCHIVED_ERR.into());
+    }
     let now = now_ms();
     let id = uuid::Uuid::new_v4().to_string();
 
@@ -152,6 +159,9 @@ pub fn delete_card(
     // sidecar to free it instead of leaving an orphaned conversation alive.
     let session_id: Option<String> = {
         let conn = state.conn.lock().map_err(|e| e.to_string())?;
+        if is_card_project_archived(&conn, &id).unwrap_or(false) {
+            return Err(ARCHIVED_ERR.into());
+        }
         conn.query_row(
             "SELECT session_id FROM cards WHERE id = ?1",
             [&id],
@@ -189,6 +199,9 @@ pub fn move_card(
     target_index: i64,
 ) -> Result<Vec<Card>, String> {
     let mut conn = state.conn.lock().map_err(|e| e.to_string())?;
+    if is_card_project_archived(&conn, &id).unwrap_or(false) {
+        return Err(ARCHIVED_ERR.into());
+    }
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let now = now_ms();
     let target_str = column.as_str();

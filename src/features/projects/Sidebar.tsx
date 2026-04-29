@@ -1,7 +1,8 @@
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Lock, Moon, Pencil, Plus, Settings, Sun, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useProjectsStore } from "../../stores/projectsStore";
+import { useThemeStore } from "../../stores/themeStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Project } from "../../types/project";
 import { CreateProjectModal } from "./CreateProjectModal";
@@ -12,6 +13,8 @@ export function Sidebar() {
   const rename = useProjectsStore((s) => s.rename);
   const activeId = useUiStore((s) => s.activeProjectId);
   const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
+  const view = useUiStore((s) => s.view);
+  const setView = useUiStore((s) => s.setView);
   const [createOpen, setCreateOpen] = useState(false);
 
   const handleDelete = async (project: Project) => {
@@ -33,50 +36,59 @@ export function Sidebar() {
 
   return (
     <aside className="glass-strong z-30 flex w-[180px] shrink-0 flex-col border-r border-[var(--glass-stroke)]">
+      {/* Projects: section header + scrollable list + "new project" trailing entry. */}
       <header className="px-4 pt-4 pb-2">
         <p className="text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
           Projets
         </p>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
-        {projects.length === 0 && (
-          <p className="px-2 py-4 text-[11px] text-[var(--text-muted)]">
-            Pas encore de projet.
-          </p>
-        )}
+      <div className="flex flex-1 flex-col overflow-y-auto px-2 pb-2">
         <ul className="flex flex-col gap-0.5">
           {projects.map((p) => (
             <li key={p.id}>
               <ProjectRow
                 project={p}
-                active={p.id === activeId}
+                active={view === "board" && p.id === activeId}
                 onSelect={() => setActiveProjectId(p.id)}
                 onRename={(next) => rename(p.id, next)}
                 onDelete={() => handleDelete(p)}
               />
             </li>
           ))}
+          <li>
+            <NewProjectRow onClick={() => setCreateOpen(true)} />
+          </li>
         </ul>
       </div>
 
-      <footer className="border-t border-[var(--glass-stroke)] p-2">
-        <button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-[12.5px] text-[var(--text-secondary)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-        >
-          <Plus className="size-4" strokeWidth={1.75} />
-          Nouveau projet
-        </button>
-      </footer>
+      {/* Bottom nav: app-level destinations and small actions, separated by
+          a hairline so they're clearly distinct from the project list. New
+          entries (shortcuts, about, etc.) plug in here. */}
+      <nav className="border-t border-[var(--glass-stroke)] px-2 py-2">
+        <ul className="flex flex-col gap-0.5">
+          <li>
+            <ThemeRow />
+          </li>
+          <li>
+            <NavRow
+              icon={<Settings className="size-3.5" strokeWidth={1.75} />}
+              label="Paramètres"
+              active={view === "settings"}
+              onClick={() =>
+                setView(view === "settings" ? "board" : "settings")
+              }
+            />
+          </li>
+        </ul>
+      </nav>
 
       {createOpen && <CreateProjectModal onClose={() => setCreateOpen(false)} />}
     </aside>
   );
 }
 
-interface RowProps {
+interface ProjectRowProps {
   project: Project;
   active: boolean;
   onSelect: () => void;
@@ -84,7 +96,13 @@ interface RowProps {
   onDelete: () => void;
 }
 
-function ProjectRow({ project, active, onSelect, onRename, onDelete }: RowProps) {
+function ProjectRow({
+  project,
+  active,
+  onSelect,
+  onRename,
+  onDelete,
+}: ProjectRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(project.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -113,7 +131,7 @@ function ProjectRow({ project, active, onSelect, onRename, onDelete }: RowProps)
   return (
     <div
       onClick={editing ? undefined : onSelect}
-      onDoubleClick={() => setEditing(true)}
+      onDoubleClick={() => !project.archived && setEditing(true)}
       className={[
         "group flex items-center gap-2 rounded-lg px-2.5 py-1.5 transition-colors",
         editing ? "" : "cursor-pointer",
@@ -122,11 +140,13 @@ function ProjectRow({ project, active, onSelect, onRename, onDelete }: RowProps)
           : "text-[var(--text-secondary)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5",
       ].join(" ")}
     >
-      <span
-        className={`size-1.5 shrink-0 rounded-full ${
-          active ? "bg-[var(--color-accent)]" : "bg-[var(--text-muted)] opacity-50"
-        }`}
-      />
+      <span className="flex w-3.5 shrink-0 justify-center">
+        <span
+          className={`size-1.5 rounded-full ${
+            active ? "bg-[var(--color-accent)]" : "bg-[var(--text-muted)] opacity-50"
+          }`}
+        />
+      </span>
       {editing ? (
         <input
           ref={inputRef}
@@ -144,21 +164,36 @@ function ProjectRow({ project, active, onSelect, onRename, onDelete }: RowProps)
           className="flex-1 bg-transparent text-[12.5px] outline-none"
         />
       ) : (
-        <span className="flex-1 truncate text-[12.5px]">{project.name}</span>
+        <span
+          className={`flex flex-1 items-center gap-1.5 truncate text-[12.5px] ${
+            project.archived ? "italic" : ""
+          }`}
+        >
+          {project.archived && (
+            <Lock
+              className="size-3 shrink-0 text-[var(--text-muted)]"
+              strokeWidth={1.75}
+              aria-label="Lecture seule"
+            />
+          )}
+          <span className="truncate">{project.name}</span>
+        </span>
       )}
       {!editing && (
         <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditing(true);
-            }}
-            className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-            aria-label="Renommer"
-          >
-            <Pencil className="size-3" strokeWidth={1.75} />
-          </button>
+          {!project.archived && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditing(true);
+              }}
+              className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+              aria-label="Renommer"
+            >
+              <Pencil className="size-3" strokeWidth={1.75} />
+            </button>
+          )}
           <button
             type="button"
             onClick={(e) => {
@@ -173,5 +208,77 @@ function ProjectRow({ project, active, onSelect, onRename, onDelete }: RowProps)
         </span>
       )}
     </div>
+  );
+}
+
+/** Trailing entry of the projects list — visually consistent with rows above
+ * but signals "create" via a + glyph and dimmed label. */
+function NewProjectRow({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[var(--text-muted)] transition-colors hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+    >
+      <span className="flex w-3.5 shrink-0 justify-center">
+        <Plus className="size-3" strokeWidth={1.75} />
+      </span>
+      Nouveau projet
+    </button>
+  );
+}
+
+/** Click-to-toggle theme entry, styled like a NavRow but acting on a store
+ * action rather than a route. Label reflects current state. */
+function ThemeRow() {
+  const theme = useThemeStore((s) => s.theme);
+  const toggle = useThemeStore((s) => s.toggleTheme);
+  const isDark = theme === "dark";
+  return (
+    <NavRow
+      icon={
+        isDark ? (
+          <Moon className="size-3.5" strokeWidth={1.75} />
+        ) : (
+          <Sun className="size-3.5" strokeWidth={1.75} />
+        )
+      }
+      label={isDark ? "Thème sombre" : "Thème clair"}
+      active={false}
+      onClick={toggle}
+    />
+  );
+}
+
+/** Generic bottom-nav entry. Same row pattern as ProjectRow so the sidebar
+ * reads as one unified list of destinations. */
+function NavRow({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={[
+        "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors",
+        active
+          ? "bg-[var(--color-accent-soft)] text-[var(--text-primary)]"
+          : "text-[var(--text-secondary)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5",
+      ].join(" ")}
+    >
+      <span className="flex w-3.5 shrink-0 justify-center text-[var(--text-muted)]">
+        {icon}
+      </span>
+      {label}
+    </button>
   );
 }
