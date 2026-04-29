@@ -16,6 +16,7 @@ pub fn run() {
         // Persists window size + position across launches; saves to a small
         // file in app data and restores on next boot. Zero JS code needed.
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let app_data = app.path().app_data_dir()?;
             let db_path = app_data.join("claude-kanban.db");

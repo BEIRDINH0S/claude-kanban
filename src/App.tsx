@@ -1,5 +1,32 @@
 import { listen } from "@tauri-apps/api/event";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 import { useEffect } from "react";
+
+/**
+ * Best-effort wrapper that asks the OS for permission on first call and
+ * silently skips if the user denies. Cached so we don't re-ask every
+ * time a permission request lands.
+ */
+let notifGranted: boolean | null = null;
+async function ensureNotifPermission(): Promise<boolean> {
+  if (notifGranted !== null) return notifGranted;
+  try {
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      const r = await requestPermission();
+      granted = r === "granted";
+    }
+    notifGranted = granted;
+    return granted;
+  } catch {
+    notifGranted = false;
+    return false;
+  }
+}
 
 import { Board } from "./features/kanban/Board";
 import { ZoomView } from "./features/session/ZoomView";
@@ -95,7 +122,9 @@ function App() {
     );
 
     // Tool-permission requests from the SDK. Stored per card; the zoom view
-    // surfaces the prompt and respond_permission unblocks the sidecar.
+    // surfaces the prompt and respond_permission unblocks the sidecar. We
+    // also fire a system notification so the user sees the request even if
+    // they're not currently in this card's zoom view.
     const unlistenPerms = listen<PermissionRequestPayload>(
       "permission-request",
       (e) => {
@@ -107,6 +136,18 @@ function App() {
           cardId,
           toolName,
           input,
+        });
+        // Skip the notification when the user is already looking at this
+        // card — they don't need to be told about something on screen.
+        if (useUiStore.getState().zoomedCardId === cardId) return;
+        const card = useCardsStore
+          .getState()
+          .cards.find((c) => c.id === cardId);
+        const title = card
+          ? `Claude attend une permission · ${card.title}`
+          : "Claude attend une permission";
+        void ensureNotifPermission().then((ok) => {
+          if (ok) sendNotification({ title, body: `Outil : ${toolName}` });
         });
       },
     );
