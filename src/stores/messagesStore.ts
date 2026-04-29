@@ -3,11 +3,6 @@ import { create } from "zustand";
 import { asBlocks } from "../features/session/format";
 import type { DisplayItem, SdkEvent } from "../types/chat";
 
-export interface PreviewLine {
-  author: "user" | "claude";
-  text: string;
-}
-
 interface MessagesState {
   byCard: Record<string, DisplayItem[]>;
   appendUserInput: (cardId: string, text: string) => void;
@@ -71,44 +66,44 @@ export const useMessagesStore = create<MessagesState>((set) => ({
     }),
 }));
 
-/**
- * Derive the last `n` user/assistant text lines for the card preview on the
- * board. tool_use chips, tool_results and SDK system/status/result events are
- * filtered out — we only want what a human would call "messages".
- *
- * Returns `null` when nothing renderable yet, so the caller can fall back to
- * a placeholder preview without an empty mono block.
- */
-export function selectLatestPreview(
+export interface ToolUseSummary {
+  name: string;
+  input: unknown;
+}
+
+/** Most recent assistant tool_use block in the transcript, if any. */
+export function findLatestToolUse(
   items: DisplayItem[] | undefined,
-  n: number,
-): PreviewLine[] | null {
-  if (!items || items.length === 0) return null;
-  const lines: PreviewLine[] = [];
-  // Walk from newest backward to collect at most `n` lines.
-  for (let i = items.length - 1; i >= 0 && lines.length < n; i--) {
+): ToolUseSummary | null {
+  if (!items) return null;
+  for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
-    if (it.kind === "user-input") {
-      lines.unshift({ author: "user", text: it.text });
-      continue;
+    if (it.kind !== "sdk" || it.event.type !== "assistant") continue;
+    const blocks = asBlocks(it.event.message?.content);
+    const tu = blocks.find((b) => b.type === "tool_use");
+    if (tu) {
+      const t = tu as { name: string; input: unknown };
+      return { name: t.name, input: t.input };
     }
-    const event = it.event;
-    if (event.type === "assistant") {
-      const text = asBlocks(event.message?.content)
-        .filter((b) => b.type === "text")
-        .map((b) => (b as { text: string }).text)
-        .join("\n")
-        .trim();
-      if (text) lines.unshift({ author: "claude", text });
-    } else if (event.type === "user") {
-      const text = asBlocks(event.message?.content)
-        .filter((b) => b.type === "text")
-        .map((b) => (b as { text: string }).text)
-        .join("\n")
-        .trim();
-      if (text) lines.unshift({ author: "user", text });
-    }
-    // Other event types (system, result, tool_*, hook_*) are skipped.
   }
-  return lines.length > 0 ? lines : null;
+  return null;
+}
+
+/** Most recent assistant text block (joined), if any. */
+export function findLatestAssistantText(
+  items: DisplayItem[] | undefined,
+): string | null {
+  if (!items) return null;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    if (it.kind !== "sdk" || it.event.type !== "assistant") continue;
+    const blocks = asBlocks(it.event.message?.content);
+    const text = blocks
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { text: string }).text)
+      .join("\n")
+      .trim();
+    if (text) return text;
+  }
+  return null;
 }

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Tailwind dark variant rebound to a `data-theme="dark"` attribute on the
+ * html root. The user can flip themes via the TopBar toggle; an inline boot
+ * script in index.html sets the attribute before paint to avoid FOUC. */
+@custom-variant dark (&:where([data-theme="dark"] *));
+
 /* ──────────────────────────────────────────────────────────────────────────
  *  Design tokens — exposed to Tailwind via @theme so utilities like
  *  `font-sans`, `font-mono`, `text-accent`, `bg-glass`, etc. resolve to these.
@@ -16,10 +21,12 @@
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
- *  Theme variables — light by default, overridden by prefers-color-scheme.
- *  The whole app reads from these so we never hard-code colours in components.
+ *  Theme variables. `data-theme` is always set to "light" or "dark" by the
+ *  inline boot script in index.html (resolving "system" via media query),
+ *  so we never need to query `prefers-color-scheme` from CSS.
  * ────────────────────────────────────────────────────────────────────────── */
-:root {
+:root,
+:root[data-theme="light"] {
   --bg-grad-from: oklch(0.985 0.006 270);
   --bg-grad-via: oklch(0.97 0.012 280);
   --bg-grad-to: oklch(0.955 0.018 295);
@@ -38,25 +45,23 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-grad-from: oklch(0.18 0.03 275);
-    --bg-grad-via: oklch(0.15 0.035 280);
-    --bg-grad-to: oklch(0.12 0.04 290);
+:root[data-theme="dark"] {
+  --bg-grad-from: oklch(0.18 0.03 275);
+  --bg-grad-via: oklch(0.15 0.035 280);
+  --bg-grad-to: oklch(0.12 0.04 290);
 
-    --text-primary: oklch(0.96 0.005 270);
-    --text-secondary: oklch(0.78 0.012 280);
-    --text-muted: oklch(0.6 0.015 280);
+  --text-primary: oklch(0.96 0.005 270);
+  --text-secondary: oklch(0.78 0.012 280);
+  --text-muted: oklch(0.6 0.015 280);
 
-    --glass-bg: rgb(255 255 255 / 0.05);
-    --glass-bg-strong: rgb(40 40 56 / 0.78);
-    --glass-stroke: rgb(255 255 255 / 0.1);
-    --glass-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset,
-      0 8px 32px -8px rgb(0 0 0 / 0.5),
-      0 24px 64px -16px rgb(0 0 0 / 0.4);
+  --glass-bg: rgb(255 255 255 / 0.05);
+  --glass-bg-strong: rgb(40 40 56 / 0.78);
+  --glass-stroke: rgb(255 255 255 / 0.1);
+  --glass-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset,
+    0 8px 32px -8px rgb(0 0 0 / 0.5),
+    0 24px 64px -16px rgb(0 0 0 / 0.4);
 
-    color-scheme: dark;
-  }
+  color-scheme: dark;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

@@ -20,7 +20,7 @@ export function Column({ def, cards }: Props) {
     <div
       ref={setNodeRef}
       className={[
-        "flex h-full w-72 shrink-0 flex-col rounded-2xl transition-colors duration-150",
+        "flex h-full min-w-[220px] flex-1 flex-col rounded-2xl transition-colors duration-150",
         isOver ? "bg-[var(--color-accent-soft)]/40" : "",
       ].join(" ")}
     >

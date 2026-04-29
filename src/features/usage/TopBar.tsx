@@ -7,6 +7,7 @@ import {
   useUsageStore,
 } from "../../stores/usageStore";
 import { RateLimitMeter } from "./RateLimitMeter";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface Props {
   onCreate: () => void;
@@ -42,14 +43,17 @@ export function TopBar({ onCreate }: Props) {
         {weekly && <RateLimitMeter label="weekly" info={weekly} />}
       </div>
 
-      <button
-        type="button"
-        onClick={onCreate}
-        className="glass flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-[12.5px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)]"
-      >
-        <Plus className="size-4" strokeWidth={1.75} />
-        Nouvelle tâche
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        <ThemeToggle />
+        <button
+          type="button"
+          onClick={onCreate}
+          className="glass flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12.5px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)]"
+        >
+          <Plus className="size-4" strokeWidth={1.75} />
+          Nouvelle tâche
+        </button>
+      </div>
     </header>
   );
 }

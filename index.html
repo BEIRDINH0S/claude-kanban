@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>claude-kanban</title>
+    <script>
+      // Boot-time theme: read user pref, fall back to OS preference once.
+      // Set data-theme before paint to avoid FOUC on reload.
+      (function () {
+        try {
+          var v = localStorage.getItem("claude-kanban-theme");
+          var resolved =
+            v === "light" || v === "dark"
+              ? v
+              : window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light";
+          document.documentElement.setAttribute("data-theme", resolved);
+        } catch (_) {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
   </head>
 
   <body>
