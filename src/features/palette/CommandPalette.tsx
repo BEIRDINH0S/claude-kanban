@@ -58,6 +58,14 @@ export function CommandPalette() {
       },
     });
     out.push({
+      id: "projects",
+      label: "Projets · gérer / créer",
+      icon: <FolderKanban className="size-3.5" strokeWidth={1.75} />,
+      hint: "Aller à",
+      keywords: ["nouveau", "projet", "create"],
+      run: () => setView("projects"),
+    });
+    out.push({
       id: "settings",
       label: "Paramètres",
       icon: <Settings className="size-3.5" strokeWidth={1.75} />,

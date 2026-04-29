@@ -17,10 +17,10 @@ import {
   ChevronsRight,
   Eye,
   EyeOff,
+  FolderCog,
   Lock,
   Moon,
   Pencil,
-  Plus,
   Settings,
   Sun,
   Trash2,
@@ -31,7 +31,6 @@ import { useProjectsStore } from "../../stores/projectsStore";
 import { useThemeStore } from "../../stores/themeStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Project } from "../../types/project";
-import { CreateProjectModal } from "./CreateProjectModal";
 
 const HIDE_ARCHIVED_KEY = "claude-kanban-hide-archived";
 function readHideArchived(): boolean {
@@ -78,7 +77,6 @@ export function Sidebar() {
     ids.splice(toIdx, 0, ids.splice(fromIdx, 1)[0]);
     void reorder(ids);
   };
-  const [createOpen, setCreateOpen] = useState(false);
   const [hideArchived, setHideArchived] = useState(readHideArchived);
   const visibleProjects = hideArchived
     ? projects.filter((p) => !p.archived)
@@ -116,14 +114,15 @@ export function Sidebar() {
         collapsed ? "w-[52px]" : "w-[180px]",
       ].join(" ")}
     >
-      {/* Projects: section header + scrollable list + "new project" trailing entry. */}
-      <header className="flex items-center gap-2 px-2 pt-2.5 pb-2">
+      {/* App-level toolbar: collapse/expand the sidebar itself. Lives in its
+          own thin row so it doesn't pollute the projects section header. */}
+      <div className="flex justify-end px-2 pt-2 pb-1">
         <button
           type="button"
           onClick={toggleSidebar}
           aria-label={collapsed ? "Déplier la sidebar" : "Replier la sidebar"}
           title={collapsed ? "Déplier la sidebar" : "Replier la sidebar"}
-          className="grid size-7 shrink-0 place-items-center rounded text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+          className="grid size-6 place-items-center rounded text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
         >
           {collapsed ? (
             <ChevronsRight className="size-3.5" strokeWidth={1.75} />
@@ -131,37 +130,56 @@ export function Sidebar() {
             <ChevronsLeft className="size-3.5" strokeWidth={1.75} />
           )}
         </button>
-        {!collapsed && (
-          <>
-            <p className="flex-1 text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-              Projets
-            </p>
-            {archivedCount > 0 && (
-              <button
-                type="button"
-                onClick={toggleHideArchived}
-                title={
-                  hideArchived
-                    ? `Afficher les projets archivés (${archivedCount})`
-                    : "Masquer les projets archivés"
-                }
-                aria-label={
-                  hideArchived
-                    ? "Afficher les archivés"
-                    : "Masquer les archivés"
-                }
-                className="rounded p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-              >
-                {hideArchived ? (
-                  <EyeOff className="size-3" strokeWidth={1.75} />
-                ) : (
-                  <Eye className="size-3" strokeWidth={1.75} />
-                )}
-              </button>
-            )}
-          </>
-        )}
-      </header>
+      </div>
+
+      {/* Projects section header: label + project-only actions on the right. */}
+      {!collapsed && (
+        <header className="flex items-center gap-1 px-4 pt-1 pb-2">
+          <p className="flex-1 text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
+            Projets
+          </p>
+          {archivedCount > 0 && (
+            <button
+              type="button"
+              onClick={toggleHideArchived}
+              title={
+                hideArchived
+                  ? `Afficher les projets archivés (${archivedCount})`
+                  : "Masquer les projets archivés"
+              }
+              aria-label={
+                hideArchived
+                  ? "Afficher les archivés"
+                  : "Masquer les archivés"
+              }
+              className="rounded p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+            >
+              {hideArchived ? (
+                <EyeOff className="size-3" strokeWidth={1.75} />
+              ) : (
+                <Eye className="size-3" strokeWidth={1.75} />
+              )}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              setView(view === "projects" ? "board" : "projects")
+            }
+            aria-pressed={view === "projects"}
+            title="Gérer les projets"
+            aria-label="Gérer les projets"
+            className={[
+              "rounded p-1 transition-colors",
+              view === "projects"
+                ? "bg-[var(--color-accent-soft)] text-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5",
+            ].join(" ")}
+          >
+            <FolderCog className="size-3" strokeWidth={1.75} />
+          </button>
+        </header>
+      )}
 
       <div className="flex flex-1 flex-col overflow-y-auto px-2 pb-2">
         <DndContext
@@ -188,7 +206,6 @@ export function Sidebar() {
             </ul>
           </SortableContext>
         </DndContext>
-        <NewProjectRow onClick={() => setCreateOpen(true)} />
       </div>
 
       {/* Bottom nav: app-level destinations and small actions, separated by
@@ -212,7 +229,6 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      {createOpen && <CreateProjectModal onClose={() => setCreateOpen(false)} />}
     </aside>
   );
 }
@@ -359,25 +375,6 @@ function ProjectRow({
         </span>
       )}
     </div>
-  );
-}
-
-/** Trailing entry of the projects list — visually consistent with rows above
- * but signals "create" via a + glyph and dimmed label. */
-function NewProjectRow({ onClick }: { onClick: () => void }) {
-  const collapsed = useUiStore((s) => s.sidebarCollapsed);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={collapsed ? "Nouveau projet" : undefined}
-      className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[var(--text-muted)] transition-colors hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-    >
-      <span className="flex w-3.5 shrink-0 justify-center">
-        <Plus className="size-3" strokeWidth={1.75} />
-      </span>
-      {!collapsed && "Nouveau projet"}
-    </button>
   );
 }
 

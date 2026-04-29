@@ -13,6 +13,7 @@ import {
 import { useEffect, useState } from "react";
 
 import { CreateCardModal } from "../card-create/CreateCardModal";
+import { ProjectsPage } from "../projects/ProjectsPage";
 import { Sidebar } from "../projects/Sidebar";
 import { SettingsPage } from "../settings/SettingsPage";
 import { BinaryBanner } from "../usage/BinaryBanner";
@@ -112,6 +113,8 @@ export function Board() {
 
           {view === "settings" ? (
             <SettingsPage />
+          ) : view === "projects" ? (
+            <ProjectsPage />
           ) : (
             <>
               <BoardHeader onCreate={() => setCreateOpen(true)} />

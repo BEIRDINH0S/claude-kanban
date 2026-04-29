@@ -41,6 +41,21 @@ Les builds ne sont pas signés, donc le premier lancement nécessite un détour 
 accessible sur ton PATH (`which claude` doit renvoyer un chemin). Node est
 **bundlé dans l'app**, pas besoin de l'installer.
 
+### Windows + WSL
+
+Si tu utilises `claude` depuis WSL (Linux dans Windows) plutôt que natif
+Windows, le sidecar Node de l'app ne trouvera pas le binaire avec un
+simple `where claude` — il scanne le PATH Windows seulement. Crée un shim
+`claude.bat` quelque part dans ton PATH Windows, contenant simplement :
+
+```batch
+@echo off
+wsl claude %*
+```
+
+L'app le détectera comme une commande `claude` standard et appellera
+WSL en transparent.
+
 ## Lancer en dev (depuis les sources)
 
 ```bash
