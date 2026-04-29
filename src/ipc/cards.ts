@@ -17,6 +17,19 @@ export function deleteCard(id: string): Promise<void> {
   return invoke<void>("delete_card", { id });
 }
 
+export interface CardPatch {
+  title?: string;
+  projectPath?: string;
+}
+
+export function updateCard(id: string, patch: CardPatch): Promise<Card> {
+  return invoke<Card>("update_card", {
+    id,
+    title: patch.title,
+    projectPath: patch.projectPath,
+  });
+}
+
 export function moveCard(
   id: string,
   column: CardColumn,

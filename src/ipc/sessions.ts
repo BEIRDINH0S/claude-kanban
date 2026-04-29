@@ -24,6 +24,10 @@ export function sendMessage(cardId: string, text: string): Promise<void> {
   return invoke<void>("send_message", { cardId, text });
 }
 
+export function stopSession(cardId: string): Promise<void> {
+  return invoke<void>("stop_session", { cardId });
+}
+
 export type PermissionDecision = "allow" | "deny";
 
 export function respondPermission(

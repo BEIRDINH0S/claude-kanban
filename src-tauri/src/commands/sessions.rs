@@ -125,6 +125,29 @@ pub async fn start_session(
     result
 }
 
+/// Forcibly stop the SDK query for a card's session. The sidecar receives a
+/// `stop_session` and ends its prompt iterable; the SDK then emits its final
+/// events (or an error) which flow through the normal listener path. We do
+/// NOT clear `session_id` on the card so the user can still resume later.
+#[tauri::command]
+pub async fn stop_session(app: AppHandle, card_id: String) -> Result<(), String> {
+    let session_id: Option<String> = {
+        let db = app.state::<DbState>();
+        let conn = db.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT session_id FROM cards WHERE id = ?1",
+            [&card_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("card not found: {e}"))?
+    };
+    let session_id = session_id.ok_or("card has no session")?;
+
+    let host = app.state::<SessionHost>();
+    host.send(SidecarInbound::StopSession { session_id })
+        .map_err(|e| format!("send to sidecar: {e}"))
+}
+
 #[tauri::command]
 pub async fn send_message(
     app: AppHandle,

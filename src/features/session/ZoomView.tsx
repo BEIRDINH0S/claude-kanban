@@ -1,5 +1,14 @@
-import { LoaderCircle, TriangleAlert, X } from "lucide-react";
-import { useEffect } from "react";
+import { openPath } from "@tauri-apps/plugin-opener";
+import {
+  Archive,
+  CircleStop,
+  FolderOpen,
+  LoaderCircle,
+  Pencil,
+  TriangleAlert,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   readSessionHistory,
@@ -8,6 +17,7 @@ import {
 import { useCardsStore } from "../../stores/cardsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
 import { useMessagesStore } from "../../stores/messagesStore";
+import { useProjectsStore } from "../../stores/projectsStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Card } from "../../types/card";
 import { MessageInput } from "./MessageInput";
@@ -49,6 +59,31 @@ export function ZoomView() {
 }
 
 function Header({ card, onClose }: { card: Card; onClose: () => void }) {
+  const update = useCardsStore((s) => s.update);
+  const move = useCardsStore((s) => s.move);
+  const stopSession = useCardsStore((s) => s.stopSession);
+  const closeZoom = useUiStore((s) => s.closeZoom);
+  const liveSessionIds = useUiStore((s) => s.liveSessionIds);
+  const isLive = !!card.sessionId && liveSessionIds.has(card.sessionId);
+  const archived = useProjectsStore((s) =>
+    s.projects.find((p) => p.id === card.projectId)?.archived ?? false,
+  );
+
+  const handleArchive = () => {
+    // Move to Done. The store's optimistic move + Rust commit handles
+    // renumbering. Stop the session first if it's live so we don't leave
+    // an SDK query running for a card the user just archived.
+    if (isLive) void stopSession(card.id);
+    void move(card.id, "done", 0);
+    closeZoom();
+  };
+
+  const handleOpenFolder = () => {
+    void openPath(card.projectPath).catch(() => {
+      // Best-effort — if the path doesn't exist, the OS dialog will say so.
+    });
+  };
+
   return (
     <header className="flex items-start justify-between gap-3 border-b border-[var(--glass-stroke)] px-6 py-4">
       <div className="min-w-0 flex-1">
@@ -60,22 +95,198 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
               : "no session"}
           </span>
         </p>
-        <h2 className="mt-1 truncate text-[15px] font-semibold text-[var(--text-primary)]">
-          {card.title}
-        </h2>
-        <p className="mt-0.5 truncate font-mono text-[11px] text-[var(--text-muted)]">
-          {card.projectPath}
-        </p>
+        <EditableTitle
+          value={card.title}
+          disabled={archived}
+          onCommit={(next) => update(card.id, { title: next })}
+        />
+        <EditablePath
+          value={card.projectPath}
+          disabled={archived}
+          onCommit={(next) => update(card.id, { projectPath: next })}
+          onOpen={handleOpenFolder}
+        />
       </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {isLive && !archived && (
+          <button
+            type="button"
+            onClick={() => void stopSession(card.id)}
+            title="Stopper la session Claude"
+            aria-label="Stopper la session"
+            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 dark:hover:bg-white/5"
+          >
+            <CircleStop className="size-4" strokeWidth={1.75} />
+          </button>
+        )}
+        {!archived && card.column !== "done" && (
+          <button
+            type="button"
+            onClick={handleArchive}
+            title="Archiver dans Done"
+            aria-label="Archiver"
+            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+          >
+            <Archive className="size-4" strokeWidth={1.75} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="-mt-1 -mr-1 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+          aria-label="Fermer"
+        >
+          <X className="size-4" strokeWidth={1.5} />
+        </button>
+      </div>
+    </header>
+  );
+}
+
+interface EditableTitleProps {
+  value: string;
+  disabled: boolean;
+  onCommit: (next: string) => Promise<unknown> | void;
+}
+
+function EditableTitle({ value, disabled, onCommit }: EditableTitleProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (editing) {
+      ref.current?.focus();
+      ref.current?.select();
+    }
+  }, [editing]);
+
+  const commit = async () => {
+    const next = draft.trim();
+    if (next && next !== value) {
+      try {
+        await onCommit(next);
+      } catch {
+        setDraft(value);
+      }
+    } else {
+      setDraft(value);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={ref}
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void commit();
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="mt-1 w-full rounded-md border border-[var(--color-accent-ring)] bg-black/5 px-2 py-0.5 text-[15px] font-semibold text-[var(--text-primary)] outline-none dark:bg-white/5"
+      />
+    );
+  }
+  return (
+    <h2
+      onDoubleClick={() => !disabled && setEditing(true)}
+      className={`mt-1 truncate text-[15px] font-semibold text-[var(--text-primary)] ${
+        disabled ? "" : "cursor-text"
+      }`}
+      title={disabled ? undefined : "Double-clique pour renommer"}
+    >
+      {value}
+    </h2>
+  );
+}
+
+interface EditablePathProps {
+  value: string;
+  disabled: boolean;
+  onCommit: (next: string) => Promise<unknown> | void;
+  onOpen: () => void;
+}
+
+function EditablePath({ value, disabled, onCommit, onOpen }: EditablePathProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (editing) {
+      ref.current?.focus();
+      ref.current?.select();
+    }
+  }, [editing]);
+
+  const commit = async () => {
+    const next = draft.trim();
+    if (next && next !== value) {
+      try {
+        await onCommit(next);
+      } catch {
+        setDraft(value);
+      }
+    } else {
+      setDraft(value);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={ref}
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void commit();
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="mt-1 w-full rounded-md border border-[var(--color-accent-ring)] bg-black/5 px-2 py-0.5 font-mono text-[11px] text-[var(--text-primary)] outline-none dark:bg-white/5"
+      />
+    );
+  }
+  return (
+    <div className="mt-0.5 flex items-center gap-1">
       <button
         type="button"
-        onClick={onClose}
-        className="-mt-1 -mr-1 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-        aria-label="Fermer"
+        onClick={onOpen}
+        title="Ouvrir le dossier"
+        aria-label="Ouvrir le dossier"
+        className="shrink-0 rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
       >
-        <X className="size-4" strokeWidth={1.5} />
+        <FolderOpen className="size-3" strokeWidth={1.75} />
       </button>
-    </header>
+      <p className="flex-1 truncate font-mono text-[11px] text-[var(--text-muted)]">
+        {value}
+      </p>
+      {!disabled && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title="Modifier le chemin"
+          aria-label="Modifier le chemin"
+          className="shrink-0 rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-black/5 hover:text-[var(--text-primary)] group-hover:opacity-100 dark:hover:bg-white/5"
+        >
+          <Pencil className="size-3" strokeWidth={1.75} />
+        </button>
+      )}
+    </div>
   );
 }
 

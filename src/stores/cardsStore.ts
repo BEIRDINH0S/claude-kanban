@@ -1,9 +1,17 @@
 import { create } from "zustand";
 
-import { createCard, deleteCard, listCards, moveCard } from "../ipc/cards";
+import {
+  createCard,
+  deleteCard,
+  listCards,
+  moveCard,
+  updateCard,
+  type CardPatch,
+} from "../ipc/cards";
 import {
   resumeSession as invokeResumeSession,
   startSession as invokeStartSession,
+  stopSession as invokeStopSession,
 } from "../ipc/sessions";
 import type { Card, CardColumn } from "../types/card";
 import { useMessagesStore } from "./messagesStore";
@@ -21,7 +29,9 @@ interface CardsState {
 
   load: (projectId: string) => Promise<void>;
   create: (title: string, projectPath: string, projectId: string) => Promise<Card>;
+  update: (id: string, patch: CardPatch) => Promise<Card>;
   remove: (id: string) => Promise<void>;
+  stopSession: (cardId: string) => Promise<void>;
   /**
    * Optimistically reorder locally, then call Rust which returns the
    * canonical state. Rolls back on failure.
@@ -100,6 +110,22 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     const card = await createCard(title, projectPath, projectId);
     set((s) => ({ cards: [...s.cards, card] }));
     return card;
+  },
+
+  update: async (id, patch) => {
+    const fresh = await updateCard(id, patch);
+    set((s) => ({
+      cards: s.cards.map((c) => (c.id === id ? fresh : c)),
+    }));
+    return fresh;
+  },
+
+  stopSession: async (cardId) => {
+    try {
+      await invokeStopSession(cardId);
+    } catch (e) {
+      set({ error: String(e) });
+    }
   },
 
   remove: async (id) => {

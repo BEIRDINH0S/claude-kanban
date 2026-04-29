@@ -113,6 +113,54 @@ pub fn create_card(
     .map_err(|e| e.to_string())
 }
 
+/// Patch the user-editable fields of a card. Both `title` and `project_path`
+/// are optional so the caller can update one without touching the other.
+#[tauri::command]
+pub fn update_card(
+    state: State<DbState>,
+    id: String,
+    title: Option<String>,
+    project_path: Option<String>,
+) -> Result<Card, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    if is_card_project_archived(&conn, &id).unwrap_or(false) {
+        return Err(ARCHIVED_ERR.into());
+    }
+
+    let now = now_ms();
+    if let Some(t) = title.as_ref() {
+        let t = t.trim();
+        if t.is_empty() {
+            return Err("title is required".into());
+        }
+        conn.execute(
+            "UPDATE cards SET title = ?1, updated_at = ?2 WHERE id = ?3",
+            params![t, now, &id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    if let Some(p) = project_path.as_ref() {
+        let p = p.trim();
+        if p.is_empty() {
+            return Err("project_path is required".into());
+        }
+        conn.execute(
+            "UPDATE cards SET project_path = ?1, updated_at = ?2 WHERE id = ?3",
+            params![p, now, &id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    conn.query_row(
+        r#"SELECT id, title, "column", position, session_id, project_path,
+                  project_id, created_at, updated_at, last_state
+             FROM cards WHERE id = ?1"#,
+        [&id],
+        map_card,
+    )
+    .map_err(|e| e.to_string())
+}
+
 /// Renumber a column so positions are dense 0..n-1 within a single project.
 /// If `insert_id` is provided, it gets inserted at `insert_at` (clamped) and
 /// the existing card with that id is removed from its old slot first.

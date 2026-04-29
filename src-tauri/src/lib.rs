@@ -13,6 +13,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        // Persists window size + position across launches; saves to a small
+        // file in app data and restores on next boot. Zero JS code needed.
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(|app| {
             let app_data = app.path().app_data_dir()?;
             let db_path = app_data.join("claude-kanban.db");
@@ -39,6 +42,7 @@ pub fn run() {
             commands::cards::list_cards,
             commands::cards::create_card,
             commands::cards::delete_card,
+            commands::cards::update_card,
             commands::cards::move_card,
             commands::projects::list_projects,
             commands::projects::create_project,
@@ -48,6 +52,7 @@ pub fn run() {
             commands::backup::import_project_from_file,
             commands::sessions::start_session,
             commands::sessions::send_message,
+            commands::sessions::stop_session,
             commands::sessions::respond_permission,
             commands::sessions::resume_session,
             commands::sessions::read_session_history,

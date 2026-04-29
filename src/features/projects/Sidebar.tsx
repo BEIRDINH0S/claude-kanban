@@ -1,4 +1,14 @@
-import { Lock, Moon, Pencil, Plus, Settings, Sun, Trash2 } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  Moon,
+  Pencil,
+  Plus,
+  Settings,
+  Sun,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useProjectsStore } from "../../stores/projectsStore";
@@ -6,6 +16,22 @@ import { useThemeStore } from "../../stores/themeStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Project } from "../../types/project";
 import { CreateProjectModal } from "./CreateProjectModal";
+
+const HIDE_ARCHIVED_KEY = "claude-kanban-hide-archived";
+function readHideArchived(): boolean {
+  try {
+    return localStorage.getItem(HIDE_ARCHIVED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeHideArchived(v: boolean) {
+  try {
+    localStorage.setItem(HIDE_ARCHIVED_KEY, v ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
 
 export function Sidebar() {
   const projects = useProjectsStore((s) => s.projects);
@@ -16,6 +42,18 @@ export function Sidebar() {
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
   const [createOpen, setCreateOpen] = useState(false);
+  const [hideArchived, setHideArchived] = useState(readHideArchived);
+  const visibleProjects = hideArchived
+    ? projects.filter((p) => !p.archived)
+    : projects;
+  const archivedCount = projects.filter((p) => p.archived).length;
+  const toggleHideArchived = () => {
+    setHideArchived((v) => {
+      const next = !v;
+      writeHideArchived(next);
+      return next;
+    });
+  };
 
   const handleDelete = async (project: Project) => {
     const ok = window.confirm(
@@ -37,15 +75,38 @@ export function Sidebar() {
   return (
     <aside className="glass-strong z-30 flex w-[180px] shrink-0 flex-col border-r border-[var(--glass-stroke)]">
       {/* Projects: section header + scrollable list + "new project" trailing entry. */}
-      <header className="px-4 pt-4 pb-2">
+      <header className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
         <p className="text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
           Projets
         </p>
+        {archivedCount > 0 && (
+          <button
+            type="button"
+            onClick={toggleHideArchived}
+            title={
+              hideArchived
+                ? `Afficher les projets archivés (${archivedCount})`
+                : "Masquer les projets archivés"
+            }
+            aria-label={
+              hideArchived
+                ? "Afficher les archivés"
+                : "Masquer les archivés"
+            }
+            className="rounded p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+          >
+            {hideArchived ? (
+              <EyeOff className="size-3" strokeWidth={1.75} />
+            ) : (
+              <Eye className="size-3" strokeWidth={1.75} />
+            )}
+          </button>
+        )}
       </header>
 
       <div className="flex flex-1 flex-col overflow-y-auto px-2 pb-2">
         <ul className="flex flex-col gap-0.5">
-          {projects.map((p) => (
+          {visibleProjects.map((p) => (
             <li key={p.id}>
               <ProjectRow
                 project={p}
