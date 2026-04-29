@@ -1,10 +1,12 @@
 import {
-  closestCorners,
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -36,6 +38,16 @@ export function Board() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
+
+  // Pointer-within is far more predictable than closestCorners for a multi-
+  // column kanban: it only matches droppables the cursor is actually over,
+  // so dropping in column A never lands in column B by mistake. We fall back
+  // to rectIntersection when the pointer is on the gap between columns.
+  const collisionDetection: CollisionDetection = (args) => {
+    const within = pointerWithin(args);
+    if (within.length > 0) return within;
+    return rectIntersection(args);
+  };
 
   const handleDragStart = (e: DragStartEvent) => {
     const card = cards.find((c) => c.id === e.active.id);
@@ -78,7 +90,7 @@ export function Board() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
