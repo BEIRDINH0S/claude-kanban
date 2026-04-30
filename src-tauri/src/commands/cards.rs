@@ -408,6 +408,35 @@ pub fn git_card_status(
     Ok(crate::worktree::card_status(&wt).ok())
 }
 
+/// Diff the card's worktree against its base ref. Returns an empty diff
+/// (not an error) when the card has no worktree or when the worktree is
+/// gone — same convention as git_card_status. `base_override` lets the
+/// front pin a non-default base from the UI (future feature).
+#[tauri::command]
+pub fn git_card_diff(
+    state: State<DbState>,
+    card_id: String,
+    base_override: Option<String>,
+) -> Result<crate::worktree::DiffResult, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let worktree_path: Option<String> = conn
+        .query_row(
+            "SELECT worktree_path FROM cards WHERE id = ?1",
+            [&card_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("card not found: {e}"))?;
+    let Some(wt) = worktree_path else {
+        return Ok(crate::worktree::DiffResult {
+            base: String::new(),
+            stat: String::new(),
+            diff: String::new(),
+            truncated: false,
+        });
+    };
+    crate::worktree::card_diff(&wt, base_override.as_deref())
+}
+
 /// First-boot demo data so the empty board has something to drag around.
 /// Now a no-op once the user has any cards or a non-default project.
 pub fn seed_if_empty(_conn: &Connection) -> rusqlite::Result<u32> {

@@ -70,6 +70,7 @@ pub fn run() {
             commands::cards::update_card,
             commands::cards::move_card,
             commands::cards::git_card_status,
+            commands::cards::git_card_diff,
             commands::projects::list_projects,
             commands::projects::create_project,
             commands::projects::rename_project,

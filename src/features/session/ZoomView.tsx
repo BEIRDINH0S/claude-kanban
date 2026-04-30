@@ -27,6 +27,7 @@ import { useProjectsStore } from "../../stores/projectsStore";
 import { useToastsStore } from "../../stores/toastsStore";
 import { useUiStore } from "../../stores/uiStore";
 import { parseTags, type Card } from "../../types/card";
+import { DiffView } from "./DiffView";
 import {
   defaultMarkdownFilename,
   transcriptToMarkdown,
@@ -626,6 +627,12 @@ function Body({ card }: { card: Card }) {
       ? "Reprends la conversation avec un message…"
       : "Réponds à Claude…";
 
+  // Tab switcher between the chat transcript and the worktree diff.
+  // Diff tab is hidden entirely for cards without a worktree — there's
+  // nothing to show. Default = chat (the everyday view).
+  const [tab, setTab] = useState<"chat" | "diff">("chat");
+  const showDiffTab = !!card.worktreePath;
+
   return (
     <>
       {error && (
@@ -635,15 +642,62 @@ function Body({ card }: { card: Card }) {
           onRetry={canRetry ? handleRetry : undefined}
         />
       )}
-      <MessageList items={items} />
-      <Footer working={isWorking} />
-      <PermissionPanel cardId={card.id} />
-      <MessageInput
-        onSend={handleSend}
-        disabled={isStarting}
-        placeholder={placeholder}
-      />
+      {showDiffTab && <TabBar value={tab} onChange={setTab} />}
+      {tab === "diff" && showDiffTab ? (
+        <DiffView cardId={card.id} />
+      ) : (
+        <>
+          <MessageList items={items} />
+          <Footer working={isWorking} />
+          <PermissionPanel cardId={card.id} />
+          <MessageInput
+            onSend={handleSend}
+            disabled={isStarting}
+            placeholder={placeholder}
+          />
+        </>
+      )}
     </>
+  );
+}
+
+/**
+ * Slim tab bar above the chat / diff body. Only mounted when there's a
+ * second tab to show (= card has a worktree). Keeps the everyday no-
+ * worktree case visually identical to before.
+ */
+function TabBar({
+  value,
+  onChange,
+}: {
+  value: "chat" | "diff";
+  onChange: (v: "chat" | "diff") => void;
+}) {
+  const tabs: { id: "chat" | "diff"; label: string }[] = [
+    { id: "chat", label: "Chat" },
+    { id: "diff", label: "Diff" },
+  ];
+  return (
+    <div className="flex shrink-0 items-center gap-1 border-b border-[var(--glass-stroke)] px-6 py-1.5">
+      {tabs.map((t) => {
+        const active = t.id === value;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onChange(t.id)}
+            className={[
+              "rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+              active
+                ? "bg-[var(--color-accent-soft)] text-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5",
+            ].join(" ")}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

@@ -168,6 +168,93 @@ pub fn create_for_card(project_path: &str, card_id: &str) -> Result<WorktreeInfo
     })
 }
 
+/// Full diff of the worktree vs. the base ref — committed AND working
+/// tree changes in one go. Uses `git diff <base>` (no `..HEAD`) which
+/// compares the live working copy against `base`, so dirty edits show
+/// up alongside finished commits. That's the total set of changes the
+/// card has produced.
+///
+/// `base_override` lets the caller force a specific ref (`origin/develop`,
+/// `HEAD~5`, …) instead of the auto-detected one. Pass None for default.
+///
+/// Output size is capped — diffs above the cap get truncated with a
+/// trailing marker so the IPC payload stays sane.
+pub fn card_diff(worktree_path: &str, base_override: Option<&str>) -> Result<DiffResult, String> {
+    const MAX_BYTES: usize = 256 * 1024; // 256 KB ≈ a generous review unit
+
+    let wt = Path::new(worktree_path);
+    if !wt.exists() {
+        return Err("worktree path does not exist".into());
+    }
+    let base = match base_override {
+        Some(b) if !b.trim().is_empty() => b.to_string(),
+        _ => detect_base_branch(wt),
+    };
+
+    // `git diff <base>` = working-tree-vs-base. Includes everything: commits
+    // on top of base, staged changes, and unstaged edits to tracked files.
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(wt)
+        .arg("diff")
+        .arg("--no-color")
+        .arg(&base)
+        .output()
+        .map_err(|e| format!("git diff: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    let raw = String::from_utf8_lossy(&out.stdout).into_owned();
+
+    // Also grab a short --stat for header context (number of files, +/-).
+    let stat = Command::new("git")
+        .arg("-C")
+        .arg(wt)
+        .arg("diff")
+        .arg("--shortstat")
+        .arg("--no-color")
+        .arg(&base)
+        .output()
+        .ok()
+        .and_then(|o| o.status.success().then(|| String::from_utf8_lossy(&o.stdout).trim().to_string()))
+        .unwrap_or_default();
+
+    let truncated = raw.len() > MAX_BYTES;
+    let body = if truncated {
+        let mut cut = raw.into_bytes();
+        cut.truncate(MAX_BYTES);
+        // Avoid splitting in the middle of a UTF-8 char.
+        while !cut.is_empty() && std::str::from_utf8(&cut).is_err() {
+            cut.pop();
+        }
+        let mut s = String::from_utf8(cut).unwrap_or_default();
+        s.push_str("\n\n… (diff tronqué — taille au-delà de 256 KB) …\n");
+        s
+    } else {
+        raw
+    };
+
+    Ok(DiffResult {
+        base,
+        stat,
+        diff: body,
+        truncated,
+    })
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffResult {
+    pub base: String,
+    /// Short-stat line (e.g. "3 files changed, 42 insertions(+), 7 deletions(-)").
+    /// May be empty when there are no changes.
+    pub stat: String,
+    /// Full unified diff text. Empty string = no changes.
+    pub diff: String,
+    /// True when the diff exceeded the 256 KB cap and was cut.
+    pub truncated: bool,
+}
+
 /// Snapshot the worktree's git state. Returns Err if the path is gone or
 /// not a repo — callers should treat that as "no status to show" rather
 /// than a hard failure (the worktree may have been removed manually).
