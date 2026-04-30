@@ -37,6 +37,28 @@ function writeSidebarCollapsed(v: boolean) {
   }
 }
 
+// Done column collapse state — persisted because most users want it
+// minimised most of the time (it acts as a graveyard) but still want
+// drag-to-Done to work as a drop target.
+const DONE_COLLAPSED_KEY = "claude-kanban-done-collapsed";
+function readDoneCollapsed(): boolean {
+  try {
+    // Default = collapsed. Done is overwhelmingly an archive: showing it
+    // expanded by default means most boards open with one column eating
+    // 1/5 of the horizontal space for nothing.
+    return localStorage.getItem(DONE_COLLAPSED_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+function writeDoneCollapsed(v: boolean) {
+  try {
+    localStorage.setItem(DONE_COLLAPSED_KEY, v ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
+
 interface UiState {
   zoomedCardId: string | null;
   /** Session ids whose SDK query is currently alive in the sidecar process.
@@ -53,6 +75,9 @@ interface UiState {
   view: CentralView;
   /** Sidebar collapsed = icon-only. Persisted in localStorage. */
   sidebarCollapsed: boolean;
+  /** Done column collapsed = thin vertical strip with just count.
+   *  Click to expand. Default ON. Persisted in localStorage. */
+  doneCollapsed: boolean;
   /** Cmd+K palette open state. Not persisted. */
   paletteOpen: boolean;
 
@@ -63,6 +88,7 @@ interface UiState {
   setActiveProjectId: (id: string | null) => void;
   setView: (view: CentralView) => void;
   toggleSidebar: () => void;
+  toggleDoneCollapsed: () => void;
   setPaletteOpen: (open: boolean) => void;
   togglePalette: () => void;
 }
@@ -73,6 +99,7 @@ export const useUiStore = create<UiState>((set) => ({
   activeProjectId: readActiveProject(),
   view: "board",
   sidebarCollapsed: readSidebarCollapsed(),
+  doneCollapsed: readDoneCollapsed(),
   paletteOpen: false,
 
   openZoom: (cardId) => set({ zoomedCardId: cardId }),
@@ -107,6 +134,13 @@ export const useUiStore = create<UiState>((set) => ({
       const next = !s.sidebarCollapsed;
       writeSidebarCollapsed(next);
       return { sidebarCollapsed: next };
+    }),
+
+  toggleDoneCollapsed: () =>
+    set((s) => {
+      const next = !s.doneCollapsed;
+      writeDoneCollapsed(next);
+      return { doneCollapsed: next };
     }),
 
   setPaletteOpen: (open) => set({ paletteOpen: open }),

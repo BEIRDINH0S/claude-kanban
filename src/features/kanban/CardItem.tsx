@@ -24,6 +24,13 @@ export function CardItem({ card, overlay }: Props) {
   const archived = useProjectsStore((s) =>
     s.projects.find((p) => p.id === card.projectId)?.archived ?? false,
   );
+  // "Live" = the SDK query is still alive in the sidecar (vs. column =
+  // in_progress which can survive a sidecar crash and stay stale until
+  // the boot-time repair). Surfacing it on the card lets users distinguish
+  // "Claude is actively thinking" from "this card is parked in In Progress".
+  const isLive = useUiStore((s) =>
+    !!card.sessionId && s.liveSessionIds.has(card.sessionId),
+  );
 
   const {
     attributes,
@@ -82,6 +89,17 @@ export function CardItem({ card, overlay }: Props) {
         <h3 className="flex-1 text-[13.5px] font-medium leading-snug text-[var(--text-primary)]">
           {card.title}
         </h3>
+        {/* Live dot: SDK query alive in the sidecar. Sits next to the
+            spinner so users can tell apart "thinking" (spinner) vs
+            "alive but idle" (just the dot). The pulse animation comes
+            from Tailwind's built-in `animate-pulse`. */}
+        {isLive && !isWorking && (
+          <span
+            className="mt-1 size-2 shrink-0 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_6px_rgb(74,222,128,0.6)]"
+            title="Session active dans le sidecar"
+            aria-label="Session active"
+          />
+        )}
         {isWorking && (
           <LoaderCircle
             className="mt-0.5 size-3.5 shrink-0 animate-spin text-[var(--color-accent)]"
