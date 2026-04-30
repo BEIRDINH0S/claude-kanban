@@ -34,6 +34,7 @@ import { ZoomView } from "./features/session/ZoomView";
 import { ToastStack } from "./features/toasts/ToastStack";
 import { readSessionHistory } from "./ipc/sessions";
 import { readNotifyOnTurnEnd } from "./lib/prefs";
+import { matchShortcut } from "./stores/shortcutsStore";
 import { useCardsStore } from "./stores/cardsStore";
 import { useCostsStore } from "./stores/costsStore";
 import { useErrorsStore } from "./stores/errorsStore";
@@ -87,17 +88,20 @@ interface BinaryStatusPayload {
 }
 
 function App() {
-  // Cmd+K = palette, Cmd+F = board search, Esc on the search clears it.
-  // We intercept Cmd+F at the window level so the webview's native find
-  // bar (which we don't ship) doesn't capture it.
+  // Global shortcuts (palette + board search) and the contextual Esc that
+  // closes the search bar. Bindings come from the shortcuts store so the
+  // user can rebind them in Settings; Esc stays hardcoded because it's a
+  // close gesture, not a "shortcut" the user thinks of as customizable.
+  // We intercept the search shortcut at the window level so the webview's
+  // native find bar (which we don't ship) doesn't capture it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if (matchShortcut("global.palette", e)) {
         e.preventDefault();
         useUiStore.getState().togglePalette();
         return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+      if (matchShortcut("global.search", e)) {
         // Only useful when the board is showing — settings/projects pages
         // don't have anything to filter.
         if (useUiStore.getState().view !== "board") return;
