@@ -229,7 +229,6 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     const previous = get().cards;
     const card = previous.find((c) => c.id === id);
     const fromColumn = card?.column;
-    const fromIndex = card?.position ?? 0;
 
     // Archiving a card with a live SDK query (drag-to-Done OR archive
     // button) must stop the session first — otherwise the sidecar keeps
@@ -252,12 +251,19 @@ export const useCardsStore = create<CardsState>((set, get) => ({
       set({ cards: fresh });
       // Toast undo only for cross-column moves — same-column reorders are
       // less likely to be regretted and would generate too many toasts.
+      // We DON'T capture the original index: between the move and the
+      // user clicking Undo, the card may have been moved again (auto
+      // transitions on session events, manual drag…). Restoring the
+      // original column and asking Rust to drop the card at the end
+      // (clamped server-side) is the safer "send it back where it was"
+      // approximation.
       if (card && fromColumn && fromColumn !== column) {
         useToastsStore.getState().push({
           message: `Carte déplacée vers ${COLUMN_LABEL[column]}`,
           action: {
             label: "Annuler",
-            handler: () => get().move(id, fromColumn, fromIndex),
+            handler: () =>
+              get().move(id, fromColumn, Number.MAX_SAFE_INTEGER),
           },
         });
       }

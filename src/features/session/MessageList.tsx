@@ -17,16 +17,40 @@ interface Props {
 
 export function MessageList({ items }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Sticky-bottom: only auto-scroll if the user hasn't scrolled up to read
+  // older content. Initial value `true` so the first paint scrolls to bottom.
+  const stickToBottomRef = useRef(true);
+  // Track the *id* of the last item, not just `items.length`. When the
+  // transcript is hydrated/replaced from disk (`replaceForCard`), the new
+  // array may have the same length as the previous in-memory list — relying
+  // on length alone would silently skip the scroll.
+  const lastId = items[items.length - 1]?.id ?? null;
 
-  // Auto-scroll on new items.
   useEffect(() => {
+    if (!stickToBottomRef.current) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [items.length]);
+  }, [lastId, items.length]);
+
+  // Decide whether the user is "reading old content" based on scroll
+  // position. 80 px of slack absorbs the bounce of `behavior: "smooth"`
+  // so a programmatic scroll doesn't immediately mark the user as
+  // having scrolled up.
+  const onScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    stickToBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
 
   const renderable = items.flatMap(toRenderable);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6">
+    <div
+      ref={containerRef}
+      onScroll={onScroll}
+      className="flex-1 overflow-y-auto px-6 py-6"
+    >
       <div className="mx-auto flex max-w-[760px] flex-col gap-5">
         {renderable.map((r, idx) => (
           <RenderedRow key={`${r.key}-${idx}`} row={r} />

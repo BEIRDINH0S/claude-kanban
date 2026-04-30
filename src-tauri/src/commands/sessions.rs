@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
 
 
-use crate::db::{is_card_project_archived, DbState};
+use crate::db::{is_card_project_archived, lock_recover, DbState};
 use crate::session_host::{
     protocol::{PermissionDecision, SidecarInbound},
     SessionHost,
@@ -37,7 +37,7 @@ pub async fn start_session(
     //    parallel cards on the same repo never collide on filesystem state.
     let project_path = {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
             return Err(ARCHIVED_ERR.into());
         }
@@ -62,7 +62,7 @@ pub async fn start_session(
     //    while the SDK boots (typically 1–3 s).
     {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         let next_pos: i64 = conn
             .query_row(
                 r#"SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE "column" = 'in_progress'"#,
@@ -113,7 +113,7 @@ pub async fn start_session(
     // optimistic move to In Progress so the card doesn't get stuck there.
     if result.is_err() {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         let next_pos: i64 = conn
             .query_row(
                 r#"SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE "column" = 'todo'"#,
@@ -139,7 +139,7 @@ pub async fn start_session(
 pub async fn stop_session(app: AppHandle, card_id: String) -> Result<(), String> {
     let session_id: Option<String> = {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         conn.query_row(
             "SELECT session_id FROM cards WHERE id = ?1",
             [&card_id],
@@ -168,7 +168,7 @@ pub async fn send_message(
     // Look up session_id and current column.
     let (session_id, column) = {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
             return Err(ARCHIVED_ERR.into());
         }
@@ -187,7 +187,7 @@ pub async fn send_message(
     // landed back in Idle (turn complete) bring it forward again.
     {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         let now = now_ms();
         if column != "in_progress" {
             let next_pos: i64 = conn
@@ -225,7 +225,7 @@ pub async fn resume_session(
     }
     let (project_path, session_id) = {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
             return Err(ARCHIVED_ERR.into());
         }
@@ -245,7 +245,7 @@ pub async fn resume_session(
     // Lift the card to In Progress while the SDK boots.
     {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         let next_pos: i64 = conn
             .query_row(
                 r#"SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE "column" = 'in_progress'"#,
@@ -290,7 +290,7 @@ pub async fn resume_session(
     if result.is_err() {
         // Bring the card back to Idle since the resume didn't take.
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         let next_pos: i64 = conn
             .query_row(
                 r#"SELECT COALESCE(MAX(position) + 1, 0) FROM cards WHERE "column" = 'idle'"#,
@@ -390,7 +390,7 @@ pub async fn respond_permission(
 ) -> Result<(), String> {
     {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
             return Err(ARCHIVED_ERR.into());
         }
@@ -409,7 +409,7 @@ pub async fn respond_permission(
     // so the spinner reads as "Claude is working" again.
     {
         let db = app.state::<DbState>();
-        let conn = db.conn.lock().unwrap();
+        let conn = lock_recover(&db.conn);
         let now = now_ms();
         let next_pos: i64 = conn
             .query_row(
