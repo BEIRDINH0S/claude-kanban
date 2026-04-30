@@ -26,3 +26,12 @@ export type ClaudeRuntimePref = "auto" | "native" | "wsl";
  * pre-create worktrees from a CLI / IPC bypass.
  */
 export const PREF_DEFAULT_WORKTREE = "default_create_worktree";
+
+/**
+ * User-defined prompt templates surfaced in the message input via a slash
+ * menu (`/`) and managed from the Settings page. Stored as a JSON-encoded
+ * `PromptTemplate[]` (see `stores/templatesStore.ts` for the shape) under
+ * a single pref row to keep things atomic — avoids juggling N rows for
+ * the few templates a user typically has.
+ */
+export const PREF_PROMPT_TEMPLATES = "prompt_templates";
