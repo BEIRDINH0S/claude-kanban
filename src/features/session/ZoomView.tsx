@@ -5,6 +5,7 @@ import {
   FolderOpen,
   LoaderCircle,
   Pencil,
+  RotateCw,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -326,6 +327,10 @@ function Body({ card }: { card: Card }) {
   // hydrate from the on-disk JSONL so the conversation history is visible.
   // Failures (missing file, corrupt lines past tolerance) surface as a
   // dismissable banner — the rest of the view stays usable.
+  //
+  // Bumping `hydrateNonce` re-runs this effect (used by the ErrorBanner
+  // retry button — see below).
+  const [hydrateNonce, setHydrateNonce] = useState(0);
   useEffect(() => {
     if (!card.sessionId) return;
     if (items.length > 0) return;
@@ -348,9 +353,20 @@ function Body({ card }: { card: Card }) {
     return () => {
       cancelled = true;
     };
-    // We only want this to fire once when the zoom opens for an empty card.
+    // hydrateNonce is the retry trigger. card.id covers the standard
+    // "zoom switched to a new card" case.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [card.id]);
+  }, [card.id, hydrateNonce]);
+
+  // Retry handler for the ErrorBanner: only meaningful when the error came
+  // from the JSONL hydration above (i.e. the card has a sessionId but no
+  // messages yet). For Rust-side session errors there's no useful retry —
+  // the user just resends from the input.
+  const canRetry = !!card.sessionId && items.length === 0;
+  const handleRetry = () => {
+    clearError(card.id);
+    setHydrateNonce((n) => n + 1);
+  };
 
   const isWorking = card.column === "in_progress" || isStarting;
   // What does "send" mean for this card right now?
@@ -393,6 +409,7 @@ function Body({ card }: { card: Card }) {
         <ErrorBanner
           message={error}
           onDismiss={() => clearError(card.id)}
+          onRetry={canRetry ? handleRetry : undefined}
         />
       )}
       <MessageList items={items} />
@@ -410,9 +427,13 @@ function Body({ card }: { card: Card }) {
 function ErrorBanner({
   message,
   onDismiss,
+  onRetry,
 }: {
   message: string;
   onDismiss: () => void;
+  /** Optional — when present, surfaces a "Réessayer" button. Only set by
+   *  callers that have a meaningful retry action (e.g. JSONL hydration). */
+  onRetry?: () => void;
 }) {
   return (
     <div className="flex items-start gap-2.5 border-b border-red-400/30 bg-red-400/8 px-6 py-2.5 text-red-300/90">
@@ -420,6 +441,17 @@ function ErrorBanner({
       <p className="flex-1 font-mono text-[11.5px] leading-relaxed break-words">
         {message}
       </p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="-mt-0.5 shrink-0 flex items-center gap-1 rounded-md border border-red-400/40 px-2 py-1 text-[11px] font-medium text-red-200 hover:bg-red-400/10"
+          aria-label="Réessayer"
+        >
+          <RotateCw className="size-3" strokeWidth={1.75} />
+          Réessayer
+        </button>
+      )}
       <button
         type="button"
         onClick={onDismiss}
