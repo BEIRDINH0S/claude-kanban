@@ -38,3 +38,12 @@ export function gitCardDiff(
 ): Promise<DiffResult> {
   return invoke<DiffResult>("git_card_diff", { cardId, baseOverride });
 }
+
+/**
+ * Tear down the card's git worktree on disk and clear `worktree_path` on
+ * the row. The git BRANCH is left intact — it may carry unmerged commits.
+ * Idempotent: cards without a worktree resolve to no-op success.
+ */
+export function dropCardWorktree(cardId: string): Promise<void> {
+  return invoke<void>("drop_card_worktree", { cardId });
+}

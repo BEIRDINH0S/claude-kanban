@@ -344,10 +344,9 @@ fn git_capture(cwd: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// Best-effort cleanup. Used when the user explicitly removes a card and
-/// asks us to also drop the worktree. We never call this implicitly — the
-/// branch may have unmerged commits.
-#[allow(dead_code)]
+/// Best-effort cleanup. Called from the Tauri `drop_card_worktree` command.
+/// We never call this implicitly from delete_card — the branch may have
+/// unmerged commits the user wants to keep around.
 pub fn remove(project_path: &str, worktree_path: &str) -> Result<(), String> {
     let project = Path::new(project_path);
     let toplevel =

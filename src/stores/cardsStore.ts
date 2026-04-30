@@ -9,6 +9,7 @@ import {
   updateCard,
   type CardPatch,
 } from "../ipc/cards";
+import { dropCardWorktree } from "../ipc/git";
 import {
   resumeSession as invokeResumeSession,
   startSession as invokeStartSession,
@@ -45,6 +46,7 @@ interface CardsState {
     createWorktree?: boolean,
   ) => Promise<Card>;
   duplicate: (id: string) => Promise<Card | null>;
+  dropWorktree: (id: string) => Promise<void>;
   update: (id: string, patch: CardPatch) => Promise<Card>;
   remove: (id: string) => Promise<void>;
   stopSession: (cardId: string) => Promise<void>;
@@ -146,6 +148,23 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     } catch (e) {
       set({ error: String(e) });
       return null;
+    }
+  },
+
+  dropWorktree: async (id) => {
+    // Optimistic: blank out the worktreePath in the local card so the UI
+    // immediately stops showing the worktree affordances. Rollback on
+    // Rust failure (which can happen if `git worktree remove` errors out).
+    const previous = get().cards;
+    set({
+      cards: previous.map((c) =>
+        c.id === id ? { ...c, worktreePath: null } : c,
+      ),
+    });
+    try {
+      await dropCardWorktree(id);
+    } catch (e) {
+      set({ cards: previous, error: String(e) });
     }
   },
 

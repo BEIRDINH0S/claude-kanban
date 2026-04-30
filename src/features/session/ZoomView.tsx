@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Pencil,
   RotateCw,
+  Trash,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -74,6 +75,7 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   const update = useCardsStore((s) => s.update);
   const move = useCardsStore((s) => s.move);
   const stopSession = useCardsStore((s) => s.stopSession);
+  const dropWorktree = useCardsStore((s) => s.dropWorktree);
   const closeZoom = useUiStore((s) => s.closeZoom);
   const liveSessionIds = useUiStore((s) => s.liveSessionIds);
   const isLive = !!card.sessionId && liveSessionIds.has(card.sessionId);
@@ -81,6 +83,21 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
     s.projects.find((p) => p.id === card.projectId)?.archived ?? false,
   );
   const cost = useCostsStore((s) => s.byCard[card.id] ?? 0);
+  const pushToastHeader = useToastsStore((s) => s.push);
+
+  const handleDropWorktree = () => {
+    if (!card.worktreePath) return;
+    // Confirm via window.confirm — destructive (the working dir is wiped),
+    // but the branch persists so it's recoverable if the user remembers
+    // its name. The status line shows the branch right above this button.
+    const ok = window.confirm(
+      `Supprimer le worktree ?\n\n${card.worktreePath}\n\nLe dossier de travail est supprimé. La branche git est conservée (tu peux la retrouver via git branch).`,
+    );
+    if (!ok) return;
+    void dropWorktree(card.id).then(() => {
+      pushToastHeader({ message: "Worktree supprimé. Branche conservée." });
+    });
+  };
 
   const handleArchive = () => {
     // Close immediately for snappy UX; the store's `move` now stops a live
@@ -157,6 +174,8 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
             cardId={card.id}
             worktreePath={card.worktreePath}
             projectPath={card.projectPath}
+            archived={archived}
+            onDrop={handleDropWorktree}
           />
         )}
         <EditableTags
@@ -359,18 +378,22 @@ function EditablePath({ value, disabled, onCommit, onOpen }: EditablePathProps) 
 
 /**
  * Worktree-aware status line under the project path. Shows the active
- * branch + ahead/behind/dirty counts. Refreshes once on mount (so opening
- * the zoom always shows current data, not the last 12s heartbeat snapshot)
- * and re-renders live as the heartbeat updates the store.
+ * branch + ahead/behind/dirty counts, with affordances to open the worktree
+ * in the OS file explorer and to drop it (cleanup). Refreshes once on
+ * mount and re-renders live via the heartbeat-driven gitStatusStore.
  */
 function WorktreeStatusLine({
   cardId,
   worktreePath,
   projectPath,
+  archived,
+  onDrop,
 }: {
   cardId: string;
   worktreePath: string;
   projectPath: string;
+  archived: boolean;
+  onDrop: () => void;
 }) {
   const status = useGitStatusStore((s) => s.byCard[cardId]);
 
@@ -385,11 +408,27 @@ function WorktreeStatusLine({
       }\nWorktree cwd: ${worktreePath}\nRepo: ${projectPath}`
     : `Worktree cwd: ${worktreePath}\nRepo: ${projectPath}`;
 
+  const handleOpenWorktree = () => {
+    void openPath(worktreePath).catch(() => {
+      // Best-effort. The OS dialog tells the user if the path doesn't
+      // exist (e.g. someone deleted the worktree dir manually).
+    });
+  };
+
   return (
     <div
-      className="mt-0.5 flex items-center gap-2 truncate font-mono text-[10.5px]"
+      className="group/wt mt-0.5 flex items-center gap-2 truncate font-mono text-[10.5px]"
       title={tooltip}
     >
+      <button
+        type="button"
+        onClick={handleOpenWorktree}
+        title="Ouvrir le worktree dans le Finder"
+        aria-label="Ouvrir le worktree"
+        className="shrink-0 rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-emerald-300 dark:hover:bg-white/5"
+      >
+        <FolderOpen className="size-3" strokeWidth={1.75} />
+      </button>
       <span className="flex items-center gap-1 text-emerald-300/85">
         <span>⎇</span>
         <span className="truncate">{branch}</span>
@@ -409,6 +448,17 @@ function WorktreeStatusLine({
             </span>
           )}
         </span>
+      )}
+      {!archived && (
+        <button
+          type="button"
+          onClick={onDrop}
+          title="Supprimer le worktree (la branche git est conservée)"
+          aria-label="Supprimer le worktree"
+          className="ml-auto shrink-0 rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-rose-400/10 hover:text-rose-300 group-hover/wt:opacity-100"
+        >
+          <Trash className="size-3" strokeWidth={1.75} />
+        </button>
       )}
     </div>
   );

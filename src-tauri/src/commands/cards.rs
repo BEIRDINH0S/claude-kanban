@@ -408,6 +408,42 @@ pub fn git_card_status(
     Ok(crate::worktree::card_status(&wt).ok())
 }
 
+/// Drop a card's worktree on disk AND clear `worktree_path` on the row,
+/// so subsequent sessions run in the bare `project_path`. The git branch
+/// itself is NOT deleted — it may have unmerged commits the user wants to
+/// rebase or push later. Idempotent: clearing a card that has no worktree
+/// is a no-op success.
+#[tauri::command]
+pub fn drop_card_worktree(state: State<DbState>, card_id: String) -> Result<(), String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let row: (Option<String>, String) = conn
+        .query_row(
+            "SELECT worktree_path, project_path FROM cards WHERE id = ?1",
+            [&card_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|e| format!("card not found: {e}"))?;
+    let (worktree_path, project_path) = row;
+    let Some(wt) = worktree_path else {
+        return Ok(());
+    };
+    // Best-effort: even if `git worktree remove` fails (path already gone,
+    // permission issue), we still NULL out the column so the UI catches up.
+    // Surface the git error in the message but don't make it block.
+    let git_err = crate::worktree::remove(&project_path, &wt).err();
+    conn.execute(
+        "UPDATE cards SET worktree_path = NULL, updated_at = ?1 WHERE id = ?2",
+        rusqlite::params![now_ms(), &card_id],
+    )
+    .map_err(|e| e.to_string())?;
+    if let Some(e) = git_err {
+        return Err(format!(
+            "worktree path cleared on card, but git worktree remove failed: {e}"
+        ));
+    }
+    Ok(())
+}
+
 /// Diff the card's worktree against its base ref. Returns an empty diff
 /// (not an error) when the card has no worktree or when the worktree is
 /// gone — same convention as git_card_status. `base_override` lets the
