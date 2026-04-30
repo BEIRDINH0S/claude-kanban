@@ -2,9 +2,11 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Copy, GitBranch, LoaderCircle, Trash2 } from "lucide-react";
 
+import { PermissionCardActions } from "../session/PermissionCardActions";
 import { useCardsStore } from "../../stores/cardsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
 import { useGitStatusStore } from "../../stores/gitStatusStore";
+import { usePermissionsStore } from "../../stores/permissionsStore";
 import { useProjectsStore } from "../../stores/projectsStore";
 import { useUiStore } from "../../stores/uiStore";
 import { parseTags, type Card } from "../../types/card";
@@ -55,6 +57,16 @@ export function CardItem({ card, overlay }: Props) {
   // Keyboard-nav cursor — set by Board's hjkl handler. We render a brighter
   // ring than the error one so it's clearly "where you are" vs. a problem.
   const isSelected = useUiStore((s) => s.selectedCardId === card.id);
+
+  // Pending permission for this card — when present we render the inline
+  // approve/deny buttons at the bottom of the card so the user doesn't have
+  // to open the zoom view to unblock Claude. The amber ring also doubles as
+  // a "needs your attention" cue when scanning the board with many agents.
+  // Selector returns the boolean directly so this card only re-renders on
+  // a true → false transition, not on every keystroke into pending.input.
+  const hasPendingPermission = usePermissionsStore(
+    (s) => !!s.byCard[card.id],
+  );
 
   const tags = parseTags(card.tags);
 
@@ -121,10 +133,14 @@ export function CardItem({ card, overlay }: Props) {
           : archived
           ? "cursor-default"
           : "cursor-grab active:cursor-grabbing",
-        // Selection ring trumps the error ring visually — both can apply
-        // but in practice you'd want to fix the error from the keyboard.
+        // Selection ring trumps the error/permission rings visually — all
+        // can apply but in practice you'd want to fix the error from the
+        // keyboard. Pending-permission gets an amber ring so it stands out
+        // in a dense board even before you read the inline buttons.
         isSelected
           ? "ring-2 ring-[var(--color-accent-ring)]"
+          : hasPendingPermission
+          ? "ring-1 ring-amber-400/50"
           : error
           ? "ring-1 ring-red-400/40"
           : "",
@@ -219,6 +235,13 @@ export function CardItem({ card, overlay }: Props) {
             </span>
           ))}
         </div>
+      )}
+      {/* Inline permission actions — skipping this in the drag overlay
+          avoids rendering interactive buttons on a dragging-clone. The real
+          card behind the overlay still has them, so the user just drops and
+          clicks once the card lands. */}
+      {!overlay && hasPendingPermission && (
+        <PermissionCardActions cardId={card.id} />
       )}
     </div>
   );
