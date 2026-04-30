@@ -36,13 +36,14 @@ fn map_card(row: &rusqlite::Row) -> rusqlite::Result<Card> {
         created_at: row.get("created_at")?,
         updated_at: row.get("updated_at")?,
         last_state: row.get("last_state")?,
+        tags: row.get("tags").unwrap_or_default(),
     })
 }
 
 fn fetch_all(conn: &Connection, project_id: &str) -> rusqlite::Result<Vec<Card>> {
     let mut stmt = conn.prepare(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state
+                  project_id, created_at, updated_at, last_state, tags
              FROM cards
             WHERE project_id = ?1
             ORDER BY "column", position, id"#,
@@ -105,7 +106,7 @@ pub fn create_card(
 
     conn.query_row(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state
+                  project_id, created_at, updated_at, last_state, tags
              FROM cards WHERE id = ?1"#,
         [&id],
         map_card,
@@ -113,14 +114,15 @@ pub fn create_card(
     .map_err(|e| e.to_string())
 }
 
-/// Patch the user-editable fields of a card. Both `title` and `project_path`
-/// are optional so the caller can update one without touching the other.
+/// Patch the user-editable fields of a card. Each field is independently
+/// optional so the caller can touch only what it needs.
 #[tauri::command]
 pub fn update_card(
     state: State<DbState>,
     id: String,
     title: Option<String>,
     project_path: Option<String>,
+    tags: Option<String>,
 ) -> Result<Card, String> {
     let conn = state.conn.lock().map_err(|e| e.to_string())?;
     if is_card_project_archived(&conn, &id).unwrap_or(false) {
@@ -150,10 +152,31 @@ pub fn update_card(
         )
         .map_err(|e| e.to_string())?;
     }
+    if let Some(raw) = tags.as_ref() {
+        // Normalise: split, trim, drop empties, lowercase, dedupe, rejoin.
+        // Stored sorted-by-insertion-order so the visual order matches what
+        // the user typed (we don't sort alphabetically — preserves intent).
+        let mut seen: Vec<String> = Vec::new();
+        for t in raw.split(',') {
+            let t = t.trim().to_lowercase();
+            if t.is_empty() {
+                continue;
+            }
+            if !seen.iter().any(|x| x == &t) {
+                seen.push(t);
+            }
+        }
+        let normalised = seen.join(",");
+        conn.execute(
+            "UPDATE cards SET tags = ?1, updated_at = ?2 WHERE id = ?3",
+            params![&normalised, now, &id],
+        )
+        .map_err(|e| e.to_string())?;
+    }
 
     conn.query_row(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state
+                  project_id, created_at, updated_at, last_state, tags
              FROM cards WHERE id = ?1"#,
         [&id],
         map_card,
@@ -256,8 +279,9 @@ pub fn restore_card(state: State<DbState>, card: Card) -> Result<Card, String> {
     let column_str = card.column.as_str();
     conn.execute(
         r#"INSERT INTO cards (id, title, "column", position, session_id,
-                              project_path, project_id, created_at, updated_at, last_state)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+                              project_path, project_id, created_at, updated_at,
+                              last_state, tags)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
         params![
             &card.id,
             &card.title,
@@ -269,13 +293,14 @@ pub fn restore_card(state: State<DbState>, card: Card) -> Result<Card, String> {
             card.created_at,
             now,
             card.last_state.as_ref(),
+            &card.tags,
         ],
     )
     .map_err(|e| e.to_string())?;
 
     conn.query_row(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state
+                  project_id, created_at, updated_at, last_state, tags
              FROM cards WHERE id = ?1"#,
         [&card.id],
         map_card,

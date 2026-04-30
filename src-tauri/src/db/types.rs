@@ -48,6 +48,10 @@ pub struct Card {
     pub created_at: i64,
     pub updated_at: i64,
     pub last_state: Option<String>,
+    /// Comma-separated tag slugs ("bug,refactor,spike"). Empty string = no
+    /// tags. Front splits/joins; we treat the column as opaque storage.
+    #[serde(default)]
+    pub tags: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

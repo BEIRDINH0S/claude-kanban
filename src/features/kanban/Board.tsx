@@ -32,17 +32,17 @@ export function Board() {
   const view = useUiStore((s) => s.view);
   const searchQuery = useUiStore((s) => s.searchQuery);
 
-  // Cheap case-insensitive substring match on title + projectPath.
-  // We keep all cards in the dnd context so drag still works during a
-  // filter, but only render the matching ones in their columns.
+  // Cheap case-insensitive substring match on title + projectPath + tags.
+  // Tags are stored comma-separated already lowercased, so just include the
+  // raw string in the haystack — `bug` matches both "bug" and "bugfix" which
+  // is the loose match users expect from Cmd+F.
   const filteredCards = (() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return cards;
-    return cards.filter(
-      (c) =>
-        c.title.toLowerCase().includes(q) ||
-        c.projectPath.toLowerCase().includes(q),
-    );
+    return cards.filter((c) => {
+      const hay = `${c.title} ${c.projectPath} ${c.tags}`.toLowerCase();
+      return hay.includes(q);
+    });
   })();
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);

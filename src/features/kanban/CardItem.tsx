@@ -6,7 +6,26 @@ import { useCardsStore } from "../../stores/cardsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
 import { useProjectsStore } from "../../stores/projectsStore";
 import { useUiStore } from "../../stores/uiStore";
-import type { Card } from "../../types/card";
+import { parseTags, type Card } from "../../types/card";
+
+/**
+ * Deterministic palette pick for a tag string. Same tag → same color across
+ * cards so the user can scan visually. Hash kept tiny — we only need a
+ * stable mod into a 6-element table.
+ */
+const TAG_COLORS = [
+  "bg-sky-400/20 text-sky-200 border-sky-400/40",
+  "bg-amber-400/20 text-amber-200 border-amber-400/40",
+  "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
+  "bg-violet-400/20 text-violet-200 border-violet-400/40",
+  "bg-rose-400/20 text-rose-200 border-rose-400/40",
+  "bg-cyan-400/20 text-cyan-200 border-cyan-400/40",
+];
+function tagColor(tag: string): string {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) | 0;
+  return TAG_COLORS[Math.abs(h) % TAG_COLORS.length];
+}
 
 interface Props {
   card: Card;
@@ -32,6 +51,8 @@ export function CardItem({ card, overlay }: Props) {
   const isLive = useUiStore((s) =>
     !!card.sessionId && s.liveSessionIds.has(card.sessionId),
   );
+
+  const tags = parseTags(card.tags);
 
   const {
     attributes,
@@ -138,6 +159,21 @@ export function CardItem({ card, overlay }: Props) {
           </div>
         )}
       </div>
+      {tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {tags.map((t) => (
+            <span
+              key={t}
+              className={[
+                "rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-wide",
+                tagColor(t),
+              ].join(" ")}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

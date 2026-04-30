@@ -25,7 +25,7 @@ import { useMessagesStore } from "../../stores/messagesStore";
 import { useProjectsStore } from "../../stores/projectsStore";
 import { useToastsStore } from "../../stores/toastsStore";
 import { useUiStore } from "../../stores/uiStore";
-import type { Card } from "../../types/card";
+import { parseTags, type Card } from "../../types/card";
 import {
   defaultMarkdownFilename,
   transcriptToMarkdown,
@@ -149,6 +149,11 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
           disabled={archived}
           onCommit={(next) => update(card.id, { projectPath: next })}
           onOpen={handleOpenFolder}
+        />
+        <EditableTags
+          value={card.tags}
+          disabled={archived}
+          onCommit={(next) => update(card.id, { tags: next })}
         />
       </div>
       <div className="flex shrink-0 items-center gap-1">
@@ -335,6 +340,116 @@ function EditablePath({ value, disabled, onCommit, onOpen }: EditablePathProps) 
           title="Modifier le chemin"
           aria-label="Modifier le chemin"
           className="shrink-0 rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-black/5 hover:text-[var(--text-primary)] group-hover:opacity-100 dark:hover:bg-white/5"
+        >
+          <Pencil className="size-3" strokeWidth={1.75} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Same shared palette as CardItem. Kept inline to avoid a one-export module;
+// if a third surface needs it we'll lift to its own file.
+const TAG_COLORS = [
+  "bg-sky-400/20 text-sky-200 border-sky-400/40",
+  "bg-amber-400/20 text-amber-200 border-amber-400/40",
+  "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
+  "bg-violet-400/20 text-violet-200 border-violet-400/40",
+  "bg-rose-400/20 text-rose-200 border-rose-400/40",
+  "bg-cyan-400/20 text-cyan-200 border-cyan-400/40",
+];
+function tagColor(tag: string): string {
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) | 0;
+  return TAG_COLORS[Math.abs(h) % TAG_COLORS.length];
+}
+
+interface EditableTagsProps {
+  value: string;
+  disabled: boolean;
+  onCommit: (next: string) => Promise<unknown> | void;
+}
+
+function EditableTags({ value, disabled, onCommit }: EditableTagsProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => setDraft(value), [value]);
+  useEffect(() => {
+    if (editing) {
+      ref.current?.focus();
+      ref.current?.select();
+    }
+  }, [editing]);
+
+  const tags = parseTags(value);
+
+  const commit = async () => {
+    if (draft !== value) {
+      try {
+        await onCommit(draft);
+      } catch {
+        setDraft(value);
+      }
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={ref}
+        type="text"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void commit();
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        placeholder="bug, refactor, spike…"
+        className="mt-1.5 w-full rounded-md border border-[var(--color-accent-ring)] bg-black/5 px-2 py-0.5 font-mono text-[11px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] dark:bg-white/5"
+      />
+    );
+  }
+
+  if (tags.length === 0) {
+    if (disabled) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="mt-1.5 rounded-md border border-dashed border-[var(--glass-stroke)] px-2 py-0.5 text-[11px] text-[var(--text-muted)] hover:border-[var(--color-accent-ring)] hover:text-[var(--text-primary)]"
+      >
+        + tags
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+      {tags.map((t) => (
+        <span
+          key={t}
+          className={[
+            "rounded-md border px-1.5 py-0.5 text-[10.5px] font-medium tracking-wide",
+            tagColor(t),
+          ].join(" ")}
+        >
+          {t}
+        </span>
+      ))}
+      {!disabled && (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          title="Modifier les tags"
+          aria-label="Modifier les tags"
+          className="rounded-md p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-black/5 hover:text-[var(--text-primary)] group-hover:opacity-100 dark:hover:bg-white/5"
         >
           <Pencil className="size-3" strokeWidth={1.75} />
         </button>

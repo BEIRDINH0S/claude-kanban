@@ -29,6 +29,9 @@ export function restoreCard(card: Card): Promise<Card> {
 export interface CardPatch {
   title?: string;
   projectPath?: string;
+  /** Raw comma-separated tag string; Rust normalises (trim/lowercase/dedupe)
+   *  before storing. Pass empty string to clear all tags. */
+  tags?: string;
 }
 
 export function updateCard(id: string, patch: CardPatch): Promise<Card> {
@@ -36,6 +39,7 @@ export function updateCard(id: string, patch: CardPatch): Promise<Card> {
     id,
     title: patch.title,
     projectPath: patch.projectPath,
+    tags: patch.tags,
   });
 }
 

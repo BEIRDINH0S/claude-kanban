@@ -83,6 +83,15 @@ const MIGRATIONS: &[&str] = &[
         value TEXT NOT NULL
     );
     "#,
+
+    // v7 — free-form tags per card (bug / feature / spike / refactor / …).
+    // Stored as a comma-separated string for simplicity: tag names are short
+    // single-word slugs so a join table is overkill. Front splits/joins on
+    // `,` after trim. Empty default = no tags. Searchable via the board
+    // filter alongside title/path.
+    r#"
+    ALTER TABLE cards ADD COLUMN tags TEXT NOT NULL DEFAULT '';
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {
