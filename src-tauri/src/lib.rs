@@ -58,6 +58,7 @@ pub fn run() {
             commands::cards::list_cards,
             commands::cards::create_card,
             commands::cards::delete_card,
+            commands::cards::restore_card,
             commands::cards::update_card,
             commands::cards::move_card,
             commands::projects::list_projects,

@@ -1,4 +1,4 @@
-import { Check, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { Check, ShieldAlert, ShieldCheck, TriangleAlert, X } from "lucide-react";
 import { useState } from "react";
 
 import { respondPermission } from "../../ipc/sessions";
@@ -30,6 +30,10 @@ export function PermissionPanel({ cardId }: Props) {
   const clearForCard = usePermissionsStore((s) => s.clearForCard);
   const addRule = usePermissionRulesStore((s) => s.add);
   const [busy, setBusy] = useState<"allow" | "always" | "deny" | null>(null);
+  // Inline error keeps the panel actionable: the user can retry or pick a
+  // different decision instead of being stuck with no feedback when the
+  // sidecar IPC fails (e.g. sidecar crashed mid-request).
+  const [err, setErr] = useState<string | null>(null);
 
   if (!pending) return null;
 
@@ -38,11 +42,14 @@ export function PermissionPanel({ cardId }: Props) {
   const handleRespond = async (decision: "allow" | "deny") => {
     if (busy) return;
     setBusy(decision);
+    setErr(null);
     try {
       await respondPermission(cardId, pending.requestId, decision);
       clearForCard(cardId);
     } catch (e) {
-      console.error("respond_permission failed:", e);
+      // Don't clear — the request is still pending in the sidecar, the
+      // user should be able to try again.
+      setErr(`Réponse ignorée — ${String(e)}`);
     } finally {
       setBusy(null);
     }
@@ -51,6 +58,7 @@ export function PermissionPanel({ cardId }: Props) {
   const handleAlways = async () => {
     if (busy) return;
     setBusy("always");
+    setErr(null);
     try {
       // Add the rule first so future calls hit the auto-approve path; then
       // unblock this specific call. If the add fails (invalid pattern, conflict
@@ -58,12 +66,13 @@ export function PermissionPanel({ cardId }: Props) {
       try {
         await addRule(suggested);
       } catch (e) {
-        console.error("add_permission_rule failed:", e);
+        // Non-fatal: surface as a warning but still try to approve.
+        setErr(`Règle non sauvée (${String(e)}) — j'approuve quand même.`);
       }
       await respondPermission(cardId, pending.requestId, "allow");
       clearForCard(cardId);
     } catch (e) {
-      console.error("respond_permission failed:", e);
+      setErr(`Approbation ignorée — ${String(e)}`);
     } finally {
       setBusy(null);
     }
@@ -81,6 +90,17 @@ export function PermissionPanel({ cardId }: Props) {
         <pre className="max-h-32 overflow-y-auto rounded-lg border border-[var(--glass-stroke)] bg-black/10 p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-[var(--text-secondary)] dark:bg-white/5">
           {formatToolUse(pending.toolName, pending.input)}
         </pre>
+        {err && (
+          <div className="flex items-start gap-2 rounded-lg border border-red-400/30 bg-red-400/10 px-2.5 py-2 text-red-300/90">
+            <TriangleAlert
+              className="mt-0.5 size-3.5 shrink-0"
+              strokeWidth={1.75}
+            />
+            <p className="font-mono text-[11px] leading-relaxed break-words">
+              {err}
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"

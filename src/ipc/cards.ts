@@ -17,6 +17,15 @@ export function deleteCard(id: string): Promise<void> {
   return invoke<void>("delete_card", { id });
 }
 
+/**
+ * Re-INSERT a deleted card with its original id/title/column/position. Paired
+ * with the toast-undo on `delete`: the front holds the full Card snapshot
+ * captured before deletion and sends it back through here on click.
+ */
+export function restoreCard(card: Card): Promise<Card> {
+  return invoke<Card>("restore_card", { card });
+}
+
 export interface CardPatch {
   title?: string;
   projectPath?: string;

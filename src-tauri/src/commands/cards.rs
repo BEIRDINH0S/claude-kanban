@@ -239,6 +239,50 @@ pub fn delete_card(
     Ok(())
 }
 
+/// Re-INSERT a previously deleted card with its original id, title, column,
+/// position, session_id, etc. Used by the toast-undo on delete: the front
+/// captures the full Card before calling `delete_card`, then sends it back
+/// here if the user clicks Undo. Position may collide with cards that
+/// shifted in via a `move_card` since deletion — the `ORDER BY position, id`
+/// in `fetch_all` breaks ties deterministically, so the visual order stays
+/// stable.
+#[tauri::command]
+pub fn restore_card(state: State<DbState>, card: Card) -> Result<Card, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    if is_project_archived(&conn, &card.project_id).unwrap_or(false) {
+        return Err(ARCHIVED_ERR.into());
+    }
+    let now = now_ms();
+    let column_str = card.column.as_str();
+    conn.execute(
+        r#"INSERT INTO cards (id, title, "column", position, session_id,
+                              project_path, project_id, created_at, updated_at, last_state)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)"#,
+        params![
+            &card.id,
+            &card.title,
+            column_str,
+            card.position,
+            card.session_id.as_ref(),
+            &card.project_path,
+            &card.project_id,
+            card.created_at,
+            now,
+            card.last_state.as_ref(),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.query_row(
+        r#"SELECT id, title, "column", position, session_id, project_path,
+                  project_id, created_at, updated_at, last_state
+             FROM cards WHERE id = ?1"#,
+        [&card.id],
+        map_card,
+    )
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn move_card(
     state: State<DbState>,

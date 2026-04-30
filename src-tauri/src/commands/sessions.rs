@@ -302,6 +302,11 @@ pub async fn resume_session(
 /// Reads a session's JSONL transcript from `~/.claude/projects/<encoded>/<id>.jsonl`
 /// and returns each line as an opaque JSON value. The front filters down to
 /// renderable items (the same MessageList logic used for live events).
+///
+/// Inputs come from the front (`session_id`, `project_path`) and could
+/// contain `..` segments — we canonicalize the resolved path and refuse to
+/// read anything outside `~/.claude/projects/` to keep this from becoming a
+/// "read any .jsonl on disk" primitive.
 #[tauri::command]
 pub fn read_session_history(
     app: AppHandle,
@@ -312,17 +317,44 @@ pub fn read_session_history(
         .path()
         .home_dir()
         .map_err(|e| format!("home_dir: {e}"))?;
-    // Claude Code's project-dir encoding swaps `/` for `-`. A leading slash
-    // becomes a leading dash, which matches the directories we observe on disk.
-    let encoded = project_path.replace('/', "-");
-    let path = home
-        .join(".claude")
-        .join("projects")
+    let projects_root = home.join(".claude").join("projects");
+
+    // Claude Code's project-dir encoding swaps `/` AND `\` for `-` (Windows
+    // paths must be normalised too — `replace('/', '-')` alone left
+    // backslashes intact). A leading separator becomes a leading dash, which
+    // matches the directories we observe on disk.
+    let encoded = project_path.replace(['/', '\\'], "-");
+    // Reject empty / dot-traversal segments outright before joining. session
+    // IDs from the SDK are UUID-like; any `..`, `/`, `\`, or path separator
+    // here is a sign the caller is up to no good.
+    if session_id.is_empty()
+        || session_id.contains('/')
+        || session_id.contains('\\')
+        || session_id.contains("..")
+        || encoded.contains("..")
+    {
+        return Err(format!("invalid session_id or project_path"));
+    }
+
+    let path = projects_root
         .join(&encoded)
         .join(format!("{session_id}.jsonl"));
 
-    let file = std::fs::File::open(&path)
+    // Canonicalize once the file exists (canonicalize fails on non-existent
+    // paths). We canonicalize the root too so symlink-ed home dirs match.
+    let canon_path = std::fs::canonicalize(&path)
         .map_err(|e| format!("open {}: {e}", path.display()))?;
+    let canon_root = std::fs::canonicalize(&projects_root)
+        .unwrap_or(projects_root.clone());
+    if !canon_path.starts_with(&canon_root) {
+        return Err(format!(
+            "path escapes ~/.claude/projects: {}",
+            canon_path.display()
+        ));
+    }
+
+    let file = std::fs::File::open(&canon_path)
+        .map_err(|e| format!("open {}: {e}", canon_path.display()))?;
 
     use std::io::BufRead;
     let reader = std::io::BufReader::new(file);

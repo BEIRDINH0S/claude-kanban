@@ -5,6 +5,7 @@ import {
   deleteCard,
   listCards,
   moveCard,
+  restoreCard,
   updateCard,
   type CardPatch,
 } from "../ipc/cards";
@@ -139,6 +140,10 @@ export const useCardsStore = create<CardsState>((set, get) => ({
 
   remove: async (id) => {
     const previous = get().cards;
+    // Snapshot the doomed card so the toast can offer an undo. Captured
+    // BEFORE the optimistic removal because once the store is updated the
+    // closure-bound state would be gone.
+    const snapshot = previous.find((c) => c.id === id);
     // Optimistic removal so the card disappears from the board immediately.
     set({ cards: previous.filter((c) => c.id !== id) });
     try {
@@ -148,6 +153,27 @@ export const useCardsStore = create<CardsState>((set, get) => ({
       useMessagesStore.getState().clear(id);
       const ui = useUiStore.getState();
       if (ui.zoomedCardId === id) ui.closeZoom();
+      // Toast undo — calls back into the new restore_card command with the
+      // full snapshot, re-inserting the original id/column/position so the
+      // card pops back roughly where it was. The session is gone (sidecar
+      // stop is fire-and-forget in delete_card) but the JSONL persists, so
+      // the user can resume the conversation by sending a new message.
+      if (snapshot) {
+        useToastsStore.getState().push({
+          message: `Carte « ${snapshot.title} » supprimée`,
+          action: {
+            label: "Annuler",
+            handler: async () => {
+              try {
+                const fresh = await restoreCard(snapshot);
+                set((s) => ({ cards: [...s.cards, fresh] }));
+              } catch (e) {
+                set({ error: String(e) });
+              }
+            },
+          },
+        });
+      }
     } catch (e) {
       set({ cards: previous, error: String(e) });
     }
