@@ -17,7 +17,9 @@ import { ProjectsPage } from "../projects/ProjectsPage";
 import { Sidebar } from "../projects/Sidebar";
 import { SettingsPage } from "../settings/SettingsPage";
 import { BinaryBanner } from "../usage/BinaryBanner";
+import { isTextInputTarget } from "../../lib/shortcuts";
 import { selectByColumn, useCardsStore } from "../../stores/cardsStore";
+import { matchShortcut } from "../../stores/shortcutsStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Card, CardColumn } from "../../types/card";
 import { BoardHeader } from "./BoardHeader";
@@ -50,25 +52,17 @@ export function Board() {
     });
   })();
 
-  // Keyboard navigation. Vim-style hjkl + arrow keys for navigation, Enter
-  // to open, n=new, /=search, d=delete, y=duplicate, a=archive. We only
+  // Keyboard navigation. Default bindings are vim-style hjkl + arrow keys
+  // for navigation, Enter/o to open, n=new, /=search, d=delete, y=duplicate,
+  // a=archive — all customizable via Settings (`shortcutsStore`). We only
   // wire this up on the board view, and bail when a text input is focused
-  // (otherwise typing in CreateCardModal/Settings would trigger actions).
+  // (so typing in CreateCardModal/Settings doesn't trigger actions).
   useEffect(() => {
     if (view !== "board") return;
     const onKey = (e: KeyboardEvent) => {
-      // Bail on modifier keys (Cmd+F, Cmd+K, etc. are handled in App.tsx)
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
       // Bail when the user is typing in any input/textarea/contenteditable.
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
+      // Modifier-based bindings still fire (handled inside isTextInputTarget).
+      if (isTextInputTarget(e)) return;
       // Bail when a modal/palette is on top — those have their own handlers.
       const ui = useUiStore.getState();
       if (ui.zoomedCardId || ui.paletteOpen) return;
@@ -103,11 +97,8 @@ export function Board() {
         return false;
       };
 
-      const k = e.key;
-      const lower = k.toLowerCase();
-
       // Movement
-      if (k === "ArrowDown" || lower === "j") {
+      if (matchShortcut("board.moveDown", e)) {
         e.preventDefault();
         const cur = findCursor();
         if (cur.col < 0) return void seedSelection();
@@ -116,7 +107,7 @@ export function Board() {
         if (next) setSelectedCardId(next.id);
         return;
       }
-      if (k === "ArrowUp" || lower === "k") {
+      if (matchShortcut("board.moveUp", e)) {
         e.preventDefault();
         const cur = findCursor();
         if (cur.col < 0) return void seedSelection();
@@ -125,7 +116,7 @@ export function Board() {
         if (next) setSelectedCardId(next.id);
         return;
       }
-      if (k === "ArrowLeft" || lower === "h") {
+      if (matchShortcut("board.moveLeft", e)) {
         e.preventDefault();
         const cur = findCursor();
         if (cur.col < 0) return void seedSelection();
@@ -139,7 +130,7 @@ export function Board() {
         }
         return;
       }
-      if (k === "ArrowRight" || lower === "l") {
+      if (matchShortcut("board.moveRight", e)) {
         e.preventDefault();
         const cur = findCursor();
         if (cur.col < 0) return void seedSelection();
@@ -158,35 +149,35 @@ export function Board() {
         ? cards.find((c) => c.id === selectedCardId) ?? null
         : null;
 
-      if (k === "Enter" || lower === "o") {
+      if (matchShortcut("board.openCard", e)) {
         if (!sel) return;
         e.preventDefault();
         openZoom(sel.id);
         return;
       }
-      if (lower === "n") {
+      if (matchShortcut("board.newTask", e)) {
         e.preventDefault();
         // Same channel as the palette uses — keeps the create modal owner
         // (BoardHeader) as the single source of truth for it.
         window.dispatchEvent(new CustomEvent("claude-kanban:new-task"));
         return;
       }
-      if (lower === "/") {
+      if (matchShortcut("board.openSearch", e)) {
         e.preventDefault();
         useUiStore.getState().setSearchOpen(true);
         return;
       }
-      if (lower === "a" && sel && sel.column !== "done") {
+      if (matchShortcut("board.archive", e) && sel && sel.column !== "done") {
         e.preventDefault();
         void move(sel.id, "done", 0);
         return;
       }
-      if (lower === "y" && sel) {
+      if (matchShortcut("board.duplicate", e) && sel) {
         e.preventDefault();
         void duplicate(sel.id);
         return;
       }
-      if ((k === "Backspace" || k === "Delete" || lower === "d") && sel) {
+      if (matchShortcut("board.delete", e) && sel) {
         e.preventDefault();
         void remove(sel.id);
         return;
