@@ -80,6 +80,13 @@ interface UiState {
   doneCollapsed: boolean;
   /** Cmd+K palette open state. Not persisted. */
   paletteOpen: boolean;
+  /** Board search query — filters cards by title/path. Not persisted
+   *  (transient, you don't want to land on a board pre-filtered after a
+   *  reload). Empty string = no filter. */
+  searchQuery: string;
+  /** Whether the search input is currently mounted in the BoardHeader.
+   *  Hidden by default; toggled by Cmd+F or the search button. */
+  searchOpen: boolean;
 
   openZoom: (cardId: string) => void;
   closeZoom: () => void;
@@ -91,6 +98,8 @@ interface UiState {
   toggleDoneCollapsed: () => void;
   setPaletteOpen: (open: boolean) => void;
   togglePalette: () => void;
+  setSearchQuery: (q: string) => void;
+  setSearchOpen: (open: boolean) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -101,6 +110,8 @@ export const useUiStore = create<UiState>((set) => ({
   sidebarCollapsed: readSidebarCollapsed(),
   doneCollapsed: readDoneCollapsed(),
   paletteOpen: false,
+  searchQuery: "",
+  searchOpen: false,
 
   openZoom: (cardId) => set({ zoomedCardId: cardId }),
   closeZoom: () => set({ zoomedCardId: null }),
@@ -145,4 +156,14 @@ export const useUiStore = create<UiState>((set) => ({
 
   setPaletteOpen: (open) => set({ paletteOpen: open }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),
+
+  setSearchQuery: (q) => set({ searchQuery: q }),
+  // Closing the search also clears the query — leaving a hidden filter
+  // on would silently break "where are my cards?" the next time the
+  // user opens the board.
+  setSearchOpen: (open) =>
+    set((s) => ({
+      searchOpen: open,
+      searchQuery: open ? s.searchQuery : "",
+    })),
 }));

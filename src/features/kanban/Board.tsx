@@ -30,6 +30,20 @@ export function Board() {
   const move = useCardsStore((s) => s.move);
   const error = useCardsStore((s) => s.error);
   const view = useUiStore((s) => s.view);
+  const searchQuery = useUiStore((s) => s.searchQuery);
+
+  // Cheap case-insensitive substring match on title + projectPath.
+  // We keep all cards in the dnd context so drag still works during a
+  // filter, but only render the matching ones in their columns.
+  const filteredCards = (() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return cards;
+    return cards.filter(
+      (c) =>
+        c.title.toLowerCase().includes(q) ||
+        c.projectPath.toLowerCase().includes(q),
+    );
+  })();
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -128,7 +142,7 @@ export function Board() {
                   <Column
                     key={col.id}
                     def={col}
-                    cards={selectByColumn(cards, col.id)}
+                    cards={selectByColumn(filteredCards, col.id)}
                   />
                 ))}
               </div>

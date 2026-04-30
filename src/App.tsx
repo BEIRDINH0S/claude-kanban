@@ -85,12 +85,31 @@ interface BinaryStatusPayload {
 }
 
 function App() {
-  // Cmd+K (or Ctrl+K) opens the command palette from anywhere.
+  // Cmd+K = palette, Cmd+F = board search, Esc on the search clears it.
+  // We intercept Cmd+F at the window level so the webview's native find
+  // bar (which we don't ship) doesn't capture it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         useUiStore.getState().togglePalette();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        // Only useful when the board is showing — settings/projects pages
+        // don't have anything to filter.
+        if (useUiStore.getState().view !== "board") return;
+        e.preventDefault();
+        useUiStore.getState().setSearchOpen(true);
+        return;
+      }
+      if (e.key === "Escape" && useUiStore.getState().searchOpen) {
+        // Don't steal Esc from the zoom view — it has its own handler
+        // mounted only when zoom is open. Same for the palette.
+        const ui = useUiStore.getState();
+        if (ui.zoomedCardId || ui.paletteOpen) return;
+        e.preventDefault();
+        ui.setSearchOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
