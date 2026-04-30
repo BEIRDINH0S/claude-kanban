@@ -87,6 +87,10 @@ interface UiState {
   /** Whether the search input is currently mounted in the BoardHeader.
    *  Hidden by default; toggled by Cmd+F or the search button. */
   searchOpen: boolean;
+  /** Keyboard-nav cursor on the board. Highlights one card with a ring;
+   *  arrow / hjkl move it; Enter opens its zoom. Not persisted — selection
+   *  is meaningful only within a session of board interaction. */
+  selectedCardId: string | null;
 
   openZoom: (cardId: string) => void;
   closeZoom: () => void;
@@ -100,6 +104,7 @@ interface UiState {
   togglePalette: () => void;
   setSearchQuery: (q: string) => void;
   setSearchOpen: (open: boolean) => void;
+  setSelectedCardId: (id: string | null) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -112,6 +117,7 @@ export const useUiStore = create<UiState>((set) => ({
   paletteOpen: false,
   searchQuery: "",
   searchOpen: false,
+  selectedCardId: null,
 
   openZoom: (cardId) => set({ zoomedCardId: cardId }),
   closeZoom: () => set({ zoomedCardId: null }),
@@ -166,4 +172,13 @@ export const useUiStore = create<UiState>((set) => ({
       searchOpen: open,
       searchQuery: open ? s.searchQuery : "",
     })),
+
+  setSelectedCardId: (id) => set({ selectedCardId: id }),
 }));
+
+// Selection is project-scoped: switching projects must drop the cursor.
+useUiStore.subscribe((state, prev) => {
+  if (state.activeProjectId !== prev.activeProjectId && state.selectedCardId) {
+    useUiStore.setState({ selectedCardId: null });
+  }
+});

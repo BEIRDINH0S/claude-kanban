@@ -28,9 +28,14 @@ import { COLUMNS, isColumnId } from "./columns";
 export function Board() {
   const cards = useCardsStore((s) => s.cards);
   const move = useCardsStore((s) => s.move);
+  const remove = useCardsStore((s) => s.remove);
+  const duplicate = useCardsStore((s) => s.duplicate);
   const error = useCardsStore((s) => s.error);
   const view = useUiStore((s) => s.view);
   const searchQuery = useUiStore((s) => s.searchQuery);
+  const selectedCardId = useUiStore((s) => s.selectedCardId);
+  const setSelectedCardId = useUiStore((s) => s.setSelectedCardId);
+  const openZoom = useUiStore((s) => s.openZoom);
 
   // Cheap case-insensitive substring match on title + projectPath + tags.
   // Tags are stored comma-separated already lowercased, so just include the
@@ -44,6 +49,162 @@ export function Board() {
       return hay.includes(q);
     });
   })();
+
+  // Keyboard navigation. Vim-style hjkl + arrow keys for navigation, Enter
+  // to open, n=new, /=search, d=delete, y=duplicate, a=archive. We only
+  // wire this up on the board view, and bail when a text input is focused
+  // (otherwise typing in CreateCardModal/Settings would trigger actions).
+  useEffect(() => {
+    if (view !== "board") return;
+    const onKey = (e: KeyboardEvent) => {
+      // Bail on modifier keys (Cmd+F, Cmd+K, etc. are handled in App.tsx)
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // Bail when the user is typing in any input/textarea/contenteditable.
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      // Bail when a modal/palette is on top — those have their own handlers.
+      const ui = useUiStore.getState();
+      if (ui.zoomedCardId || ui.paletteOpen) return;
+
+      // Compute the per-column lists with stable order (matches what's
+      // rendered). We work off `filteredCards` so search-narrowed lists
+      // navigate correctly.
+      const cols = COLUMNS.map((c) => ({
+        id: c.id,
+        cards: selectByColumn(filteredCards, c.id),
+      }));
+      const allFlat = cols.flatMap((c) => c.cards);
+      if (allFlat.length === 0) return;
+
+      const findCursor = (): { col: number; row: number } => {
+        if (!selectedCardId) return { col: -1, row: -1 };
+        for (let c = 0; c < cols.length; c++) {
+          const r = cols[c].cards.findIndex((x) => x.id === selectedCardId);
+          if (r >= 0) return { col: c, row: r };
+        }
+        return { col: -1, row: -1 };
+      };
+
+      const seedSelection = () => {
+        // First non-empty column, first card.
+        for (const col of cols) {
+          if (col.cards.length > 0) {
+            setSelectedCardId(col.cards[0].id);
+            return true;
+          }
+        }
+        return false;
+      };
+
+      const k = e.key;
+      const lower = k.toLowerCase();
+
+      // Movement
+      if (k === "ArrowDown" || lower === "j") {
+        e.preventDefault();
+        const cur = findCursor();
+        if (cur.col < 0) return void seedSelection();
+        const list = cols[cur.col].cards;
+        const next = list[Math.min(cur.row + 1, list.length - 1)];
+        if (next) setSelectedCardId(next.id);
+        return;
+      }
+      if (k === "ArrowUp" || lower === "k") {
+        e.preventDefault();
+        const cur = findCursor();
+        if (cur.col < 0) return void seedSelection();
+        const list = cols[cur.col].cards;
+        const next = list[Math.max(cur.row - 1, 0)];
+        if (next) setSelectedCardId(next.id);
+        return;
+      }
+      if (k === "ArrowLeft" || lower === "h") {
+        e.preventDefault();
+        const cur = findCursor();
+        if (cur.col < 0) return void seedSelection();
+        // Walk left until we find a non-empty column.
+        for (let c = cur.col - 1; c >= 0; c--) {
+          if (cols[c].cards.length > 0) {
+            const target = cols[c].cards[Math.min(cur.row, cols[c].cards.length - 1)];
+            setSelectedCardId(target.id);
+            return;
+          }
+        }
+        return;
+      }
+      if (k === "ArrowRight" || lower === "l") {
+        e.preventDefault();
+        const cur = findCursor();
+        if (cur.col < 0) return void seedSelection();
+        for (let c = cur.col + 1; c < cols.length; c++) {
+          if (cols[c].cards.length > 0) {
+            const target = cols[c].cards[Math.min(cur.row, cols[c].cards.length - 1)];
+            setSelectedCardId(target.id);
+            return;
+          }
+        }
+        return;
+      }
+
+      // Actions on the selected card
+      const sel = selectedCardId
+        ? cards.find((c) => c.id === selectedCardId) ?? null
+        : null;
+
+      if (k === "Enter" || lower === "o") {
+        if (!sel) return;
+        e.preventDefault();
+        openZoom(sel.id);
+        return;
+      }
+      if (lower === "n") {
+        e.preventDefault();
+        // Same channel as the palette uses — keeps the create modal owner
+        // (BoardHeader) as the single source of truth for it.
+        window.dispatchEvent(new CustomEvent("claude-kanban:new-task"));
+        return;
+      }
+      if (lower === "/") {
+        e.preventDefault();
+        useUiStore.getState().setSearchOpen(true);
+        return;
+      }
+      if (lower === "a" && sel && sel.column !== "done") {
+        e.preventDefault();
+        void move(sel.id, "done", 0);
+        return;
+      }
+      if (lower === "y" && sel) {
+        e.preventDefault();
+        void duplicate(sel.id);
+        return;
+      }
+      if ((k === "Backspace" || k === "Delete" || lower === "d") && sel) {
+        e.preventDefault();
+        void remove(sel.id);
+        return;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    view,
+    filteredCards,
+    cards,
+    selectedCardId,
+    setSelectedCardId,
+    openZoom,
+    move,
+    remove,
+    duplicate,
+  ]);
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [createOpen, setCreateOpen] = useState(false);

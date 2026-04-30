@@ -51,6 +51,9 @@ export function CardItem({ card, overlay }: Props) {
   const isLive = useUiStore((s) =>
     !!card.sessionId && s.liveSessionIds.has(card.sessionId),
   );
+  // Keyboard-nav cursor — set by Board's hjkl handler. We render a brighter
+  // ring than the error one so it's clearly "where you are" vs. a problem.
+  const isSelected = useUiStore((s) => s.selectedCardId === card.id);
 
   const tags = parseTags(card.tags);
 
@@ -77,10 +80,14 @@ export function CardItem({ card, overlay }: Props) {
           : 1,
       };
 
+  const setSelectedCardId = useUiStore((s) => s.setSelectedCardId);
   const handleClick = () => {
     if (overlay || isDragging) return;
     // Click always opens the zoom view. The session start, if needed, is
     // kicked off from inside the zoom (clearer UX than implicit-on-click).
+    // We also park the keyboard cursor here so closing the zoom leaves
+    // hjkl navigation centered on the just-clicked card.
+    setSelectedCardId(card.id);
     openZoom(card.id);
   };
 
@@ -104,7 +111,13 @@ export function CardItem({ card, overlay }: Props) {
           : archived
           ? "cursor-default"
           : "cursor-grab active:cursor-grabbing",
-        error ? "ring-1 ring-red-400/40" : "",
+        // Selection ring trumps the error ring visually — both can apply
+        // but in practice you'd want to fix the error from the keyboard.
+        isSelected
+          ? "ring-2 ring-[var(--color-accent-ring)]"
+          : error
+          ? "ring-1 ring-red-400/40"
+          : "",
       ].join(" ")}
     >
       <div className="flex items-start gap-2">
