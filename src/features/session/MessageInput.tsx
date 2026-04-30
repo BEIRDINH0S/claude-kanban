@@ -11,9 +11,14 @@ export function MessageInput({ onSend, disabled, placeholder }: Props) {
   const [text, setText] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  // Autofocus on mount and after each successful send.
+  // Autofocus on mount and after each successful send. We defer with rAF so
+  // the focus call lands AFTER the parent's `animate-zoom-in` first paint —
+  // some browsers drop focus calls that hit a node mid-animation when it
+  // sits inside a `backdrop-filter` ancestor (the glass modal here).
   useEffect(() => {
-    if (!disabled) ref.current?.focus();
+    if (disabled) return;
+    const id = requestAnimationFrame(() => ref.current?.focus());
+    return () => cancelAnimationFrame(id);
   }, [disabled]);
 
   // Auto-grow textarea up to a sensible cap.
@@ -37,6 +42,10 @@ export function MessageInput({ onSend, disabled, placeholder }: Props) {
         <div className="glass flex-1 rounded-2xl px-4 py-2.5">
           <textarea
             ref={ref}
+            // Belt-and-suspenders with the rAF effect above — covers the
+            // initial mount before React effects run.
+            // eslint-disable-next-line jsx-a11y/no-autofocus
+            autoFocus={!disabled}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {

@@ -78,6 +78,10 @@ interface SessionErrorPayload {
 
 interface BinaryStatusPayload {
   claudeBinary: string | null;
+  /** "native" | "wsl" — the runtime the sidecar resolved at boot. May be
+   *  absent if the user is on an older sidecar build. */
+  runtime?: "native" | "wsl" | null;
+  runtimePref?: "auto" | "native" | "wsl" | null;
 }
 
 function App() {
@@ -242,11 +246,15 @@ function App() {
       },
     );
 
-    // Whether `claude` is on PATH — drives the boot banner.
+    // Whether `claude` is on PATH — drives the boot banner. Also carries
+    // the effective runtime ("native" | "wsl") so Settings can confirm the
+    // current mode after a runtime-pref change + restart.
     const unlistenBinary = listen<BinaryStatusPayload>(
       "binary-status",
       (e) => {
-        useErrorsStore.getState().setClaudeBinary(e.payload.claudeBinary);
+        useErrorsStore
+          .getState()
+          .setBinaryStatus(e.payload.claudeBinary, e.payload.runtime ?? null);
       },
     );
 

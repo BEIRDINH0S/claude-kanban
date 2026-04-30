@@ -21,6 +21,9 @@
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import readline from "node:readline";
 
 const stdout = process.stdout;
@@ -35,11 +38,11 @@ function log(...args) {
 
 /**
  * Detect a `claude` install on PATH purely so the front can decide whether to
- * surface the "Claude Code introuvable" banner. We do NOT pass this to the SDK:
- * Claude Code v2.x ships as a native binary and the SDK has its own bundled
- * copy in `@anthropic-ai/claude-agent-sdk-{platform}-{arch}/claude.exe`, which
- * it auto-resolves when `pathToClaudeCodeExecutable` is omitted. Forcing a
- * user-PATH path is brittle (npm shims aren't spawnable by Node) and provides
+ * surface the "Claude Code introuvable" banner. By default we do NOT pass
+ * this to the SDK: Claude Code v2.x ships as a native binary and the SDK
+ * has its own bundled copy in `@anthropic-ai/claude-agent-sdk-{platform}-{arch}/claude.exe`,
+ * which it auto-resolves when `pathToClaudeCodeExecutable` is omitted. Forcing
+ * a user-PATH path is brittle (npm shims aren't spawnable by Node) and provides
  * no real win since the bundled binary shares the same `~/.claude` config.
  */
 function detectClaudeOnPath() {
@@ -52,12 +55,90 @@ function detectClaudeOnPath() {
   }
 }
 
-const CLAUDE_PATH = detectClaudeOnPath();
-log("claude on PATH:", CLAUDE_PATH ?? "(none — using SDK-bundled binary)");
+/**
+ * Windows + WSL: detect a `claude` install inside the user's default WSL
+ * distro. Used when the user explicitly opts into WSL mode via Settings —
+ * their auth tokens, MCP servers and ~/.claude config all live on the Linux
+ * side, so the SDK-bundled Windows `claude.exe` would point at a different
+ * home. We generate a tiny .cmd shim that wraps `wsl claude %*` and pass
+ * that path to the SDK so every session actually runs the user's WSL binary.
+ *
+ * Returns `{ shimPath, wslClaude }` or null if WSL is unavailable / has no
+ * claude installed.
+ */
+function detectWslClaude() {
+  if (process.platform !== "win32") return null;
+  let wslClaude = null;
+  try {
+    // `wsl which claude` runs inside the default distro's login shell. If
+    // wsl.exe itself is missing or no distro is registered, this throws.
+    const out = execSync("wsl -- which claude", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    wslClaude = out.split(/\r?\n/)[0] || null;
+  } catch {
+    return null;
+  }
+  if (!wslClaude) return null;
+
+  // Generate a shim .cmd in tmpdir. Deterministic name so we don't litter
+  // tmp on each restart. `.cmd` (not `.bat`) is what `process.spawn` will
+  // happily exec on Windows without `shell: true`.
+  const shimPath = join(tmpdir(), "claude-kanban-wsl-claude.cmd");
+  try {
+    writeFileSync(shimPath, "@echo off\r\nwsl claude %*\r\n", "utf8");
+  } catch (err) {
+    log(`wsl shim write failed: ${err?.message ?? err}`);
+    return null;
+  }
+  return { shimPath, wslClaude };
+}
+
+/**
+ * Parse `--claude-runtime=auto|native|wsl` from CLI args. Default `auto`.
+ *   - `auto`   : detect native; on Windows fall back to WSL if native is
+ *                missing.
+ *   - `native` : never use WSL even if native is missing (let the SDK fall
+ *                back to its bundled binary).
+ *   - `wsl`    : force WSL mode on Windows; ignored elsewhere (no WSL).
+ */
+function parseRuntimeArg() {
+  const raw = process.argv.find((a) => a.startsWith("--claude-runtime="));
+  const v = raw ? raw.split("=", 2)[1] : "auto";
+  return ["auto", "native", "wsl"].includes(v) ? v : "auto";
+}
+
+const RUNTIME_PREF = parseRuntimeArg();
+const NATIVE_CLAUDE = RUNTIME_PREF === "wsl" ? null : detectClaudeOnPath();
+// WSL is checked when the user explicitly asked for it, OR in `auto` mode
+// when nothing native turned up. `native` mode skips WSL entirely.
+const SHOULD_TRY_WSL =
+  RUNTIME_PREF === "wsl" ||
+  (RUNTIME_PREF === "auto" && process.platform === "win32" && !NATIVE_CLAUDE);
+const WSL_CLAUDE = SHOULD_TRY_WSL ? detectWslClaude() : null;
+const CLAUDE_PATH = WSL_CLAUDE?.wslClaude ?? NATIVE_CLAUDE ?? null;
+// Path actually passed to the SDK. Null = let the SDK use its bundled binary.
+const CLAUDE_EXEC_OVERRIDE = WSL_CLAUDE?.shimPath ?? null;
+const EFFECTIVE_RUNTIME = WSL_CLAUDE ? "wsl" : "native";
+
+log(`runtime pref: ${RUNTIME_PREF} → effective: ${EFFECTIVE_RUNTIME}`);
+if (WSL_CLAUDE) {
+  log(`claude via WSL: ${WSL_CLAUDE.wslClaude} (shim ${WSL_CLAUDE.shimPath})`);
+} else if (RUNTIME_PREF === "wsl") {
+  log("WSL mode requested but no WSL claude found — falling back to bundled");
+} else {
+  log("claude on PATH:", NATIVE_CLAUDE ?? "(none — using SDK-bundled binary)");
+}
 // Heads-up to Rust at boot: tells the front whether to surface a
-// "claude not installed" banner.
+// "claude not installed" banner and which runtime we ended up using.
 process.nextTick(() => {
-  send({ type: "ready", claudeBinary: CLAUDE_PATH });
+  send({
+    type: "ready",
+    claudeBinary: CLAUDE_PATH,
+    runtime: EFFECTIVE_RUNTIME,
+    runtimePref: RUNTIME_PREF,
+  });
 });
 
 const sessionsById = new Map(); // sessionId  → SessionHandle (after init)
@@ -113,6 +194,12 @@ class SessionHandle {
         // Every tool use gets routed through here; we ask the user via the UI.
         canUseTool: (toolName, input) => self.askPermission(toolName, input),
         ...(resumeSessionId ? { resume: resumeSessionId } : {}),
+        // When running on Windows with a WSL-only claude install, the shim
+        // generated at boot wraps `wsl claude %*`. Otherwise we leave this
+        // unset so the SDK uses its bundled binary (default behaviour).
+        ...(CLAUDE_EXEC_OVERRIDE
+          ? { pathToClaudeCodeExecutable: CLAUDE_EXEC_OVERRIDE }
+          : {}),
       },
     });
 

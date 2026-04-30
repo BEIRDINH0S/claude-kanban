@@ -23,6 +23,19 @@ pub fn run() {
             let db_path = app_data.join("claude-kanban.db");
             let conn = db::open(&db_path)?;
             commands::cards::seed_if_empty(&conn)?;
+
+            // Read user prefs the sidecar needs at spawn time. Default
+            // "auto" matches the historical behaviour. Bad values fall back
+            // to "auto" silently rather than crashing the app.
+            let runtime_pref = commands::prefs::read_pref(
+                &conn,
+                commands::prefs::KEY_CLAUDE_RUNTIME,
+            )
+            .ok()
+            .flatten()
+            .filter(|v| matches!(v.as_str(), "auto" | "native" | "wsl"))
+            .unwrap_or_else(|| "auto".to_string());
+
             app.manage(db::DbState {
                 conn: Mutex::new(conn),
                 path: db_path,
@@ -33,6 +46,7 @@ pub fn run() {
             // async runtime (= tokio) before calling it.
             let host = tauri::async_runtime::block_on(session_host::spawn(
                 app.handle().clone(),
+                runtime_pref,
             ))
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             app.manage(host);
@@ -62,6 +76,8 @@ pub fn run() {
             commands::permissions::list_permission_rules,
             commands::permissions::add_permission_rule,
             commands::permissions::remove_permission_rule,
+            commands::prefs::get_pref,
+            commands::prefs::set_pref,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

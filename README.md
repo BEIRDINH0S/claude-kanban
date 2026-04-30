@@ -43,18 +43,16 @@ accessible sur ton PATH (`which claude` doit renvoyer un chemin). Node est
 
 ### Windows + WSL
 
-Si tu utilises `claude` depuis WSL (Linux dans Windows) plutôt que natif
-Windows, le sidecar Node de l'app ne trouvera pas le binaire avec un
-simple `where claude` — il scanne le PATH Windows seulement. Crée un shim
-`claude.bat` quelque part dans ton PATH Windows, contenant simplement :
+Si ton `claude` vit dans WSL (Linux dans Windows) plutôt qu'en natif
+Windows — typiquement parce que ton `claude login`, tes MCP servers et
+ton `~/.claude` config sont tous côté Linux — va dans **Paramètres →
+Claude → Runtime** et choisis **WSL**. Au prochain démarrage de l'app,
+le sidecar génère un shim `wsl claude %*` à la volée et le passe au
+SDK. Plus besoin de `claude.bat` manuel.
 
-```batch
-@echo off
-wsl claude %*
-```
-
-L'app le détectera comme une commande `claude` standard et appellera
-WSL en transparent.
+Le mode **Auto** (défaut) cherche d'abord un `claude` natif et bascule
+sur WSL si rien n'est trouvé. **Natif** force le binaire bundlé du SDK
+ou ton install Windows.
 
 ## Lancer en dev (depuis les sources)
 

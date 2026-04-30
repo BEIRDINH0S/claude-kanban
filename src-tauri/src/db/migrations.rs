@@ -72,6 +72,17 @@ const MIGRATIONS: &[&str] = &[
         created_at INTEGER NOT NULL
     );
     "#,
+
+    // v6 — generic key/value bag for app-wide preferences that need to be
+    // visible to BOTH the front (UI toggles) and the Rust setup (sidecar
+    // spawn-time decisions like `claude_runtime`). Avoids splitting state
+    // across localStorage + a side-file. Keys are namespaced by feature.
+    r#"
+    CREATE TABLE app_prefs (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {

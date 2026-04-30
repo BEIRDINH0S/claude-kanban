@@ -94,11 +94,16 @@ fn resolve_paths(app: &AppHandle) -> (std::path::PathBuf, std::path::PathBuf) {
 /// a Tokio runtime context — call from `tauri::async_runtime::block_on(...)`
 /// in `setup`, since the Tauri setup callback itself is sync and not yet on
 /// the async runtime.
-pub async fn spawn(app: AppHandle) -> Result<SessionHost, String> {
+///
+/// `runtime_pref` is one of `"auto"`, `"native"`, `"wsl"` — passed to the
+/// sidecar as `--claude-runtime=<value>` so it knows whether to look for a
+/// WSL-installed claude on Windows. Read from the `app_prefs` table at boot.
+pub async fn spawn(app: AppHandle, runtime_pref: String) -> Result<SessionHost, String> {
     let (node_path, host_path) = resolve_paths(&app);
 
     let mut cmd = Command::new(&node_path);
     cmd.arg(&host_path)
+        .arg(format!("--claude-runtime={runtime_pref}"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -171,11 +176,22 @@ async fn handle_outbound(app: &AppHandle, line: &str) {
     };
 
     match msg {
-        SidecarOutbound::Ready { claude_binary } => {
-            eprintln!("[host] sidecar ready · claude={:?}", claude_binary);
+        SidecarOutbound::Ready {
+            claude_binary,
+            runtime,
+            runtime_pref,
+        } => {
+            eprintln!(
+                "[host] sidecar ready · claude={:?} runtime={:?} pref={:?}",
+                claude_binary, runtime, runtime_pref,
+            );
             let _ = app.emit(
                 "binary-status",
-                json!({ "claudeBinary": claude_binary }),
+                json!({
+                    "claudeBinary": claude_binary,
+                    "runtime": runtime,
+                    "runtimePref": runtime_pref,
+                }),
             );
         }
 

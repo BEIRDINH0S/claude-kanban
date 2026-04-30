@@ -44,6 +44,15 @@ pub enum SidecarOutbound {
     Ready {
         #[serde(default)]
         claude_binary: Option<String>,
+        /// Effective runtime the sidecar resolved to: `"native"` or `"wsl"`.
+        /// Optional for backwards compat with older sidecar builds.
+        #[serde(default)]
+        runtime: Option<String>,
+        /// Pref the user requested via Settings (`auto`/`native`/`wsl`).
+        /// May differ from `runtime` if e.g. the user asked for `wsl` but
+        /// no WSL claude was found and we silently fell back.
+        #[serde(default)]
+        runtime_pref: Option<String>,
     },
     SessionStarted {
         request_id: String,
