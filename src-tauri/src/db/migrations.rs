@@ -101,6 +101,57 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE cards ADD COLUMN worktree_path TEXT;
     "#,
+
+    // v9 — token-precise usage index. Source of truth = `~/.claude/projects/`
+    // JSONL files (the SDK writes them as it streams; we re-parse and
+    // aggregate). One row per assistant message (`uuid` is unique-per-event
+    // across all sessions). The cursor table makes incremental ingestion
+    // possible without re-reading the whole archive on every change.
+    //
+    // We use full token granularity (input/output/cache_read/cache_create
+    // 5m+1h split) because aggregating to "tokens" would lose visibility on
+    // cache hit ratio and ephemeral-window pricing — both meaningful for
+    // anyone monitoring spend.
+    //
+    // `cost_usd_local` is computed at insert time using the pricing table
+    // baked into the binary (`usage::pricing`). Re-computed on rebuild_index
+    // when prices change.
+    r#"
+    CREATE TABLE usage_messages (
+        session_id                       TEXT NOT NULL,
+        message_uuid                     TEXT NOT NULL,
+        request_id                       TEXT,
+        ts_ms                            INTEGER NOT NULL,
+        project_path                     TEXT NOT NULL,
+        encoded_dir                      TEXT NOT NULL,
+        card_id                          TEXT,
+        model                            TEXT NOT NULL,
+        git_branch                       TEXT,
+        input_tokens                     INTEGER NOT NULL DEFAULT 0,
+        output_tokens                    INTEGER NOT NULL DEFAULT 0,
+        cache_read_input_tokens          INTEGER NOT NULL DEFAULT 0,
+        cache_creation_input_tokens      INTEGER NOT NULL DEFAULT 0,
+        cache_creation_5m_input_tokens   INTEGER NOT NULL DEFAULT 0,
+        cache_creation_1h_input_tokens   INTEGER NOT NULL DEFAULT 0,
+        web_search_requests              INTEGER NOT NULL DEFAULT 0,
+        web_fetch_requests               INTEGER NOT NULL DEFAULT 0,
+        cost_usd_local                   REAL NOT NULL DEFAULT 0,
+        PRIMARY KEY (session_id, message_uuid)
+    ) WITHOUT ROWID;
+    CREATE INDEX idx_usage_ts        ON usage_messages (ts_ms);
+    CREATE INDEX idx_usage_card      ON usage_messages (card_id);
+    CREATE INDEX idx_usage_project   ON usage_messages (project_path);
+    CREATE INDEX idx_usage_model     ON usage_messages (model);
+    CREATE INDEX idx_usage_session   ON usage_messages (session_id);
+
+    CREATE TABLE usage_jsonl_cursor (
+        encoded_dir TEXT NOT NULL,
+        session_id  TEXT NOT NULL,
+        bytes_read  INTEGER NOT NULL DEFAULT 0,
+        mtime_ms    INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (encoded_dir, session_id)
+    ) WITHOUT ROWID;
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {
