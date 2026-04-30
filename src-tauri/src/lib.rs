@@ -67,6 +67,7 @@ pub fn run() {
             commands::projects::delete_project,
             commands::projects::reorder_projects,
             commands::backup::export_project_to_file,
+            commands::backup::export_session_markdown,
             commands::backup::import_project_from_file,
             commands::sessions::start_session,
             commands::sessions::send_message,

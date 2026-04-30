@@ -113,6 +113,19 @@ pub fn export_project_to_file(
     Ok(())
 }
 
+/// Write a session transcript to a Markdown file. The caller (front) builds
+/// the markdown body — Rust just persists it. Same convention as
+/// `export_project_to_file`: `path` comes from a Tauri save-dialog so the
+/// user explicitly picked a destination.
+#[tauri::command]
+pub fn export_session_markdown(
+    markdown: String,
+    path: String,
+) -> Result<(), String> {
+    std::fs::write(&path, markdown).map_err(|e| format!("write failed: {e}"))?;
+    Ok(())
+}
+
 /// Read a dump JSON and materialize it as a brand-new project. We always
 /// allocate fresh ids so importing the same file twice never collides with
 /// an existing project, and so cross-machine moves don't smash live rows.

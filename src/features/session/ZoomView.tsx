@@ -1,7 +1,9 @@
+import { save } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import {
   Archive,
   CircleStop,
+  Download,
   FolderOpen,
   LoaderCircle,
   Pencil,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { exportSessionMarkdown } from "../../ipc/backup";
 import {
   readSessionHistory,
   sendMessage as ipcSendMessage,
@@ -20,8 +23,13 @@ import { useCostsStore } from "../../stores/costsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
 import { useMessagesStore } from "../../stores/messagesStore";
 import { useProjectsStore } from "../../stores/projectsStore";
+import { useToastsStore } from "../../stores/toastsStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Card } from "../../types/card";
+import {
+  defaultMarkdownFilename,
+  transcriptToMarkdown,
+} from "./markdownExport";
 import { MessageInput } from "./MessageInput";
 import { MessageList } from "./MessageList";
 import { PermissionPanel } from "./PermissionPanel";
@@ -86,6 +94,32 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
     });
   };
 
+  // Markdown export: render the in-memory transcript through the formatter
+  // and ask Rust to write the result. The user picks the destination via
+  // the OS save dialog (consistent with the project-level export). The
+  // transcript may be the live one or the JSONL-hydrated one — either way
+  // it's the same DisplayItem[] the user sees on screen.
+  const pushToast = useToastsStore((s) => s.push);
+  const handleExportMarkdown = async () => {
+    const items = useMessagesStore.getState().byCard[card.id] ?? [];
+    if (items.length === 0) {
+      pushToast({ message: "Pas de transcript à exporter pour l'instant." });
+      return;
+    }
+    try {
+      const path = await save({
+        defaultPath: defaultMarkdownFilename(card),
+        filters: [{ name: "Markdown", extensions: ["md"] }],
+      });
+      if (typeof path !== "string") return; // user cancelled
+      const md = transcriptToMarkdown(card, items);
+      await exportSessionMarkdown(md, path);
+      pushToast({ message: `Transcript exporté vers ${path}` });
+    } catch (e) {
+      pushToast({ message: `Export échoué — ${String(e)}` });
+    }
+  };
+
   return (
     <header className="flex items-start justify-between gap-3 border-b border-[var(--glass-stroke)] px-6 py-4">
       <div className="min-w-0 flex-1">
@@ -129,6 +163,15 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
             <CircleStop className="size-4" strokeWidth={1.75} />
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => void handleExportMarkdown()}
+          title="Exporter le transcript en Markdown"
+          aria-label="Exporter le transcript"
+          className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+        >
+          <Download className="size-4" strokeWidth={1.75} />
+        </button>
         {!archived && card.column !== "done" && (
           <button
             type="button"
