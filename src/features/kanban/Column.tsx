@@ -99,7 +99,13 @@ export function Column({ def, cards }: Props) {
         items={cards.map((c) => c.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
+        {/*
+         * pt-0.5 (2px) gives the keyboard-nav selection ring (ring-2 on
+         * CardItem) breathing room past the column's overflow-y-auto clip.
+         * Without it, the top edge of the ring on the first card sits flush
+         * with the scroll container and gets cut off.
+         */}
+        <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pt-0.5 pb-2">
           {cards.map((c) => (
             <CardItem key={c.id} card={c} />
           ))}
