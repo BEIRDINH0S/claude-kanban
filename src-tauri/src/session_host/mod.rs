@@ -11,7 +11,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::db::DbState;
+use crate::db::{lock_recover, DbState};
 use protocol::{SidecarInbound, SidecarOutbound};
 
 /// Resolves to either the assigned session_id or a sidecar error message.
@@ -31,11 +31,11 @@ impl SessionHost {
     }
 
     pub fn register_pending(&self, request_id: String, tx: oneshot::Sender<StartResult>) {
-        self.pending.lock().unwrap().insert(request_id, tx);
+        lock_recover(&self.pending).insert(request_id, tx);
     }
 
     pub fn take_pending(&self, request_id: &str) -> Option<oneshot::Sender<StartResult>> {
-        self.pending.lock().unwrap().remove(request_id)
+        lock_recover(&self.pending).remove(request_id)
     }
 }
 
@@ -200,17 +200,45 @@ async fn handle_outbound(app: &AppHandle, line: &str) {
             card_id,
             session_id,
         } => {
-            // Persist the assigned session_id on the card.
-            {
+            // Persist the assigned session_id on the card. If this fails
+            // (DB locked, disk full, schema drift…) we MUST surface the
+            // error: silently resolving the oneshot would leave the front
+            // believing the session is live while the DB has no session_id,
+            // making the card permanently unstoppable / unresumable.
+            let persist = {
                 let db = app.state::<DbState>();
-                let conn = db.conn.lock().unwrap();
-                let _ = conn.execute(
+                let conn = lock_recover(&db.conn);
+                conn.execute(
                     r#"UPDATE cards SET session_id = ?1, updated_at = ?2 WHERE id = ?3"#,
                     rusqlite::params![&session_id, now_ms(), &card_id],
+                )
+            };
+            let host = app.state::<SessionHost>();
+            if let Err(e) = persist {
+                eprintln!(
+                    "[host] failed to persist session_id={session_id} for card={card_id}: {e}"
                 );
+                if let Some(tx) = host.take_pending(&request_id) {
+                    let _ = tx.send(Err(format!("DB persist failed: {e}")));
+                }
+                // Tell the sidecar to abandon this session — we can't
+                // route messages to it anyway since the card row has
+                // no record of the id.
+                let _ = host.send(
+                    crate::session_host::protocol::SidecarInbound::StopSession {
+                        session_id: session_id.clone(),
+                    },
+                );
+                let _ = app.emit(
+                    "session-error",
+                    json!({
+                        "sessionId": session_id,
+                        "message": format!("Impossible d'enregistrer la session : {e}"),
+                    }),
+                );
+                return;
             }
             // Resolve the start_session command's oneshot.
-            let host = app.state::<SessionHost>();
             if let Some(tx) = host.take_pending(&request_id) {
                 let _ = tx.send(Ok(session_id.clone()));
             }
@@ -238,7 +266,7 @@ async fn handle_outbound(app: &AppHandle, line: &str) {
             // to Review) are preserved by the column='in_progress' guard.
             if let Some(sid) = &session_id {
                 let db = app.state::<DbState>();
-                let conn = db.conn.lock().unwrap();
+                let conn = lock_recover(&db.conn);
                 let now = now_ms();
                 let next_pos: i64 = conn
                     .query_row(
@@ -283,7 +311,7 @@ async fn handle_outbound(app: &AppHandle, line: &str) {
             // The transcript still gets a notice via `permission-auto-approved`.
             let auto_allow = {
                 let db = app.state::<DbState>();
-                let conn = db.conn.lock().unwrap();
+                let conn = lock_recover(&db.conn);
                 let rules = crate::permissions::list(&conn).unwrap_or_default();
                 crate::permissions::is_allowed(&rules, &tool_name, &input)
             };
@@ -312,7 +340,7 @@ async fn handle_outbound(app: &AppHandle, line: &str) {
             // Move the owning card to Review while we wait on the user.
             if let Some(cid) = &card_id {
                 let db = app.state::<DbState>();
-                let conn = db.conn.lock().unwrap();
+                let conn = lock_recover(&db.conn);
                 let now = now_ms();
                 let next_pos: i64 = conn
                     .query_row(

@@ -21,10 +21,16 @@
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import readline from "node:readline";
+
+// Hard cap on how long we wait for the user to answer a tool-permission
+// prompt. If Rust crashes or the UI loses the request, the SDK would
+// otherwise stay paused forever — denying after 5 min is the safe fallback.
+const PERMISSION_TIMEOUT_MS = 5 * 60_000;
 
 const stdout = process.stdout;
 function send(msg) {
@@ -225,20 +231,39 @@ class SessionHandle {
    * Called by the SDK before each tool execution. We return a Promise that
    * resolves only when Rust replies with `permission_response`. Until then
    * the SDK is paused for this session (Claude is waiting on us).
+   *
+   * A hard timeout (`PERMISSION_TIMEOUT_MS`) and a session-end purge in
+   * `consume()`'s finally block prevent the Promise from leaking when
+   * Rust never replies or the session dies mid-prompt.
    */
   askPermission(toolName, input) {
     return new Promise((resolve) => {
-      const requestId = `perm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      // crypto.randomUUID is collision-free; previously we used Date.now()
+      // + 6-char random which can collide if two canUseTool fire in the
+      // same millisecond on the same session.
+      const requestId = `perm-${randomUUID()}`;
+      const sessionId = this.sessionId;
+      const timer = setTimeout(() => {
+        const entry = pendingPermissions.get(requestId);
+        if (!entry) return;
+        pendingPermissions.delete(requestId);
+        log(`canUseTool ${toolName} TIMEOUT req=${requestId}`);
+        entry.resolve({
+          behavior: "deny",
+          message: "Délai de réponse dépassé.",
+        });
+      }, PERMISSION_TIMEOUT_MS);
       // Stash the original input alongside resolve: when Rust replies with
       // `allow` it doesn't (need to) echo the input back, but the SDK still
       // expects an `updatedInput` to forward to the tool — falling back to
       // `{}` would silently break Bash/Edit/etc.
-      pendingPermissions.set(requestId, { resolve, input });
+      // sessionId is captured so the session-end purge can scope its cleanup.
+      pendingPermissions.set(requestId, { resolve, input, timer, sessionId });
       log(`canUseTool ${toolName} req=${requestId}`);
       send({
         type: "permission_request",
         requestId,
-        sessionId: this.sessionId,
+        sessionId,
         cardId: this.cardId,
         toolName,
         input,
@@ -335,6 +360,18 @@ class SessionHandle {
     } finally {
       if (this.sessionId) sessionsById.delete(this.sessionId);
       pendingByRequest.delete(this.requestId);
+      // Reject any in-flight permission prompt that belonged to this
+      // session — otherwise its requestId leaks in pendingPermissions
+      // forever and the SDK Promise is never settled.
+      for (const [rid, entry] of pendingPermissions) {
+        if (entry.sessionId !== this.sessionId) continue;
+        clearTimeout(entry.timer);
+        pendingPermissions.delete(rid);
+        entry.resolve({
+          behavior: "deny",
+          message: "Session terminée avant la réponse.",
+        });
+      }
     }
   }
 }
@@ -393,6 +430,8 @@ rl.on("line", (line) => {
         return;
       }
       pendingPermissions.delete(msg.requestId);
+      // Cancel the timeout so it doesn't fire later and double-resolve.
+      clearTimeout(entry.timer);
       const { resolve, input: originalInput } = entry;
       if (msg.decision === "allow") {
         // updatedInput defaults to whatever the SDK originally proposed; we

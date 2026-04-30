@@ -5,11 +5,20 @@ pub use types::{Card, CardColumn, Project};
 
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 pub struct DbState {
     pub conn: Mutex<Connection>,
     pub path: PathBuf,
+}
+
+/// Acquire a mutex guard, transparently recovering from poisoning. The state
+/// behind our locks (rusqlite `Connection`, `HashMap`s) holds no invariants
+/// that would be corrupted if a previous holder panicked mid-operation, so
+/// `unwrap_or_else(into_inner)` is safer than `unwrap()` — the latter cascades
+/// the panic and tears down the whole Tauri runtime on a single bad query.
+pub fn lock_recover<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 #[derive(Debug, thiserror::Error)]
