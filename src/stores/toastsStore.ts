@@ -20,6 +20,10 @@ interface ToastsState {
 }
 
 let counter = 0;
+// Tracks the auto-dismiss timer per toast id, so a manual dismiss (or a
+// duplicate id replacing an existing toast) can clear the pending timer
+// instead of letting it fire a no-op setState later.
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export const useToastsStore = create<ToastsState>((set, get) => ({
   toasts: [],
@@ -29,11 +33,21 @@ export const useToastsStore = create<ToastsState>((set, get) => ({
     const ttl = toast.ttlMs ?? 5000;
     set((s) => ({ toasts: [...s.toasts, { ...toast, id }] }));
     if (ttl > 0) {
-      setTimeout(() => get().dismiss(id), ttl);
+      const t = setTimeout(() => {
+        timers.delete(id);
+        get().dismiss(id);
+      }, ttl);
+      timers.set(id, t);
     }
     return id;
   },
 
-  dismiss: (id) =>
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  dismiss: (id) => {
+    const t = timers.get(id);
+    if (t !== undefined) {
+      clearTimeout(t);
+      timers.delete(id);
+    }
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+  },
 }));

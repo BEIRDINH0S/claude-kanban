@@ -761,6 +761,7 @@ function Body({ card }: { card: Card }) {
           <Footer working={isWorking} />
           <PermissionPanel cardId={card.id} />
           <MessageInput
+            cardId={card.id}
             onSend={handleSend}
             disabled={isStarting}
             placeholder={placeholder}

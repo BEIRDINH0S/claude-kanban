@@ -4,15 +4,20 @@ import {
   Bell,
   Database,
   Download,
+  FileText,
   GitBranch,
+  Keyboard,
+  Pencil,
   Plus,
+  RotateCcw,
   ShieldCheck,
   Terminal,
   Trash2,
   TrendingUp,
   Upload,
+  X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   exportProjectToFile,
@@ -29,9 +34,25 @@ import {
   readNotifyOnTurnEnd,
   writeNotifyOnTurnEnd,
 } from "../../lib/prefs";
+import {
+  SHORTCUTS,
+  SHORTCUT_BY_ID,
+  type Binding,
+  type ShortcutId,
+  captureBinding,
+  formatBinding,
+} from "../../lib/shortcuts";
 import { useErrorsStore } from "../../stores/errorsStore";
 import { usePermissionRulesStore } from "../../stores/permissionRulesStore";
 import { useProjectsStore } from "../../stores/projectsStore";
+import {
+  findConflict,
+  useShortcutsStore,
+} from "../../stores/shortcutsStore";
+import {
+  type PromptTemplate,
+  useTemplatesStore,
+} from "../../stores/templatesStore";
 import { useUiStore } from "../../stores/uiStore";
 import {
   selectSessionLimit,
@@ -66,6 +87,14 @@ export function SettingsPage() {
 
         <Category title="Permissions">
           <PermissionRulesSection />
+        </Category>
+
+        <Category title="Raccourcis clavier">
+          <ShortcutsSection />
+        </Category>
+
+        <Category title="Prompts">
+          <PromptTemplatesSection />
         </Category>
 
         <Category title="Cartes">
@@ -166,14 +195,14 @@ function Toggle({
       aria-pressed={enabled}
       aria-label={ariaLabel}
       className={[
-        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors",
         enabled ? "bg-[var(--color-accent)]" : "bg-[var(--glass-stroke)]",
       ].join(" ")}
     >
       <span
         className={[
-          "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
-          enabled ? "translate-x-[18px]" : "translate-x-0.5",
+          "block size-5 rounded-full bg-white shadow transition-transform",
+          enabled ? "translate-x-5" : "translate-x-0",
         ].join(" ")}
       />
     </button>
@@ -695,6 +724,253 @@ function ProjectDataSection() {
 }
 
 // -----------------------------------------------------------------------------
+// Prompts — slash-menu templates surfaced from MessageInput
+// -----------------------------------------------------------------------------
+
+/**
+ * CRUD for the user's prompt templates. Mirrors the pattern of
+ * `PermissionRulesSection`: lazy-load on first mount, optimistic UI for
+ * writes, surface errors inline. Edits happen in-place via a child row
+ * component to keep the section flat (no modal indirection).
+ */
+function PromptTemplatesSection() {
+  const templates = useTemplatesStore((s) => s.templates);
+  const loaded = useTemplatesStore((s) => s.loaded);
+  const load = useTemplatesStore((s) => s.load);
+  const add = useTemplatesStore((s) => s.add);
+  const update = useTemplatesStore((s) => s.update);
+  const remove = useTemplatesStore((s) => s.remove);
+
+  const [draftName, setDraftName] = useState("");
+  const [draftBody, setDraftBody] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!loaded) void load();
+  }, [loaded, load]);
+
+  const handleAdd = async () => {
+    const name = draftName.trim();
+    const body = draftBody.trim();
+    if (!name || !body || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await add(name, body);
+      setDraftName("");
+      setDraftBody("");
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      icon={
+        <FileText
+          className="size-3.5 shrink-0 text-[var(--text-muted)]"
+          strokeWidth={1.75}
+        />
+      }
+      title="Templates de prompt"
+      subtitle={
+        <>
+          Snippets réutilisables, accessibles depuis l'input d'une carte en
+          tapant <code className="font-mono text-[11px]">/</code>. Le menu
+          se filtre sur le nom à mesure que tu tapes ; <kbd className="font-mono text-[11px]">Entrée</kbd> ou <kbd className="font-mono text-[11px]">Tab</kbd> insère.
+        </>
+      }
+    >
+      {/* Add form — name on top, body underneath. Body is a textarea since
+          most templates run multi-line. */}
+      <div className="mt-3 flex flex-col gap-2">
+        <input
+          type="text"
+          value={draftName}
+          onChange={(e) => setDraftName(e.target.value)}
+          placeholder="Nom (ex. Implémenter une feature)"
+          className="rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-accent-ring)] dark:bg-white/5"
+        />
+        <textarea
+          value={draftBody}
+          onChange={(e) => setDraftBody(e.target.value)}
+          rows={3}
+          placeholder="Contenu du prompt envoyé à Claude…"
+          className="resize-y rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-accent-ring)] dark:bg-white/5"
+        />
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={busy || !draftName.trim() || !draftBody.trim()}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus className="size-3.5" strokeWidth={1.75} />
+            Ajouter
+          </button>
+        </div>
+      </div>
+
+      {err && (
+        <p className="mt-2 font-mono text-[11px] text-red-400 break-words">
+          {err}
+        </p>
+      )}
+
+      <ul className="mt-3 flex flex-col gap-1.5">
+        {templates.length === 0 && loaded && (
+          <li className="font-mono text-[11px] text-[var(--text-muted)]">
+            Aucun template — ajoute-en pour les voir apparaître dans le menu /.
+          </li>
+        )}
+        {templates.map((t) => (
+          <PromptTemplateRow
+            key={t.id}
+            template={t}
+            onSave={(patch) => update(t.id, patch)}
+            onDelete={() => remove(t.id)}
+          />
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/**
+ * One row in the template list. Collapsed = name + preview + actions ;
+ * expanded = inline editor with the same shape as the add-form. Kept as
+ * its own component so the parent stays readable and edit state is
+ * scoped per-row (Esc only cancels the row you're in).
+ */
+function PromptTemplateRow({
+  template,
+  onSave,
+  onDelete,
+}: {
+  template: PromptTemplate;
+  onSave: (patch: { name?: string; body?: string }) => Promise<void>;
+  onDelete: () => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(template.name);
+  const [body, setBody] = useState(template.body);
+  const [busy, setBusy] = useState(false);
+
+  // Reset local edits if the underlying template changes (e.g. another
+  // tab edited it, or the user just saved). Preserves edits-in-progress
+  // when only the *other* fields changed by re-syncing the unchanged ones.
+  useEffect(() => {
+    if (!editing) {
+      setName(template.name);
+      setBody(template.body);
+    }
+  }, [template.name, template.body, editing]);
+
+  const handleSave = async () => {
+    if (busy) return;
+    const cleanName = name.trim();
+    if (!cleanName || !body.trim()) return;
+    setBusy(true);
+    try {
+      await onSave({ name: cleanName, body });
+      setEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (busy) return;
+    // No window.confirm — losing one template is recoverable (the user
+    // retyped them once already) and confirmations on every row gets old
+    // fast. The undo lives in their muscle memory + the add form above.
+    setBusy(true);
+    try {
+      await onDelete();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <li className="flex flex-col gap-2 rounded-lg border border-[var(--color-accent-ring)] bg-black/5 p-2.5 dark:bg-white/5">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+          className="rounded-md border border-[var(--glass-stroke)] bg-transparent px-2 py-1 text-[12px] text-[var(--text-primary)] outline-none focus:border-[var(--color-accent-ring)]"
+        />
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={3}
+          className="resize-y rounded-md border border-[var(--glass-stroke)] bg-transparent px-2 py-1 font-mono text-[11.5px] leading-relaxed text-[var(--text-primary)] outline-none focus:border-[var(--color-accent-ring)]"
+        />
+        <div className="flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              setName(template.name);
+              setBody(template.body);
+            }}
+            disabled={busy}
+            className="rounded-md px-2.5 py-1 text-[11.5px] text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] disabled:opacity-40 dark:hover:bg-white/5"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={busy || !name.trim() || !body.trim()}
+            className="rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-[11.5px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+          >
+            Enregistrer
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="group flex items-start gap-2 rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 dark:bg-white/5">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[12px] font-medium text-[var(--text-primary)]">
+          {template.name}
+        </p>
+        <p className="mt-0.5 truncate font-mono text-[10.5px] text-[var(--text-muted)]">
+          {template.body.replace(/\s+/g, " ").trim() || "(vide)"}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          aria-label="Modifier le template"
+          className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+        >
+          <Pencil className="size-3" strokeWidth={1.75} />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleDelete()}
+          disabled={busy}
+          aria-label="Supprimer le template"
+          className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 disabled:opacity-40 dark:hover:bg-white/5"
+        >
+          <Trash2 className="size-3" strokeWidth={1.75} />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+// -----------------------------------------------------------------------------
 // Usage — rate limit meters (read-only diagnostics)
 // -----------------------------------------------------------------------------
 
@@ -752,5 +1028,286 @@ function UsageSection() {
         }
       />
     </>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Raccourcis clavier — view + rebind. The capture flow uses captureBinding()
+// which installs a one-shot capture-phase listener so it intercepts the user's
+// next keystroke before App.tsx / Board.tsx can act on it.
+// -----------------------------------------------------------------------------
+
+function ShortcutsSection() {
+  const bindings = useShortcutsStore((s) => s.bindings);
+  const replaceBinding = useShortcutsStore((s) => s.replaceBinding);
+  const addBinding = useShortcutsStore((s) => s.addBinding);
+  const removeBinding = useShortcutsStore((s) => s.removeBinding);
+  const resetBindings = useShortcutsStore((s) => s.resetBindings);
+  const resetAll = useShortcutsStore((s) => s.resetAll);
+
+  // Capture state: identifies the shortcut + slot we're currently recording.
+  // `index === -1` means "appending a new binding". The cleanup function from
+  // captureBinding() lives in a ref so we can cancel it if the user clicks
+  // a different chip mid-capture.
+  type CaptureTarget = { id: ShortcutId; index: number };
+  const [capturing, setCapturing] = useState<CaptureTarget | null>(null);
+  const [conflictMsg, setConflictMsg] = useState<string | null>(null);
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  // Cancel any active capture when the section unmounts.
+  useEffect(() => {
+    return () => {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    };
+  }, []);
+
+  const startCapture = (target: CaptureTarget) => {
+    cleanupRef.current?.();
+    setConflictMsg(null);
+    setCapturing(target);
+    cleanupRef.current = captureBinding(
+      (binding) => {
+        cleanupRef.current = null;
+        setCapturing(null);
+        const conflict = findConflict(binding, target.id);
+        if (conflict) {
+          // Non-blocking: persist the change but warn so the user knows
+          // the same combo also fires another action. They can clear it
+          // from the conflicting row if they want.
+          setConflictMsg(
+            `« ${formatBinding(binding)} » est aussi utilisé pour : ${
+              SHORTCUT_BY_ID[conflict].label
+            }.`,
+          );
+        }
+        if (target.index === -1) {
+          addBinding(target.id, binding);
+        } else {
+          replaceBinding(target.id, target.index, binding);
+        }
+      },
+      () => {
+        cleanupRef.current = null;
+        setCapturing(null);
+      },
+    );
+  };
+
+  const isCapturing = (id: ShortcutId, index: number) =>
+    capturing?.id === id && capturing.index === index;
+
+  const globals = SHORTCUTS.filter((s) => s.scope === "global");
+  const board = SHORTCUTS.filter((s) => s.scope === "board");
+
+  return (
+    <Card
+      icon={
+        <Keyboard
+          className="size-3.5 shrink-0 text-[var(--text-muted)]"
+          strokeWidth={1.75}
+        />
+      }
+      title="Raccourcis clavier"
+      subtitle="Clique sur une touche pour la remplacer (appuie ensuite sur la combinaison voulue, Échap pour annuler). « + » ajoute une touche supplémentaire qui déclenche la même action."
+    >
+      <ShortcutGroup label="Global">
+        {globals.map((def) => (
+          <ShortcutRow
+            key={def.id}
+            id={def.id}
+            label={def.label}
+            description={def.description}
+            bindings={bindings[def.id] ?? []}
+            isCapturing={isCapturing}
+            onStartCapture={startCapture}
+            onRemove={(idx) => removeBinding(def.id, idx)}
+            onReset={() => resetBindings(def.id)}
+          />
+        ))}
+      </ShortcutGroup>
+
+      <ShortcutGroup label="Board">
+        {board.map((def) => (
+          <ShortcutRow
+            key={def.id}
+            id={def.id}
+            label={def.label}
+            description={def.description}
+            bindings={bindings[def.id] ?? []}
+            isCapturing={isCapturing}
+            onStartCapture={startCapture}
+            onRemove={(idx) => removeBinding(def.id, idx)}
+            onReset={() => resetBindings(def.id)}
+          />
+        ))}
+      </ShortcutGroup>
+
+      {conflictMsg && (
+        <p className="mt-3 font-mono text-[11px] text-amber-300/90">
+          {conflictMsg}
+        </p>
+      )}
+
+      <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            cleanupRef.current?.();
+            cleanupRef.current = null;
+            setCapturing(null);
+            setConflictMsg(null);
+            resetAll();
+          }}
+          className="flex items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[11.5px] font-medium text-[var(--text-secondary)] hover:border-[var(--color-accent-ring)] hover:text-[var(--text-primary)]"
+        >
+          <RotateCcw className="size-3" strokeWidth={1.75} />
+          Tout réinitialiser
+        </button>
+      </div>
+    </Card>
+  );
+}
+
+function ShortcutGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-4 first:mt-3">
+      <p className="mb-1.5 text-[10px] font-semibold tracking-[0.16em] text-[var(--text-muted)] uppercase">
+        {label}
+      </p>
+      <ul className="flex flex-col">{children}</ul>
+    </div>
+  );
+}
+
+function ShortcutRow({
+  id,
+  label,
+  description,
+  bindings,
+  isCapturing,
+  onStartCapture,
+  onRemove,
+  onReset,
+}: {
+  id: ShortcutId;
+  label: string;
+  description?: string;
+  bindings: Binding[];
+  isCapturing: (id: ShortcutId, index: number) => boolean;
+  onStartCapture: (target: { id: ShortcutId; index: number }) => void;
+  onRemove: (index: number) => void;
+  onReset: () => void;
+}) {
+  return (
+    <li className="group flex items-center gap-3 border-b border-[var(--glass-stroke)] py-2 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <p className="text-[12px] text-[var(--text-primary)]">{label}</p>
+        {description && (
+          <p className="mt-0.5 text-[10.5px] leading-snug text-[var(--text-muted)]">
+            {description}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        {bindings.length === 0 && !isCapturing(id, -1) && (
+          <span className="font-mono text-[10.5px] text-[var(--text-muted)] italic">
+            désactivé
+          </span>
+        )}
+
+        {bindings.map((b, idx) =>
+          isCapturing(id, idx) ? (
+            <RecordingChip key={idx} />
+          ) : (
+            <BindingChip
+              key={idx}
+              binding={b}
+              onClick={() => onStartCapture({ id, index: idx })}
+              onRemove={
+                bindings.length > 1 || isCapturing(id, -1)
+                  ? () => onRemove(idx)
+                  : undefined
+              }
+            />
+          ),
+        )}
+
+        {isCapturing(id, -1) && <RecordingChip />}
+
+        <button
+          type="button"
+          onClick={() => onStartCapture({ id, index: -1 })}
+          aria-label="Ajouter un raccourci"
+          title="Ajouter un raccourci"
+          className="grid size-6 place-items-center rounded-md border border-dashed border-[var(--glass-stroke)] text-[var(--text-muted)] hover:border-[var(--color-accent-ring)] hover:text-[var(--text-primary)]"
+        >
+          <Plus className="size-3" strokeWidth={1.75} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onReset}
+          aria-label="Réinitialiser ce raccourci"
+          title="Réinitialiser"
+          className="grid size-6 place-items-center rounded-md text-[var(--text-muted)] opacity-0 transition-opacity hover:text-[var(--text-primary)] group-hover:opacity-100"
+        >
+          <RotateCcw className="size-3" strokeWidth={1.75} />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function BindingChip({
+  binding,
+  onClick,
+  onRemove,
+}: {
+  binding: Binding;
+  onClick: () => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <span className="inline-flex items-center overflow-hidden rounded-md border border-[var(--glass-stroke)] bg-black/5 dark:bg-white/5">
+      <button
+        type="button"
+        onClick={onClick}
+        title="Cliquer pour remplacer"
+        className="px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5"
+      >
+        {formatBinding(binding)}
+      </button>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          aria-label="Retirer ce raccourci"
+          title="Retirer"
+          className="grid h-full place-items-center border-l border-[var(--glass-stroke)] px-1 text-[var(--text-muted)] hover:bg-red-500/10 hover:text-red-400"
+        >
+          <X className="size-2.5" strokeWidth={2} />
+        </button>
+      )}
+    </span>
+  );
+}
+
+function RecordingChip() {
+  return (
+    <span className="inline-flex animate-pulse items-center gap-1.5 rounded-md border border-[var(--color-accent-ring)] bg-[var(--color-accent)]/10 px-2 py-0.5 text-[10.5px] text-[var(--text-primary)]">
+      <span className="size-1.5 rounded-full bg-[var(--color-accent)]" />
+      Appuie sur une touche…
+    </span>
   );
 }

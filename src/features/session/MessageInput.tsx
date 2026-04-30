@@ -1,15 +1,75 @@
 import { ArrowUp } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import { useMessagesStore } from "../../stores/messagesStore";
+import { useTemplatesStore } from "../../stores/templatesStore";
+import { useUiStore } from "../../stores/uiStore";
+import {
+  filterTemplates,
+  PromptTemplateMenu,
+  shouldShowSlashMenu,
+} from "./PromptTemplateMenu";
 
 interface Props {
   onSend: (text: string) => void | Promise<void>;
   disabled?: boolean;
   placeholder?: string;
+  /**
+   * Owning card. Optional for backwards-compat with any future caller, but
+   * required in practice to enable the prompt-history shortcut (Alt+↑/↓
+   * cycles through past user messages on this card).
+   */
+  cardId?: string;
 }
 
-export function MessageInput({ onSend, disabled, placeholder }: Props) {
+export function MessageInput({ onSend, disabled, placeholder, cardId }: Props) {
   const [text, setText] = useState("");
+  const [menuCursor, setMenuCursor] = useState(0);
+  // Lets Esc temporarily hide the menu without erasing the user's `/foo`
+  // text; reset as soon as they edit again so re-typing reopens it.
+  const [menuDismissed, setMenuDismissed] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+
+  // Templates: lazy-load on first mount of any input. The store guards
+  // against double-loads internally (see `loading` flag).
+  const templates = useTemplatesStore((s) => s.templates);
+  const templatesLoaded = useTemplatesStore((s) => s.loaded);
+  const loadTemplates = useTemplatesStore((s) => s.load);
+  useEffect(() => {
+    if (!templatesLoaded) void loadTemplates();
+  }, [templatesLoaded, loadTemplates]);
+
+  // Slash-menu open state derives purely from the textarea content so we
+  // never end up with a stale "open" flag — the menu closes itself the
+  // instant the user types a space/newline (via `shouldShowSlashMenu`).
+  const slashOpen =
+    !disabled && !menuDismissed && shouldShowSlashMenu(text);
+  const slashQuery = slashOpen ? text.slice(1) : "";
+  const filteredTemplates = useMemo(
+    () => (slashOpen ? filterTemplates(templates, slashQuery) : []),
+    [slashOpen, templates, slashQuery],
+  );
+
+  // Reset cursor whenever the visible list changes — landing on a stale
+  // index after filtering would highlight the wrong row (or nothing).
+  useEffect(() => {
+    setMenuCursor(0);
+  }, [slashOpen, slashQuery, filteredTemplates.length]);
+
+  // Prompt history (Alt+↑/↓): reuse the user's previous prompts on this
+  // card, shell-style. We resolve the history lazily on each keypress so
+  // we don't subscribe the input to every transcript update — Zustand
+  // would re-render us on every Claude event otherwise.
+  //
+  // `historyIndex` is `-1` when "off" (textarea owns its content) and 0+
+  // when navigating (0 = most recent prompt). `historyDraft` snapshots
+  // whatever the user had typed before they started navigating, so
+  // pressing ↓ past index 0 restores it instead of leaving an empty box.
+  const historyIndex = useRef<number>(-1);
+  const historyDraft = useRef<string>("");
+
+  const setView = useUiStore((s) => s.setView);
+  const closeZoom = useUiStore((s) => s.closeZoom);
 
   // Autofocus on mount and after each successful send. We defer with rAF so
   // the focus call lands AFTER the parent's `animate-zoom-in` first paint —
@@ -33,11 +93,78 @@ export function MessageInput({ onSend, disabled, placeholder }: Props) {
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
     setText("");
+    historyIndex.current = -1;
+    historyDraft.current = "";
     await onSend(trimmed);
   };
 
+  /** Drop the picked template into the textarea, replacing the `/foo` trigger. */
+  const applyTemplate = (body: string) => {
+    setText(body);
+    setMenuDismissed(false);
+    // Place the caret at the end after React flushes — handy when the
+    // template is a fill-in-the-blanks prose the user wants to extend.
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      const pos = body.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
+  /** Pull the user-input transcript for this card, newest-first. */
+  const readUserHistory = (): string[] => {
+    if (!cardId) return [];
+    const items = useMessagesStore.getState().byCard[cardId] ?? [];
+    const out: string[] = [];
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      if (it.kind === "user-input" && it.text) out.push(it.text);
+    }
+    return out;
+  };
+
+  const goHistoryOlder = () => {
+    const history = readUserHistory();
+    if (history.length === 0) return;
+    if (historyIndex.current === -1) {
+      historyDraft.current = text; // remember the in-flight draft
+    }
+    const next = Math.min(historyIndex.current + 1, history.length - 1);
+    historyIndex.current = next;
+    setText(history[next]);
+  };
+
+  const goHistoryNewer = () => {
+    if (historyIndex.current === -1) return;
+    const next = historyIndex.current - 1;
+    historyIndex.current = next;
+    if (next === -1) {
+      setText(historyDraft.current);
+    } else {
+      const history = readUserHistory();
+      setText(history[next] ?? "");
+    }
+  };
+
+  const handleOpenSettings = () => {
+    closeZoom();
+    setView("settings");
+  };
+
   return (
-    <div className="px-6 pb-5">
+    <div className="relative px-6 pb-5">
+      {slashOpen && (
+        <PromptTemplateMenu
+          templates={filteredTemplates}
+          query={slashQuery}
+          cursor={menuCursor}
+          onCursorChange={setMenuCursor}
+          onPick={(tpl) => applyTemplate(tpl.body)}
+          onOpenSettings={handleOpenSettings}
+        />
+      )}
       <div className="mx-auto flex max-w-[760px] items-end gap-2">
         <div className="glass flex-1 rounded-2xl px-4 py-2.5">
           <textarea
@@ -47,9 +174,70 @@ export function MessageInput({ onSend, disabled, placeholder }: Props) {
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus={!disabled}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              setMenuDismissed(false);
+              // User edited manually → drop out of history-cycling mode.
+              historyIndex.current = -1;
+            }}
             onKeyDown={(e) => {
-              // Enter sends; Shift+Enter for newline.
+              // 1) Slash menu has priority: when it's visible, ↑/↓/Enter/Tab
+              //    drive the menu, not the textarea. Esc closes the menu
+              //    (without erasing `/foo` so the user can keep typing).
+              if (slashOpen && filteredTemplates.length > 0) {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setMenuCursor((c) =>
+                    Math.min(c + 1, filteredTemplates.length - 1),
+                  );
+                  return;
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setMenuCursor((c) => Math.max(c - 1, 0));
+                  return;
+                }
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  const tpl = filteredTemplates[menuCursor];
+                  if (tpl) applyTemplate(tpl.body);
+                  return;
+                }
+                if (e.key === "Tab") {
+                  e.preventDefault();
+                  const tpl = filteredTemplates[menuCursor];
+                  if (tpl) applyTemplate(tpl.body);
+                  return;
+                }
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  setMenuDismissed(true);
+                  return;
+                }
+              } else if (slashOpen && e.key === "Escape") {
+                // Empty results: still let Esc dismiss so the input box
+                // doesn't feel hijacked.
+                e.preventDefault();
+                setMenuDismissed(true);
+                return;
+              }
+
+              // 2) Prompt history: Alt+↑/↓ cycles through prior user
+              //    prompts on this card. Alt-modifier picked because it
+              //    avoids macOS' Ctrl+↑ (Mission Control) and the native
+              //    Cmd+↑ "go to start of textarea" binding.
+              if (e.altKey && e.key === "ArrowUp") {
+                e.preventDefault();
+                goHistoryOlder();
+                return;
+              }
+              if (e.altKey && e.key === "ArrowDown") {
+                e.preventDefault();
+                goHistoryNewer();
+                return;
+              }
+
+              // 3) Default: Enter sends; Shift+Enter for newline.
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 void submit();
