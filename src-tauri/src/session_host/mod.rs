@@ -49,16 +49,37 @@ fn now_ms() -> i64 {
 /// Resolve the Node binary and the host.mjs script path, picking the bundled
 /// (production) layout if it exists and falling back to dev paths otherwise.
 ///
-///   prod : `<resource_dir>/node[.exe]` + `<resource_dir>/sidecar/src/host.mjs`
-///   dev  : `node` (from PATH) + `<repo>/sidecar/src/host.mjs`
+/// In a production bundle, Tauri places things at:
+///   - `resources: ["../sidecar/**/*"]`  → `<Resources>/_up_/sidecar/...`
+///     (the `_up_` prefix encodes the `..` ascent in the glob)
+///   - `externalBin: ["binaries/node"]`  → next to the main executable
+///     (`Contents/MacOS/node` on macOS, alongside the .exe on Windows)
+///
+/// Dev fallback assumes `node` is on PATH and the sidecar source lives at
+/// `<repo>/sidecar/src/host.mjs`.
 fn resolve_paths(app: &AppHandle) -> (std::path::PathBuf, std::path::PathBuf) {
-    if let Ok(dir) = app.path().resource_dir() {
-        let bundled_script = dir.join("sidecar").join("src").join("host.mjs");
+    if let Ok(res_dir) = app.path().resource_dir() {
+        let bundled_script = res_dir
+            .join("_up_")
+            .join("sidecar")
+            .join("src")
+            .join("host.mjs");
         if bundled_script.exists() {
             let bin_name = if cfg!(windows) { "node.exe" } else { "node" };
-            let bundled_node = dir.join(bin_name);
-            if bundled_node.exists() {
-                return (bundled_node, bundled_script);
+            // externalBin sidecars live next to the main exe.
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(parent) = exe.parent() {
+                    let bundled_node = parent.join(bin_name);
+                    if bundled_node.exists() {
+                        return (bundled_node, bundled_script);
+                    }
+                }
+            }
+            // Fallback: some bundlers (older Tauri MSI) may place the sidecar
+            // inside the resource dir instead. Try that too before giving up.
+            let alt_node = res_dir.join(bin_name);
+            if alt_node.exists() {
+                return (alt_node, bundled_script);
             }
         }
     }
