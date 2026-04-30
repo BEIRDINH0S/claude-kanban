@@ -1,6 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { LoaderCircle, Trash2 } from "lucide-react";
+import { Copy, LoaderCircle, Trash2 } from "lucide-react";
 
 import { useCardsStore } from "../../stores/cardsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
@@ -17,6 +17,7 @@ interface Props {
 export function CardItem({ card, overlay }: Props) {
   const starting = useCardsStore((s) => s.startingCardIds.has(card.id));
   const remove = useCardsStore((s) => s.remove);
+  const duplicate = useCardsStore((s) => s.duplicate);
   const openZoom = useUiStore((s) => s.openZoom);
   const error = useErrorsStore((s) => s.byCard[card.id]);
   // A card inherits its project's archived flag — drag and delete are
@@ -107,18 +108,34 @@ export function CardItem({ card, overlay }: Props) {
           />
         )}
         {!overlay && !isWorking && !archived && (
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              void remove(card.id);
-            }}
-            className="-mt-1 -mr-1 rounded-md p-1 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-black/5 hover:text-red-400 group-hover:opacity-100 dark:hover:bg-white/5"
-            aria-label="Supprimer la carte"
-          >
-            <Trash2 className="size-3.5" strokeWidth={1.5} />
-          </button>
+          <div className="-mt-1 -mr-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                void duplicate(card.id);
+              }}
+              title="Dupliquer (clone titre + chemin, fresh session)"
+              className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+              aria-label="Dupliquer la carte"
+            >
+              <Copy className="size-3.5" strokeWidth={1.5} />
+            </button>
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                void remove(card.id);
+              }}
+              title="Supprimer (annulable via toast)"
+              className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 dark:hover:bg-white/5"
+              aria-label="Supprimer la carte"
+            >
+              <Trash2 className="size-3.5" strokeWidth={1.5} />
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -39,6 +39,7 @@ interface CardsState {
 
   load: (projectId: string) => Promise<void>;
   create: (title: string, projectPath: string, projectId: string) => Promise<Card>;
+  duplicate: (id: string) => Promise<Card | null>;
   update: (id: string, patch: CardPatch) => Promise<Card>;
   remove: (id: string) => Promise<void>;
   stopSession: (cardId: string) => Promise<void>;
@@ -120,6 +121,27 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     const card = await createCard(title, projectPath, projectId);
     set((s) => ({ cards: [...s.cards, card] }));
     return card;
+  },
+
+  duplicate: async (id) => {
+    // Clones the card metadata (title prefixed "Copie de", same path/project)
+    // into a fresh Todo entry. Session, transcript and cost are NOT carried
+    // over — duplicates are meant for "I want to try this exploration in
+    // parallel", not "save state". Rust create_card lands the new row at
+    // end of Todo, which is also where the user expects to find it.
+    const source = get().cards.find((c) => c.id === id);
+    if (!source) return null;
+    const dupTitle = source.title.startsWith("Copie de ")
+      ? source.title
+      : `Copie de ${source.title}`;
+    try {
+      const card = await createCard(dupTitle, source.projectPath, source.projectId);
+      set((s) => ({ cards: [...s.cards, card] }));
+      return card;
+    } catch (e) {
+      set({ error: String(e) });
+      return null;
+    }
   },
 
   update: async (id, patch) => {
