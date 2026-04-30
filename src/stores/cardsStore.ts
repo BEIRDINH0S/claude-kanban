@@ -158,6 +158,21 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     const card = previous.find((c) => c.id === id);
     const fromColumn = card?.column;
     const fromIndex = card?.position ?? 0;
+
+    // Archiving a card with a live SDK query (drag-to-Done OR archive
+    // button) must stop the session first — otherwise the sidecar keeps
+    // spending tokens on a card the user just put away. We fire-and-
+    // forget here: a stop failure shouldn't block the visual move (the
+    // card is going to Done either way, worst case the sidecar self-
+    // cleans on next event).
+    if (
+      column === "done" &&
+      card?.sessionId &&
+      useUiStore.getState().liveSessionIds.has(card.sessionId)
+    ) {
+      void get().stopSession(id);
+    }
+
     const optimistic = applyOptimisticMove(previous, id, column, targetIndex);
     set({ cards: optimistic });
     try {

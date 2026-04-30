@@ -72,12 +72,11 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   const cost = useCostsStore((s) => s.byCard[card.id] ?? 0);
 
   const handleArchive = () => {
-    // Move to Done. The store's optimistic move + Rust commit handles
-    // renumbering. Stop the session first if it's live so we don't leave
-    // an SDK query running for a card the user just archived.
-    if (isLive) void stopSession(card.id);
-    void move(card.id, "done", 0);
+    // Close immediately for snappy UX; the store's `move` now stops a live
+    // session itself when target=done, so no fire-and-forget stopSession
+    // is needed here (cf. the same code path used by drag-to-Done).
     closeZoom();
+    void move(card.id, "done", 0);
   };
 
   const handleOpenFolder = () => {
@@ -334,6 +333,12 @@ function Body({ card }: { card: Card }) {
     void readSessionHistory(card.sessionId, card.projectPath)
       .then((events) => {
         if (cancelled) return;
+        // Re-check against fresh store state: between our `items.length`
+        // guard above (closure-captured) and now, a `session-event` may
+        // have arrived and pushed messages for this card. Replacing
+        // would clobber those live events with stale on-disk contents.
+        const current = useMessagesStore.getState().byCard[card.id];
+        if (current && current.length > 0) return;
         replaceForCard(card.id, events);
       })
       .catch((e) => {
