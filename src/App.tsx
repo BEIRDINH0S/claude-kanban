@@ -32,6 +32,7 @@ import { Board } from "./features/kanban/Board";
 import { CommandPalette } from "./features/palette/CommandPalette";
 import { ZoomView } from "./features/session/ZoomView";
 import { ToastStack } from "./features/toasts/ToastStack";
+import { readSessionHistory } from "./ipc/sessions";
 import { readNotifyOnTurnEnd } from "./lib/prefs";
 import { useCardsStore } from "./stores/cardsStore";
 import { useCostsStore } from "./stores/costsStore";
@@ -277,6 +278,31 @@ function App() {
       },
     );
 
+    // External JSONL update: a CLI session (or another app) appended to a
+    // file matching one of our cards' session_id. Refresh the transcript
+    // ONLY if the session isn't currently live in our sidecar (otherwise
+    // session-event already covers us and a re-fetch would clobber).
+    const unlistenJsonl = listen<{ cardId: string; sessionId: string }>(
+      "external-jsonl-update",
+      (e) => {
+        const { cardId, sessionId } = e.payload;
+        if (!cardId || !sessionId) return;
+        if (useUiStore.getState().liveSessionIds.has(sessionId)) return;
+        const card = useCardsStore
+          .getState()
+          .cards.find((c) => c.id === cardId);
+        if (!card) return;
+        // Re-read JSONL from disk and replace the in-memory transcript.
+        // Errors are silently dropped — this is a background refresh, no
+        // user action triggered it.
+        void readSessionHistory(sessionId, card.projectPath)
+          .then((events) =>
+            useMessagesStore.getState().replaceForCard(cardId, events),
+          )
+          .catch(() => {});
+      },
+    );
+
     return () => {
       void unlistenCards.then((fn) => fn());
       void unlistenEvents.then((fn) => fn());
@@ -286,6 +312,7 @@ function App() {
       void unlistenEnded.then((fn) => fn());
       void unlistenErrors.then((fn) => fn());
       void unlistenBinary.then((fn) => fn());
+      void unlistenJsonl.then((fn) => fn());
     };
   }, []);
 

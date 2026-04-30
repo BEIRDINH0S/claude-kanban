@@ -29,4 +29,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 thiserror = "1"
 uuid = { version = "1", features = ["v4"] }
 tokio = { version = "1", features = ["process", "io-util", "sync", "rt-multi-thread", "macros", "time"] }
+# Filesystem watcher for ~/.claude/projects/**/*.jsonl. Lets the kanban catch
+# up to sessions running in the CLI (`claude` outside the app) without polling.
+notify = "8"
 

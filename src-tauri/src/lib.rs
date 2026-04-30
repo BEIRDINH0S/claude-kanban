@@ -3,6 +3,7 @@
 // is needed when iterating on host.mjs.
 mod commands;
 mod db;
+mod jsonl_watcher;
 mod permissions;
 mod session_host;
 
@@ -50,6 +51,12 @@ pub fn run() {
             ))
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             app.manage(host);
+
+            // Start watching ~/.claude/projects for external JSONL changes
+            // (cf. jsonl_watcher.rs). Runs on its own thread; failure to
+            // start is non-fatal — the app still works without the auto-
+            // refresh of CLI sessions.
+            jsonl_watcher::spawn(app.handle().clone());
 
             Ok(())
         })
