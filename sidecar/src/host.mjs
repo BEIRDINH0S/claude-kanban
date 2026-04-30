@@ -21,6 +21,8 @@
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import readline from "node:readline";
 
 const stdout = process.stdout;
@@ -37,15 +39,42 @@ function log(...args) {
  * The SDK looks for its bundled native binary first; if Claude Code was
  * installed manually (e.g. ~/.local/bin/claude on macOS) the bundled binary
  * isn't there, so we resolve the user's claude via PATH and hand it back.
+ *
+ * Windows caveat: `where claude` returns one of three npm shims (`claude`
+ * bash wrapper, `claude.cmd`, `claude.ps1`) — none are spawnable directly by
+ * Node. The SDK uses the file extension to decide whether to wrap the path in
+ * `node <path>` or spawn it as-is, and only `.js`/`.mjs`/`.ts`/etc. trigger
+ * the Node wrap. So on Windows we resolve the underlying `cli.js` (which the
+ * shims all delegate to) and hand that back instead.
  */
 function resolveClaudePath() {
   const cmd = process.platform === "win32" ? "where claude" : "which claude";
+  let candidates;
   try {
-    const out = execSync(cmd, { encoding: "utf8" }).trim();
-    return out.split(/\r?\n/)[0] || null;
+    candidates = execSync(cmd, { encoding: "utf8" })
+      .trim()
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
   } catch {
     return null;
   }
+  if (!candidates.length) return null;
+  if (process.platform !== "win32") return candidates[0];
+
+  for (const p of candidates) {
+    const cliJs = path.join(
+      path.dirname(p),
+      "node_modules",
+      "@anthropic-ai",
+      "claude-code",
+      "cli.js",
+    );
+    if (existsSync(cliJs)) return cliJs;
+  }
+  // Native installer would put a real .exe somewhere on PATH — keep that.
+  const exe = candidates.find((p) => p.toLowerCase().endsWith(".exe"));
+  return exe ?? candidates[0];
 }
 
 const CLAUDE_PATH = resolveClaudePath();

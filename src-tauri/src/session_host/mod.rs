@@ -97,20 +97,25 @@ fn resolve_paths(app: &AppHandle) -> (std::path::PathBuf, std::path::PathBuf) {
 pub async fn spawn(app: AppHandle) -> Result<SessionHost, String> {
     let (node_path, host_path) = resolve_paths(&app);
 
-    let mut child = Command::new(&node_path)
-        .arg(&host_path)
+    let mut cmd = Command::new(&node_path);
+    cmd.arg(&host_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| {
-            format!(
-                "spawn `{} {}`: {e}",
-                node_path.display(),
-                host_path.display()
-            )
-        })?;
+        .kill_on_drop(true);
+    // Without CREATE_NO_WINDOW the bundled Windows app pops a console window
+    // for the Node sidecar (and any child processes it spawns inherit the same
+    // console). 0x08000000 = CREATE_NO_WINDOW.
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let mut child = cmd.spawn().map_err(|e| {
+        format!(
+            "spawn `{} {}`: {e}",
+            node_path.display(),
+            host_path.display()
+        )
+    })?;
 
     let stdin = child.stdin.take().ok_or("sidecar: stdin missing")?;
     let stdout = child.stdout.take().ok_or("sidecar: stdout missing")?;

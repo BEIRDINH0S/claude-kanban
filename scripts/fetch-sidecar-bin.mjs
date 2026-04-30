@@ -73,8 +73,13 @@ const tmpExtract = join(tmpdir(), `node-extract-${process.pid}`);
 mkdirSync(tmpExtract, { recursive: true });
 
 execSync(`curl -fL "${url}" -o "${tmpArchive}"`, { stdio: "inherit" });
-// `tar -xf` on Windows 10+ handles zip too via libarchive.
-execSync(`tar -xf "${tmpArchive}" -C "${tmpExtract}"`, { stdio: "inherit" });
+
+// Use PowerShell on Windows, tar on Unix
+if (process.platform === "win32") {
+  execSync(`powershell -command "Expand-Archive -Path '${tmpArchive}' -DestinationPath '${tmpExtract}' -Force"`, { stdio: "inherit" });
+} else {
+  execSync(`tar -xf "${tmpArchive}" -C "${tmpExtract}"`, { stdio: "inherit" });
+}
 
 const folderName = cfg.archive.replace(/\.(tar\.(gz|xz)|zip)$/, "");
 const sourceBin = join(tmpExtract, folderName, cfg.binIn);
