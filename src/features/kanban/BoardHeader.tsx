@@ -2,6 +2,11 @@ import { Lock, Plus, Search, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { useCardsStore } from "../../stores/cardsStore";
+import {
+  selectTodayTotal,
+  selectTotalForCards,
+  useCostsStore,
+} from "../../stores/costsStore";
 import { useProjectsStore } from "../../stores/projectsStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { CardColumn } from "../../types/card";
@@ -35,6 +40,18 @@ export function BoardHeader({ onCreate }: Props) {
   );
   const nonEmpty = COLUMNS.filter((c) => counts[c.id] > 0);
 
+  // Cost aggregates: project total = sum of byCard for the active project's
+  // cards; today total = global across all projects (matches "what did I
+  // spend today" intent). Both reflect only LIVE accumulations since the
+  // costsStore can't replay JSONL on hydration.
+  const byCard = useCostsStore((s) => s.byCard);
+  const byDay = useCostsStore((s) => s.byDay);
+  const projectCost = selectTotalForCards(
+    byCard,
+    cards.map((c) => c.id),
+  );
+  const todayCost = selectTodayTotal(byDay);
+
   return (
     <header className="flex items-center justify-between gap-3 border-b border-[var(--glass-stroke)] px-6 py-3">
       <div className="min-w-0 flex-1">
@@ -58,6 +75,24 @@ export function BoardHeader({ onCreate }: Props) {
                 </span>
               </span>
             ))}
+            {(projectCost > 0 || todayCost > 0) && (
+              <>
+                <span className="text-[var(--text-muted)] opacity-50">·</span>
+                <span
+                  className="text-[var(--text-secondary)]"
+                  title="Cumul des sessions de ce projet (depuis le démarrage de l'app)"
+                >
+                  ${projectCost.toFixed(4)} projet
+                </span>
+                <span className="text-[var(--text-muted)] opacity-50">·</span>
+                <span
+                  className="text-[var(--text-secondary)]"
+                  title="Cumul tous projets confondus pour la journée locale"
+                >
+                  ${todayCost.toFixed(4)} aujourd'hui
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
