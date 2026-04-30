@@ -32,24 +32,30 @@ pub async fn start_session(
     }
 
     // 1. Look up the card; reject if it already has a session, or if its
-    //    owning project is an imported snapshot (read-only).
+    //    owning project is an imported snapshot (read-only). When the card
+    //    has a worktree_path, that becomes the cwd handed to the SDK so
+    //    parallel cards on the same repo never collide on filesystem state.
     let project_path = {
         let db = app.state::<DbState>();
         let conn = db.conn.lock().unwrap();
         if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
             return Err(ARCHIVED_ERR.into());
         }
-        let (project_path, existing): (String, Option<String>) = conn
+        let (project_path, worktree_path, existing): (
+            String,
+            Option<String>,
+            Option<String>,
+        ) = conn
             .query_row(
-                "SELECT project_path, session_id FROM cards WHERE id = ?1",
+                "SELECT project_path, worktree_path, session_id FROM cards WHERE id = ?1",
                 [&card_id],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .map_err(|e| format!("card not found: {e}"))?;
         if existing.is_some() {
             return Err("card already has a session — use send_message".into());
         }
-        project_path
+        worktree_path.unwrap_or(project_path)
     };
 
     // 2. Move the card to In Progress immediately so the user gets feedback
@@ -223,14 +229,16 @@ pub async fn resume_session(
         if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
             return Err(ARCHIVED_ERR.into());
         }
-        let row: (String, Option<String>) = conn
+        let row: (String, Option<String>, Option<String>) = conn
             .query_row(
-                "SELECT project_path, session_id FROM cards WHERE id = ?1",
+                "SELECT project_path, worktree_path, session_id FROM cards WHERE id = ?1",
                 [&card_id],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .map_err(|e| format!("card not found: {e}"))?;
-        row
+        // Same fallback as start_session: prefer the per-card worktree if
+        // we created one, fall back to the bare project_path.
+        (row.1.unwrap_or(row.0), row.2)
     };
     let session_id = session_id.ok_or("card has no session to resume")?;
 

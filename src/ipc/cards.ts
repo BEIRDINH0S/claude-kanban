@@ -9,8 +9,17 @@ export function createCard(
   title: string,
   projectPath: string,
   projectId: string,
+  /** When true and projectPath is a git repo, Rust creates a fresh worktree
+   *  + branch under `<repo-parent>/.claude-kanban-worktrees/` and stores its
+   *  absolute path on the new card. Sessions then run there. */
+  createWorktree: boolean = false,
 ): Promise<Card> {
-  return invoke<Card>("create_card", { title, projectPath, projectId });
+  return invoke<Card>("create_card", {
+    title,
+    projectPath,
+    projectId,
+    createWorktree,
+  });
 }
 
 export function deleteCard(id: string): Promise<void> {

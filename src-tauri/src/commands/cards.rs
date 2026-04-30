@@ -37,13 +37,15 @@ fn map_card(row: &rusqlite::Row) -> rusqlite::Result<Card> {
         updated_at: row.get("updated_at")?,
         last_state: row.get("last_state")?,
         tags: row.get("tags").unwrap_or_default(),
+        worktree_path: row.get("worktree_path").ok(),
     })
 }
 
 fn fetch_all(conn: &Connection, project_id: &str) -> rusqlite::Result<Vec<Card>> {
     let mut stmt = conn.prepare(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state, tags
+                  project_id, created_at, updated_at, last_state, tags,
+                  worktree_path
              FROM cards
             WHERE project_id = ?1
             ORDER BY "column", position, id"#,
@@ -61,12 +63,18 @@ pub fn list_cards(
     fetch_all(&conn, &project_id).map_err(|e| e.to_string())
 }
 
+/// `create_worktree`: when true and `project_path` is a git repo, create a
+/// fresh worktree + branch (`claude-kanban/card-<short>`) and store its
+/// absolute path on the card. The session will then run in the worktree,
+/// isolating it from other cards on the same repo. Default false (None) =
+/// legacy behaviour (cwd = project_path).
 #[tauri::command]
 pub fn create_card(
     state: State<DbState>,
     title: String,
     project_path: String,
     project_id: String,
+    create_worktree: Option<bool>,
 ) -> Result<Card, String> {
     let title = title.trim();
     if title.is_empty() {
@@ -86,6 +94,19 @@ pub fn create_card(
     let now = now_ms();
     let id = uuid::Uuid::new_v4().to_string();
 
+    // Optionally create the worktree BEFORE the INSERT so a git failure
+    // doesn't leave us with a card pointing at a path that doesn't exist.
+    let worktree_path: Option<String> = if create_worktree.unwrap_or(false) {
+        match crate::worktree::create_for_card(&project_path, &id) {
+            Ok(info) => Some(info.path.to_string_lossy().into_owned()),
+            Err(e) => {
+                return Err(format!("worktree creation failed: {e}"));
+            }
+        }
+    } else {
+        None
+    };
+
     // New cards land at the end of the Todo column within their project.
     let next_pos: i64 = conn
         .query_row(
@@ -98,15 +119,24 @@ pub fn create_card(
 
     conn.execute(
         r#"INSERT INTO cards (id, title, "column", position, project_path,
-                              project_id, created_at, updated_at)
-           VALUES (?1, ?2, 'todo', ?3, ?4, ?5, ?6, ?6)"#,
-        params![&id, title, next_pos, &project_path, &project_id, now],
+                              project_id, created_at, updated_at, worktree_path)
+           VALUES (?1, ?2, 'todo', ?3, ?4, ?5, ?6, ?6, ?7)"#,
+        params![
+            &id,
+            title,
+            next_pos,
+            &project_path,
+            &project_id,
+            now,
+            worktree_path.as_ref(),
+        ],
     )
     .map_err(|e| e.to_string())?;
 
     conn.query_row(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state, tags
+                  project_id, created_at, updated_at, last_state, tags,
+                  worktree_path
              FROM cards WHERE id = ?1"#,
         [&id],
         map_card,
@@ -176,7 +206,8 @@ pub fn update_card(
 
     conn.query_row(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state, tags
+                  project_id, created_at, updated_at, last_state, tags,
+                  worktree_path
              FROM cards WHERE id = ?1"#,
         [&id],
         map_card,
@@ -280,8 +311,8 @@ pub fn restore_card(state: State<DbState>, card: Card) -> Result<Card, String> {
     conn.execute(
         r#"INSERT INTO cards (id, title, "column", position, session_id,
                               project_path, project_id, created_at, updated_at,
-                              last_state, tags)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)"#,
+                              last_state, tags, worktree_path)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"#,
         params![
             &card.id,
             &card.title,
@@ -294,13 +325,15 @@ pub fn restore_card(state: State<DbState>, card: Card) -> Result<Card, String> {
             now,
             card.last_state.as_ref(),
             &card.tags,
+            card.worktree_path.as_ref(),
         ],
     )
     .map_err(|e| e.to_string())?;
 
     conn.query_row(
         r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state, tags
+                  project_id, created_at, updated_at, last_state, tags,
+                  worktree_path
              FROM cards WHERE id = ?1"#,
         [&card.id],
         map_card,

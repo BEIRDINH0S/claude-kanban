@@ -19,6 +19,10 @@ export interface Card {
   /** Comma-separated normalised tag slugs (lowercase, deduped). Empty
    *  string = no tags. Use `parseTags`/`joinTags` to round-trip via UI. */
   tags: string;
+  /** Absolute path to a per-card git worktree, set if the user opted in
+   *  at creation. Sessions run with this as cwd instead of `projectPath`,
+   *  so parallel cards on the same repo don't trample each other. */
+  worktreePath: string | null;
 }
 
 /** Split storage form into a clean array. Always returns lowercase

@@ -92,6 +92,15 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE cards ADD COLUMN tags TEXT NOT NULL DEFAULT '';
     "#,
+
+    // v8 — optional git worktree per card. When set, the sidecar spawns
+    // sessions with this path as cwd instead of project_path, so multiple
+    // cards on the same repo never collide on filesystem state. NULL =
+    // card uses project_path directly (default for non-git folders or when
+    // the user opted out at creation time).
+    r#"
+    ALTER TABLE cards ADD COLUMN worktree_path TEXT;
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {

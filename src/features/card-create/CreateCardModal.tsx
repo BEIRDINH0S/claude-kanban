@@ -1,5 +1,5 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { Folder, X } from "lucide-react";
+import { Folder, GitBranch, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useCardsStore } from "../../stores/cardsStore";
@@ -15,6 +15,10 @@ export function CreateCardModal({ onClose }: Props) {
 
   const [title, setTitle] = useState("");
   const [projectPath, setProjectPath] = useState<string | null>(null);
+  // Default OFF — most folders aren't repos and most users don't want a
+  // surprise worktree. The Rust side will fail gracefully if we ask for
+  // one on a non-git path; we still surface the error inline.
+  const [useWorktree, setUseWorktree] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -49,7 +53,7 @@ export function CreateCardModal({ onClose }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await create(title.trim(), projectPath!, activeProjectId!);
+      await create(title.trim(), projectPath!, activeProjectId!, useWorktree);
       onClose();
     } catch (err) {
       setError(String(err));
@@ -123,6 +127,38 @@ export function CreateCardModal({ onClose }: Props) {
               {projectPath ?? "Choisir un dossier…"}
             </span>
           </button>
+        </label>
+
+        <label className="mt-3 flex items-start gap-2.5 rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-3 py-2.5 dark:bg-white/5">
+          <input
+            type="checkbox"
+            checked={useWorktree}
+            onChange={(e) => setUseWorktree(e.target.checked)}
+            className="mt-0.5 size-3.5 shrink-0 accent-[var(--color-accent)]"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <GitBranch
+                className="size-3.5 shrink-0 text-[var(--text-muted)]"
+                strokeWidth={1.75}
+              />
+              <span className="text-[12px] font-medium text-[var(--text-primary)]">
+                Créer un git worktree dédié
+              </span>
+            </div>
+            <p className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
+              Si le dossier choisi est un repo git, on crée une branche{" "}
+              <code className="font-mono text-[10.5px]">
+                claude-kanban/card-…
+              </code>{" "}
+              dans{" "}
+              <code className="font-mono text-[10.5px]">
+                .claude-kanban-worktrees/
+              </code>{" "}
+              à côté du repo. Évite que plusieurs cartes parallèles se
+              piétinent. Sinon, la session tourne directement dans le dossier.
+            </p>
+          </div>
         </label>
 
         {error && (

@@ -38,7 +38,12 @@ interface CardsState {
   startingCardIds: ReadonlySet<string>;
 
   load: (projectId: string) => Promise<void>;
-  create: (title: string, projectPath: string, projectId: string) => Promise<Card>;
+  create: (
+    title: string,
+    projectPath: string,
+    projectId: string,
+    createWorktree?: boolean,
+  ) => Promise<Card>;
   duplicate: (id: string) => Promise<Card | null>;
   update: (id: string, patch: CardPatch) => Promise<Card>;
   remove: (id: string) => Promise<void>;
@@ -117,8 +122,8 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     }
   },
 
-  create: async (title, projectPath, projectId) => {
-    const card = await createCard(title, projectPath, projectId);
+  create: async (title, projectPath, projectId, createWorktree = false) => {
+    const card = await createCard(title, projectPath, projectId, createWorktree);
     set((s) => ({ cards: [...s.cards, card] }));
     return card;
   },

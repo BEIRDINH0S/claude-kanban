@@ -52,6 +52,12 @@ pub struct Card {
     /// tags. Front splits/joins; we treat the column as opaque storage.
     #[serde(default)]
     pub tags: String,
+    /// Absolute path to a git worktree dedicated to this card. When set,
+    /// the sidecar spawns the session with this as cwd (so parallel cards
+    /// on the same repo don't trample each other's working tree). NULL =
+    /// session runs in `project_path` directly.
+    #[serde(default)]
+    pub worktree_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

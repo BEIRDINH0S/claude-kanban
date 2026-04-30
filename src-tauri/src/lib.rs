@@ -6,6 +6,7 @@ mod db;
 mod jsonl_watcher;
 mod permissions;
 mod session_host;
+mod worktree;
 
 use std::sync::Mutex;
 use tauri::Manager;

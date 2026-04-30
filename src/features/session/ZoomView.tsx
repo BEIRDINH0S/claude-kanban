@@ -150,6 +150,14 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
           onCommit={(next) => update(card.id, { projectPath: next })}
           onOpen={handleOpenFolder}
         />
+        {card.worktreePath && (
+          <p
+            className="mt-0.5 truncate font-mono text-[10.5px] text-emerald-300/80"
+            title={`Sessions tournent dans ce worktree (cwd) au lieu de ${card.projectPath}`}
+          >
+            ⎇ {card.worktreePath}
+          </p>
+        )}
         <EditableTags
           value={card.tags}
           disabled={archived}
