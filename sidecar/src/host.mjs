@@ -21,8 +21,6 @@
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
 import readline from "node:readline";
 
 const stdout = process.stdout;
@@ -36,49 +34,26 @@ function log(...args) {
 }
 
 /**
- * The SDK looks for its bundled native binary first; if Claude Code was
- * installed manually (e.g. ~/.local/bin/claude on macOS) the bundled binary
- * isn't there, so we resolve the user's claude via PATH and hand it back.
- *
- * Windows caveat: `where claude` returns one of three npm shims (`claude`
- * bash wrapper, `claude.cmd`, `claude.ps1`) — none are spawnable directly by
- * Node. The SDK uses the file extension to decide whether to wrap the path in
- * `node <path>` or spawn it as-is, and only `.js`/`.mjs`/`.ts`/etc. trigger
- * the Node wrap. So on Windows we resolve the underlying `cli.js` (which the
- * shims all delegate to) and hand that back instead.
+ * Detect a `claude` install on PATH purely so the front can decide whether to
+ * surface the "Claude Code introuvable" banner. We do NOT pass this to the SDK:
+ * Claude Code v2.x ships as a native binary and the SDK has its own bundled
+ * copy in `@anthropic-ai/claude-agent-sdk-{platform}-{arch}/claude.exe`, which
+ * it auto-resolves when `pathToClaudeCodeExecutable` is omitted. Forcing a
+ * user-PATH path is brittle (npm shims aren't spawnable by Node) and provides
+ * no real win since the bundled binary shares the same `~/.claude` config.
  */
-function resolveClaudePath() {
+function detectClaudeOnPath() {
   const cmd = process.platform === "win32" ? "where claude" : "which claude";
-  let candidates;
   try {
-    candidates = execSync(cmd, { encoding: "utf8" })
-      .trim()
-      .split(/\r?\n/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const out = execSync(cmd, { encoding: "utf8" }).trim();
+    return out.split(/\r?\n/)[0] || null;
   } catch {
     return null;
   }
-  if (!candidates.length) return null;
-  if (process.platform !== "win32") return candidates[0];
-
-  for (const p of candidates) {
-    const cliJs = path.join(
-      path.dirname(p),
-      "node_modules",
-      "@anthropic-ai",
-      "claude-code",
-      "cli.js",
-    );
-    if (existsSync(cliJs)) return cliJs;
-  }
-  // Native installer would put a real .exe somewhere on PATH — keep that.
-  const exe = candidates.find((p) => p.toLowerCase().endsWith(".exe"));
-  return exe ?? candidates[0];
 }
 
-const CLAUDE_PATH = resolveClaudePath();
-log("claude binary:", CLAUDE_PATH ?? "(not found on PATH)");
+const CLAUDE_PATH = detectClaudeOnPath();
+log("claude on PATH:", CLAUDE_PATH ?? "(none — using SDK-bundled binary)");
 // Heads-up to Rust at boot: tells the front whether to surface a
 // "claude not installed" banner.
 process.nextTick(() => {
@@ -138,7 +113,6 @@ class SessionHandle {
         // Every tool use gets routed through here; we ask the user via the UI.
         canUseTool: (toolName, input) => self.askPermission(toolName, input),
         ...(resumeSessionId ? { resume: resumeSessionId } : {}),
-        ...(CLAUDE_PATH ? { pathToClaudeCodeExecutable: CLAUDE_PATH } : {}),
       },
     });
 
