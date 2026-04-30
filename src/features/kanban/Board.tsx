@@ -17,6 +17,7 @@ import { ProjectsPage } from "../projects/ProjectsPage";
 import { Sidebar } from "../projects/Sidebar";
 import { SettingsPage } from "../settings/SettingsPage";
 import { BinaryBanner } from "../usage/BinaryBanner";
+import { UsagePage } from "../usage/UsagePage";
 import { selectByColumn, useCardsStore } from "../../stores/cardsStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Card, CardColumn } from "../../types/card";
@@ -290,6 +291,8 @@ export function Board() {
             <SettingsPage />
           ) : view === "projects" ? (
             <ProjectsPage />
+          ) : view === "usage" ? (
+            <UsagePage />
           ) : (
             <>
               <BoardHeader onCreate={() => setCreateOpen(true)} />

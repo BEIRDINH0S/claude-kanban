@@ -28,6 +28,14 @@ pub enum SidecarInbound {
         #[serde(skip_serializing_if = "Option::is_none")]
         message: Option<String>,
     },
+    /// Ask the sidecar for the current OAuth `/api/oauth/usage` snapshot.
+    /// Pair with a `pending_subscription` oneshot keyed by `request_id`.
+    /// `force=true` bypasses the sidecar's 5-minute file cache.
+    GetSubscriptionUsage {
+        request_id: String,
+        #[serde(default)]
+        force: bool,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
@@ -100,4 +108,34 @@ pub enum SidecarOutbound {
         session_id: Option<String>,
         message: String,
     },
+    /// Reply to `GetSubscriptionUsage`. `data` is forwarded verbatim to
+    /// the front, so adding fields on the Node side doesn't require a
+    /// Rust shape change.
+    SubscriptionUsageResult {
+        request_id: String,
+        data: SubscriptionUsageData,
+    },
+}
+
+/// Mirror of the JSON shape the sidecar produces. Fields are optional so
+/// failure / API-user paths still deserialise. `apiError` carries a stable
+/// machine-readable string (`"rate-limited"`, `"network"`, `"timeout"`,
+/// `"no-credentials"`, `"api-user"`, `"http-<code>"`, `"parse"`).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubscriptionUsageData {
+    #[serde(default)]
+    pub plan_name: Option<String>,
+    #[serde(default)]
+    pub five_hour: Option<u32>,
+    #[serde(default)]
+    pub seven_day: Option<u32>,
+    #[serde(default)]
+    pub five_hour_reset_at: Option<String>,
+    #[serde(default)]
+    pub seven_day_reset_at: Option<String>,
+    #[serde(default)]
+    pub api_unavailable: bool,
+    #[serde(default)]
+    pub api_error: Option<String>,
 }

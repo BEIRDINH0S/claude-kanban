@@ -29,6 +29,7 @@ use serde_json::json;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::db::DbState;
+use crate::usage::ingest as usage_ingest;
 
 /// Spawn the watcher on a dedicated thread. Returns immediately; the watcher
 /// keeps itself alive via the channel sender it owns.
@@ -117,9 +118,17 @@ fn extract_session_id(path: &Path) -> Option<String> {
 }
 
 fn handle_jsonl_change(app: &AppHandle, path: &Path, session_id: &str) {
-    // Look up the matching card (if any). Best-effort: lock the DB briefly
-    // and bail on any error — we don't want a stuck JSONL update to block
-    // the watcher thread.
+    // Derive the encoded directory name (parent of the .jsonl file). Used
+    // by the usage ingester as the cursor key alongside `session_id`.
+    let encoded_dir: Option<String> = path
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string());
+
+    // Best-effort: lock the DB briefly to (a) look up the owning card and
+    // (b) feed the usage ingester. We deliberately re-lock for each phase
+    // to keep the held-time short and avoid blocking the watcher.
     let card_id: Option<String> = (|| {
         let db = app.try_state::<DbState>()?;
         let conn = db.conn.lock().ok()?;
@@ -145,8 +154,36 @@ fn handle_jsonl_change(app: &AppHandle, path: &Path, session_id: &str) {
             }),
         );
     }
-    // No-card case: silently dropped for now. A future "discover external
-    // sessions" panel could surface these.
+    // No-card case: silently dropped for the legacy event. A future
+    // "discover external sessions" panel could surface these.
+
+    // Independently, ingest into the usage index. Runs even if no card is
+    // mapped yet — the row will be linked retroactively when a card with
+    // this session_id is created (cf. usage::ingest::relink_card).
+    if let Some(encoded) = encoded_dir {
+        let inserted = (|| -> Option<u64> {
+            let db = app.try_state::<DbState>()?;
+            let mut conn = db.conn.lock().ok()?;
+            match usage_ingest::ingest_file(&mut conn, &encoded, session_id, path) {
+                Ok(stats) => Some(stats.inserted),
+                Err(e) => {
+                    eprintln!(
+                        "[jsonl_watcher] usage ingest failed for {}: {e}",
+                        path.display()
+                    );
+                    None
+                }
+            }
+        })()
+        .unwrap_or(0);
+
+        if inserted > 0 {
+            // Wake the front so the Usage page (and BoardHeader) refresh
+            // their numbers. Cheap fire-and-forget on the same channel as
+            // every other event the front listens to.
+            let _ = app.emit("usage-changed", ());
+        }
+    }
 }
 
 #[cfg(test)]

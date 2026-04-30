@@ -35,16 +35,17 @@ import { ToastStack } from "./features/toasts/ToastStack";
 import { readSessionHistory } from "./ipc/sessions";
 import { readNotifyOnTurnEnd } from "./lib/prefs";
 import { useCardsStore } from "./stores/cardsStore";
-import { useCostsStore } from "./stores/costsStore";
 import { useErrorsStore } from "./stores/errorsStore";
 import { useGitStatusStore } from "./stores/gitStatusStore";
 import { useMessagesStore } from "./stores/messagesStore";
 import { usePermissionsStore } from "./stores/permissionsStore";
 import { useProjectsStore } from "./stores/projectsStore";
+import { useSubscriptionUsageStore } from "./stores/subscriptionUsageStore";
 import { useUiStore } from "./stores/uiStore";
+import { useUsageIndexStore } from "./stores/usageIndexStore";
 import { useUsageStore } from "./stores/usageStore";
 import type { SdkEvent } from "./types/chat";
-import type { RateLimitInfo } from "./types/usage";
+import type { RateLimitInfo, SubscriptionUsage } from "./types/usage";
 
 interface SessionEventPayload {
   sessionId: string | null;
@@ -172,10 +173,12 @@ function App() {
           if (info) useUsageStore.getState().ingest(info);
         }
         if (cardId && event?.type === "result") {
+          // Cost is no longer accumulated here — the SQLite-backed
+          // `usage_messages` index (parsed from the JSONL the SDK writes
+          // in parallel) is the single source of truth, refreshed via the
+          // `usage-changed` event below. We still need `cost` for the
+          // notification body though, so keep extracting it.
           const cost = (event as { total_cost_usd?: number }).total_cost_usd;
-          if (typeof cost === "number" && cost > 0) {
-            useCostsStore.getState().add(cardId, cost);
-          }
           // A turn just ended → Claude likely committed something. Refresh
           // the badge for this specific card so the user sees ahead/dirty
           // counts move without waiting for the heartbeat.
@@ -296,6 +299,30 @@ function App() {
       },
     );
 
+    // Token-precise usage index just changed — Rust ingested new lines
+    // from a JSONL file (live SDK turn or external CLI append). Refresh
+    // the store so the Usage page + BoardHeader reflect the new totals.
+    // Lightly debounced via the usageIndexStore's `isLoading` guard.
+    const unlistenUsage = listen("usage-changed", () => {
+      void useUsageIndexStore.getState().refresh();
+    });
+
+    // Subscription % (Anthropic OAuth /usage). Pushed by the Rust poller
+    // every 5 minutes; we copy the payload straight into the store.
+    const unlistenSubscription = listen<SubscriptionUsage>(
+      "subscription-usage-changed",
+      (e) => {
+        if (e.payload) {
+          useSubscriptionUsageStore.getState().ingest(e.payload);
+        }
+      },
+    );
+
+    // Kick off the initial fetches so the BoardHeader has values to show
+    // on first paint, even before any event lands.
+    void useUsageIndexStore.getState().refresh();
+    void useSubscriptionUsageStore.getState().refresh();
+
     // External JSONL update: a CLI session (or another app) appended to a
     // file matching one of our cards' session_id. Refresh the transcript
     // ONLY if the session isn't currently live in our sidecar (otherwise
@@ -331,6 +358,8 @@ function App() {
       void unlistenErrors.then((fn) => fn());
       void unlistenBinary.then((fn) => fn());
       void unlistenJsonl.then((fn) => fn());
+      void unlistenUsage.then((fn) => fn());
+      void unlistenSubscription.then((fn) => fn());
     };
   }, []);
 

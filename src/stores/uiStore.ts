@@ -19,7 +19,7 @@ function writeActiveProject(id: string | null) {
   }
 }
 
-export type CentralView = "board" | "settings" | "projects";
+export type CentralView = "board" | "settings" | "projects" | "usage";
 
 const SIDEBAR_COLLAPSED_KEY = "claude-kanban-sidebar-collapsed";
 function readSidebarCollapsed(): boolean {

@@ -6,6 +6,7 @@ import {
   Plus,
   Settings,
   Sun,
+  TrendingUp,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -64,6 +65,14 @@ export function CommandPalette() {
       hint: "Aller à",
       keywords: ["nouveau", "projet", "create"],
       run: () => setView("projects"),
+    });
+    out.push({
+      id: "usage",
+      label: "Usage · tokens & coût",
+      icon: <TrendingUp className="size-3.5" strokeWidth={1.75} />,
+      hint: "Aller à",
+      keywords: ["consommation", "token", "cost", "spend", "claude", "anthropic"],
+      run: () => setView("usage"),
     });
     out.push({
       id: "settings",

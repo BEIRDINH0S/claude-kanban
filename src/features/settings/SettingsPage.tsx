@@ -1,5 +1,6 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import {
+  ArrowRight,
   Bell,
   Database,
   Download,
@@ -8,6 +9,7 @@ import {
   ShieldCheck,
   Terminal,
   Trash2,
+  TrendingUp,
   Upload,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -701,27 +703,54 @@ function UsageSection() {
   const session = selectSessionLimit(usageByType);
   const weekly = selectWeeklyLimit(usageByType);
   const hasUsage = !!session || !!weekly;
+  const setView = useUiStore((s) => s.setView);
 
   return (
-    <Card
-      icon={
-        <Database
-          className="size-3.5 shrink-0 text-[var(--text-muted)]"
-          strokeWidth={1.75}
-        />
-      }
-      title="Limites Claude en cours"
-      subtitle="Mises à jour à chaque tour de Claude, à partir des events SDK reçus."
-    >
-      <div className="mt-3 flex flex-col gap-2">
-        {!hasUsage && (
-          <p className="font-mono text-[11px] text-[var(--text-muted)]">
-            Aucune donnée — déclenche une session pour récupérer l'usage.
-          </p>
-        )}
-        {session && <RateLimitMeter label="session" info={session} />}
-        {weekly && <RateLimitMeter label="weekly" info={weekly} />}
-      </div>
-    </Card>
+    <>
+      <Card
+        icon={
+          <Database
+            className="size-3.5 shrink-0 text-[var(--text-muted)]"
+            strokeWidth={1.75}
+          />
+        }
+        title="Limites Claude en cours"
+        subtitle="Pourcentage exact rapporté par le SDK Anthropic à chaque tour. Sparse — ne s'affiche qu'à partir d'un seuil franchi (50/80/95 %)."
+      >
+        <div className="mt-3 flex flex-col gap-2">
+          {!hasUsage && (
+            <p className="font-mono text-[11px] text-[var(--text-muted)]">
+              Aucune donnée — déclenche une session pour récupérer l'usage.
+            </p>
+          )}
+          {session && <RateLimitMeter label="session" info={session} />}
+          {weekly && <RateLimitMeter label="weekly" info={weekly} />}
+        </div>
+      </Card>
+
+      {/* Pointer vers la vraie page Usage : tokens précis, breakdown par
+          modèle/projet/carte, fenêtres glissantes 5h/7j calculées depuis
+          le JSONL local. */}
+      <Card
+        icon={
+          <TrendingUp
+            className="size-3.5 shrink-0 text-[var(--text-muted)]"
+            strokeWidth={1.75}
+          />
+        }
+        title="Page Usage complète"
+        subtitle="Tokens (input/output/cache), coût USD, breakdown par modèle, projet et carte. Indexé localement depuis ~/.claude/projects."
+        trailing={
+          <button
+            type="button"
+            onClick={() => setView("usage")}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)]"
+          >
+            Ouvrir
+            <ArrowRight className="size-3.5" strokeWidth={1.75} />
+          </button>
+        }
+      />
+    </>
   );
 }

@@ -22,7 +22,8 @@ import {
   sendMessage as ipcSendMessage,
 } from "../../ipc/sessions";
 import { useCardsStore } from "../../stores/cardsStore";
-import { useCostsStore } from "../../stores/costsStore";
+import { useUsageIndexStore } from "../../stores/usageIndexStore";
+import { formatCost } from "../usage/format";
 import { useErrorsStore } from "../../stores/errorsStore";
 import { useGitStatusStore } from "../../stores/gitStatusStore";
 import { useMessagesStore } from "../../stores/messagesStore";
@@ -84,7 +85,14 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   const archived = useProjectsStore((s) =>
     s.projects.find((p) => p.id === card.projectId)?.archived ?? false,
   );
-  const cost = useCostsStore((s) => s.byCard[card.id] ?? 0);
+  // Per-card cost from the precise SQLite-backed index. Falls back to 0
+  // until the index has loaded (first paint after boot).
+  const cost = useUsageIndexStore((s) => {
+    if (!s.data) return 0;
+    return (
+      s.data.byCard.find((c) => c.cardId === card.id)?.summary.costUsd ?? 0
+    );
+  });
   const pushToastHeader = useToastsStore((s) => s.push);
 
   const handleDropWorktree = () => {
@@ -186,7 +194,7 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
             <>
               {" · "}
               <span className="font-mono normal-case tracking-normal">
-                ${cost.toFixed(4)}
+                {formatCost(cost)}
               </span>
             </>
           )}
