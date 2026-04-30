@@ -383,6 +383,31 @@ pub fn move_card(
     Ok(cards)
 }
 
+/// Snapshot the git state of a card's worktree (branch, ahead, behind,
+/// dirty). Returns Ok(None) when the card has no worktree configured —
+/// the front uses that to skip rendering the badge entirely. Returns
+/// Err only on lookup failure; a missing/corrupt worktree path resolves
+/// to Ok(None) too (the worktree may have been removed manually and we
+/// don't want to spam the front with errors on every poll).
+#[tauri::command]
+pub fn git_card_status(
+    state: State<DbState>,
+    card_id: String,
+) -> Result<Option<crate::worktree::CardGitStatus>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let worktree_path: Option<String> = conn
+        .query_row(
+            "SELECT worktree_path FROM cards WHERE id = ?1",
+            [&card_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("card not found: {e}"))?;
+    let Some(wt) = worktree_path else {
+        return Ok(None);
+    };
+    Ok(crate::worktree::card_status(&wt).ok())
+}
+
 /// First-boot demo data so the empty board has something to drag around.
 /// Now a no-op once the user has any cards or a non-default project.
 pub fn seed_if_empty(_conn: &Connection) -> rusqlite::Result<u32> {

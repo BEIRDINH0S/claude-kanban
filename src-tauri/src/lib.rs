@@ -69,6 +69,7 @@ pub fn run() {
             commands::cards::restore_card,
             commands::cards::update_card,
             commands::cards::move_card,
+            commands::cards::git_card_status,
             commands::projects::list_projects,
             commands::projects::create_project,
             commands::projects::rename_project,

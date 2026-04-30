@@ -15,6 +15,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use serde::Serialize;
+
 /// Result of a worktree creation attempt. `branch` is informational —
 /// callers store the path; the branch name is reconstructable from the
 /// card id if ever needed.
@@ -22,6 +24,26 @@ pub struct WorktreeInfo {
     pub path: PathBuf,
     #[allow(dead_code)]
     pub branch: String,
+}
+
+/// Snapshot of a worktree's git state. Polled by the front to render
+/// per-card badges (ahead count, dirty dot) and to label the ZoomView
+/// header. All counts are vs. the auto-detected base branch.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardGitStatus {
+    /// Current branch in the worktree (e.g. `claude-kanban/card-abc`).
+    /// Falls back to a short SHA on detached HEAD.
+    pub branch: String,
+    /// Base ref we're comparing against (`origin/main`, `main`, …).
+    pub base: String,
+    /// Commits on `branch` not yet on `base`.
+    pub ahead: u32,
+    /// Commits on `base` not yet on `branch`.
+    pub behind: u32,
+    /// True if the working tree has uncommitted changes (staged OR
+    /// unstaged), as reported by `git status --porcelain`.
+    pub dirty: bool,
 }
 
 /// Best-effort detection: returns true iff `git -C <path> rev-parse
@@ -144,6 +166,95 @@ pub fn create_for_card(project_path: &str, card_id: &str) -> Result<WorktreeInfo
         path: wt_path,
         branch,
     })
+}
+
+/// Snapshot the worktree's git state. Returns Err if the path is gone or
+/// not a repo — callers should treat that as "no status to show" rather
+/// than a hard failure (the worktree may have been removed manually).
+pub fn card_status(worktree_path: &str) -> Result<CardGitStatus, String> {
+    let wt = Path::new(worktree_path);
+    if !wt.exists() {
+        return Err("worktree path does not exist".into());
+    }
+
+    // Branch name. `--abbrev-ref HEAD` returns "HEAD" on detached state;
+    // we fall back to a short SHA in that case so the UI never shows a
+    // confusing "HEAD" pseudo-branch.
+    let branch_raw = git_capture(wt, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+    let branch = if branch_raw == "HEAD" {
+        git_capture(wt, &["rev-parse", "--short", "HEAD"]).unwrap_or_else(|_| "HEAD".into())
+    } else {
+        branch_raw
+    };
+
+    let base = detect_base_branch(wt);
+
+    // Ahead/behind: `git rev-list --left-right --count base...HEAD` returns
+    // "<behind>\t<ahead>". If the base ref is unreachable (e.g. fresh repo
+    // with no `main`), fall back to (0, 0).
+    let (ahead, behind) = match git_capture(
+        wt,
+        &["rev-list", "--left-right", "--count", &format!("{base}...HEAD")],
+    ) {
+        Ok(out) => parse_left_right(&out),
+        Err(_) => (0, 0),
+    };
+
+    // Dirty: any line of porcelain output = something changed.
+    let dirty = git_capture(wt, &["status", "--porcelain"])
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false);
+
+    Ok(CardGitStatus {
+        branch,
+        base,
+        ahead,
+        behind,
+        dirty,
+    })
+}
+
+/// Resolve the base ref to compare against. Tries `origin/HEAD` first
+/// (the convention for tracking the upstream default branch), then `main`,
+/// then `master`. Returns the raw ref name to pass to git.
+fn detect_base_branch(wt: &Path) -> String {
+    // origin/HEAD typically points to "refs/remotes/origin/main" — strip
+    // the prefix so we get a short ref name.
+    if let Ok(out) = git_capture(wt, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) {
+        let trimmed = out.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    for candidate in ["main", "master"] {
+        if git_capture(wt, &["rev-parse", "--verify", "--quiet", candidate]).is_ok() {
+            return candidate.into();
+        }
+    }
+    // Last resort: just compare against HEAD itself (always 0/0). Better
+    // than failing the whole status call.
+    "HEAD".into()
+}
+
+fn parse_left_right(s: &str) -> (u32, u32) {
+    // Format: "<behind>\t<ahead>"
+    let mut parts = s.split_whitespace();
+    let behind: u32 = parts.next().and_then(|x| x.parse().ok()).unwrap_or(0);
+    let ahead: u32 = parts.next().and_then(|x| x.parse().ok()).unwrap_or(0);
+    (ahead, behind)
+}
+
+fn git_capture(cwd: &Path, args: &[&str]) -> Result<String, String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(cwd)
+        .args(args)
+        .output()
+        .map_err(|e| format!("git {}: {e}", args.join(" ")))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 /// Best-effort cleanup. Used when the user explicitly removes a card and

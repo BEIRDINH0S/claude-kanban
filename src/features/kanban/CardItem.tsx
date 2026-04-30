@@ -1,9 +1,10 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Copy, LoaderCircle, Trash2 } from "lucide-react";
+import { Copy, GitBranch, LoaderCircle, Trash2 } from "lucide-react";
 
 import { useCardsStore } from "../../stores/cardsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
+import { useGitStatusStore } from "../../stores/gitStatusStore";
 import { useProjectsStore } from "../../stores/projectsStore";
 import { useUiStore } from "../../stores/uiStore";
 import { parseTags, type Card } from "../../types/card";
@@ -56,6 +57,15 @@ export function CardItem({ card, overlay }: Props) {
   const isSelected = useUiStore((s) => s.selectedCardId === card.id);
 
   const tags = parseTags(card.tags);
+
+  // Git status badge — only shown when the card has a worktree AND the
+  // store has a snapshot (polled every 12s + on session-turn-complete).
+  // Renders nothing for "clean & at base" so the badge means something.
+  const gitStatus = useGitStatusStore((s) => s.byCard[card.id]);
+  const showGitBadge =
+    !!card.worktreePath &&
+    gitStatus &&
+    (gitStatus.ahead > 0 || gitStatus.behind > 0 || gitStatus.dirty);
 
   const {
     attributes,
@@ -172,8 +182,31 @@ export function CardItem({ card, overlay }: Props) {
           </div>
         )}
       </div>
-      {tags.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
+      {(tags.length > 0 || showGitBadge) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {showGitBadge && gitStatus && (
+            <span
+              className="flex items-center gap-1 rounded-md border border-[var(--glass-stroke)] bg-black/5 px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-secondary)] tabular-nums dark:bg-white/5"
+              title={`${gitStatus.branch} · ${gitStatus.ahead}↑ ${gitStatus.behind}↓ vs ${gitStatus.base}${gitStatus.dirty ? " · dirty" : ""}`}
+            >
+              <GitBranch
+                className="size-2.5 shrink-0 text-[var(--text-muted)]"
+                strokeWidth={2}
+              />
+              {gitStatus.ahead > 0 && (
+                <span className="text-emerald-300/90">↑{gitStatus.ahead}</span>
+              )}
+              {gitStatus.behind > 0 && (
+                <span className="text-rose-300/90">↓{gitStatus.behind}</span>
+              )}
+              {gitStatus.dirty && (
+                <span
+                  className="size-1.5 rounded-full bg-amber-400"
+                  aria-label="Modifications non commitées"
+                />
+              )}
+            </span>
+          )}
           {tags.map((t) => (
             <span
               key={t}

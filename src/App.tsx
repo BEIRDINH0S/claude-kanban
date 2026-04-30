@@ -37,6 +37,7 @@ import { readNotifyOnTurnEnd } from "./lib/prefs";
 import { useCardsStore } from "./stores/cardsStore";
 import { useCostsStore } from "./stores/costsStore";
 import { useErrorsStore } from "./stores/errorsStore";
+import { useGitStatusStore } from "./stores/gitStatusStore";
 import { useMessagesStore } from "./stores/messagesStore";
 import { usePermissionsStore } from "./stores/permissionsStore";
 import { useProjectsStore } from "./stores/projectsStore";
@@ -117,6 +118,19 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Slow heartbeat for git status badges. 12s is a sweet spot: fast enough
+  // that a manual `git commit` in the worktree shows up before the user
+  // tabs back, slow enough that polling 5–10 worktrees doesn't burn CPU.
+  // We also refresh-on-demand from the session-event listener (cf. result
+  // events) so most updates arrive sooner than 12s anyway.
+  useEffect(() => {
+    void useGitStatusStore.getState().refreshAll();
+    const id = setInterval(() => {
+      void useGitStatusStore.getState().refreshAll();
+    }, 12_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Boot sequence: load projects, settle on an active one, let the cardsStore
   // subscription kick off the cards fetch for that project.
   useEffect(() => {
@@ -162,6 +176,10 @@ function App() {
           if (typeof cost === "number" && cost > 0) {
             useCostsStore.getState().add(cardId, cost);
           }
+          // A turn just ended → Claude likely committed something. Refresh
+          // the badge for this specific card so the user sees ahead/dirty
+          // counts move without waiting for the heartbeat.
+          void useGitStatusStore.getState().refresh(cardId);
           // Tell the user a turn finished — but only if they're not already
           // looking at this card, and they haven't opted out.
           if (

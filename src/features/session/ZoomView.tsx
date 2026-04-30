@@ -21,6 +21,7 @@ import {
 import { useCardsStore } from "../../stores/cardsStore";
 import { useCostsStore } from "../../stores/costsStore";
 import { useErrorsStore } from "../../stores/errorsStore";
+import { useGitStatusStore } from "../../stores/gitStatusStore";
 import { useMessagesStore } from "../../stores/messagesStore";
 import { useProjectsStore } from "../../stores/projectsStore";
 import { useToastsStore } from "../../stores/toastsStore";
@@ -151,12 +152,11 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
           onOpen={handleOpenFolder}
         />
         {card.worktreePath && (
-          <p
-            className="mt-0.5 truncate font-mono text-[10.5px] text-emerald-300/80"
-            title={`Sessions tournent dans ce worktree (cwd) au lieu de ${card.projectPath}`}
-          >
-            ⎇ {card.worktreePath}
-          </p>
+          <WorktreeStatusLine
+            cardId={card.id}
+            worktreePath={card.worktreePath}
+            projectPath={card.projectPath}
+          />
         )}
         <EditableTags
           value={card.tags}
@@ -351,6 +351,63 @@ function EditablePath({ value, disabled, onCommit, onOpen }: EditablePathProps) 
         >
           <Pencil className="size-3" strokeWidth={1.75} />
         </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Worktree-aware status line under the project path. Shows the active
+ * branch + ahead/behind/dirty counts. Refreshes once on mount (so opening
+ * the zoom always shows current data, not the last 12s heartbeat snapshot)
+ * and re-renders live as the heartbeat updates the store.
+ */
+function WorktreeStatusLine({
+  cardId,
+  worktreePath,
+  projectPath,
+}: {
+  cardId: string;
+  worktreePath: string;
+  projectPath: string;
+}) {
+  const status = useGitStatusStore((s) => s.byCard[cardId]);
+
+  useEffect(() => {
+    void useGitStatusStore.getState().refresh(cardId);
+  }, [cardId]);
+
+  const branch = status?.branch ?? "…";
+  const tooltip = status
+    ? `${status.branch} · ${status.ahead}↑ ${status.behind}↓ vs ${status.base}${
+        status.dirty ? " · dirty" : ""
+      }\nWorktree cwd: ${worktreePath}\nRepo: ${projectPath}`
+    : `Worktree cwd: ${worktreePath}\nRepo: ${projectPath}`;
+
+  return (
+    <div
+      className="mt-0.5 flex items-center gap-2 truncate font-mono text-[10.5px]"
+      title={tooltip}
+    >
+      <span className="flex items-center gap-1 text-emerald-300/85">
+        <span>⎇</span>
+        <span className="truncate">{branch}</span>
+      </span>
+      {status && (status.ahead > 0 || status.behind > 0 || status.dirty) && (
+        <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
+          {status.ahead > 0 && (
+            <span className="text-emerald-300/90">↑{status.ahead}</span>
+          )}
+          {status.behind > 0 && (
+            <span className="text-rose-300/90">↓{status.behind}</span>
+          )}
+          {status.dirty && (
+            <span className="flex items-center gap-1 text-amber-300/90">
+              <span className="size-1.5 rounded-full bg-amber-400" />
+              dirty
+            </span>
+          )}
+        </span>
       )}
     </div>
   );
