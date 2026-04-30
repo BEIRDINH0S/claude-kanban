@@ -3,6 +3,7 @@ import {
   Bell,
   Database,
   Download,
+  GitBranch,
   Plus,
   ShieldCheck,
   Terminal,
@@ -17,6 +18,7 @@ import {
 } from "../../ipc/backup";
 import {
   PREF_CLAUDE_RUNTIME,
+  PREF_DEFAULT_WORKTREE,
   type ClaudeRuntimePref,
   getPref,
   setPref,
@@ -62,6 +64,10 @@ export function SettingsPage() {
 
         <Category title="Permissions">
           <PermissionRulesSection />
+        </Category>
+
+        <Category title="Cartes">
+          <DefaultWorktreeSection />
         </Category>
 
         {/* Runtime selector is Windows-only — on Mac/Linux WSL doesn't
@@ -203,6 +209,65 @@ function NotificationsSection() {
         />
       }
     />
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Cartes — defaults applied to the new-card modal
+// -----------------------------------------------------------------------------
+
+function DefaultWorktreeSection() {
+  const [enabled, setEnabled] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getPref(PREF_DEFAULT_WORKTREE)
+      .then((v) => {
+        if (cancelled) return;
+        setEnabled(v === "1");
+        setHydrated(true);
+      })
+      .catch(() => setHydrated(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggle = async () => {
+    const next = !enabled;
+    setEnabled(next); // optimistic
+    try {
+      await setPref(PREF_DEFAULT_WORKTREE, next ? "1" : "0");
+    } catch {
+      setEnabled(!next); // rollback
+    }
+  };
+
+  return (
+    <Card
+      icon={
+        <GitBranch
+          className="size-3.5 shrink-0 text-[var(--text-muted)]"
+          strokeWidth={1.75}
+        />
+      }
+      title="Par défaut, créer un git worktree"
+      subtitle="Si activé, la case « Créer un git worktree dédié » de la modale de création de carte est cochée par défaut. Pratique quand tu lances 5 cartes par jour sur le même repo et veux toujours l'isolement."
+      trailing={
+        <Toggle
+          enabled={enabled}
+          onToggle={() => void toggle()}
+          ariaLabel={enabled ? "Désactiver" : "Activer"}
+        />
+      }
+    >
+      {!hydrated && (
+        <p className="mt-2 font-mono text-[10.5px] text-[var(--text-muted)]">
+          chargement…
+        </p>
+      )}
+    </Card>
   );
 }
 

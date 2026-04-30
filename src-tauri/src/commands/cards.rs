@@ -408,6 +408,26 @@ pub fn git_card_status(
     Ok(crate::worktree::card_status(&wt).ok())
 }
 
+/// `git push -u origin <branch>` for a card with a worktree. Returns the
+/// combined git output (stdout + stderr) on success — useful since git
+/// emits the "Create a pull request" hint on stderr. Errors come back
+/// verbatim from git so the user can act on auth failures, non-ff, etc.
+#[tauri::command]
+pub fn git_card_push(state: State<DbState>, card_id: String) -> Result<String, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let worktree_path: Option<String> = conn
+        .query_row(
+            "SELECT worktree_path FROM cards WHERE id = ?1",
+            [&card_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| format!("card not found: {e}"))?;
+    let Some(wt) = worktree_path else {
+        return Err("card has no worktree to push from".into());
+    };
+    crate::worktree::push_card(&wt)
+}
+
 /// Drop a card's worktree on disk AND clear `worktree_path` on the row,
 /// so subsequent sessions run in the bare `project_path`. The git branch
 /// itself is NOT deleted — it may have unmerged commits the user wants to

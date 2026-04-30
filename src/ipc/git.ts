@@ -47,3 +47,12 @@ export function gitCardDiff(
 export function dropCardWorktree(cardId: string): Promise<void> {
   return invoke<void>("drop_card_worktree", { cardId });
 }
+
+/**
+ * `git push -u origin <branch>` from the card's worktree. Returns the
+ * combined git output on success (so the UI can surface the "create PR"
+ * link most providers print). Throws on auth/ref errors verbatim.
+ */
+export function gitCardPush(cardId: string): Promise<string> {
+  return invoke<string>("git_card_push", { cardId });
+}

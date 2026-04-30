@@ -3,6 +3,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import {
   Archive,
   CircleStop,
+  CloudUpload,
   Download,
   FolderOpen,
   LoaderCircle,
@@ -15,6 +16,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import { exportSessionMarkdown } from "../../ipc/backup";
+import { gitCardPush } from "../../ipc/git";
 import {
   readSessionHistory,
   sendMessage as ipcSendMessage,
@@ -97,6 +99,37 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
     void dropWorktree(card.id).then(() => {
       pushToastHeader({ message: "Worktree supprimé. Branche conservée." });
     });
+  };
+
+  const [pushing, setPushing] = useState(false);
+  const handlePush = async () => {
+    if (!card.worktreePath || pushing) return;
+    setPushing(true);
+    try {
+      const out = await gitCardPush(card.id);
+      // Surface the first non-empty line of git's output — usually
+      // "branch claude-kanban/card-x set up to track origin/…" or the
+      // "Create a pull request for X on remote" hint. Truncate so the
+      // toast doesn't blow up on long URLs.
+      const summary = out
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .slice(-2)
+        .join(" · ")
+        .slice(0, 220);
+      pushToastHeader({
+        message: summary || "Push OK",
+        ttlMs: 8000,
+      });
+    } catch (e) {
+      pushToastHeader({
+        message: `Push échoué — ${String(e).slice(0, 220)}`,
+        ttlMs: 8000,
+      });
+    } finally {
+      setPushing(false);
+    }
   };
 
   const handleArchive = () => {
@@ -194,6 +227,25 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
             className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 dark:hover:bg-white/5"
           >
             <CircleStop className="size-4" strokeWidth={1.75} />
+          </button>
+        )}
+        {card.worktreePath && !archived && (
+          <button
+            type="button"
+            onClick={() => void handlePush()}
+            disabled={pushing}
+            title="git push -u origin <branche>"
+            aria-label="Push la branche du worktree"
+            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-emerald-300 disabled:opacity-40 dark:hover:bg-white/5"
+          >
+            {pushing ? (
+              <LoaderCircle
+                className="size-4 animate-spin"
+                strokeWidth={1.75}
+              />
+            ) : (
+              <CloudUpload className="size-4" strokeWidth={1.75} />
+            )}
           </button>
         )}
         <button

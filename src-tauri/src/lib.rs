@@ -71,6 +71,7 @@ pub fn run() {
             commands::cards::move_card,
             commands::cards::git_card_status,
             commands::cards::git_card_diff,
+            commands::cards::git_card_push,
             commands::cards::drop_card_worktree,
             commands::projects::list_projects,
             commands::projects::create_project,

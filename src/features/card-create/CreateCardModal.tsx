@@ -2,6 +2,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Folder, GitBranch, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { getPref, PREF_DEFAULT_WORKTREE } from "../../ipc/prefs";
 import { useCardsStore } from "../../stores/cardsStore";
 import { useUiStore } from "../../stores/uiStore";
 
@@ -31,6 +32,17 @@ export function CreateCardModal({ onClose }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Hydrate the worktree-default pref once on mount. Failure (no row yet
+  // = first run) leaves the checkbox at the local "off" default. We only
+  // override when the user has explicitly opted in via Settings.
+  useEffect(() => {
+    void getPref(PREF_DEFAULT_WORKTREE)
+      .then((v) => {
+        if (v === "1") setUseWorktree(true);
+      })
+      .catch(() => {});
+  }, []);
 
   const canSubmit =
     title.trim().length > 0 &&

@@ -18,3 +18,11 @@ export function setPref(key: string, value: string): Promise<void> {
 // side. Keeping them centralised here avoids typos drifting across files.
 export const PREF_CLAUDE_RUNTIME = "claude_runtime";
 export type ClaudeRuntimePref = "auto" | "native" | "wsl";
+
+/**
+ * Default state of the "create a git worktree" checkbox in the new-card
+ * modal. Stored as "1" (on) / "0" (off). Lives in app_prefs (not just
+ * localStorage) so it could be read from Rust later if we ever want to
+ * pre-create worktrees from a CLI / IPC bypass.
+ */
+export const PREF_DEFAULT_WORKTREE = "default_create_worktree";

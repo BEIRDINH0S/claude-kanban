@@ -344,6 +344,45 @@ fn git_capture(cwd: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// `git push -u origin <branch>` from the worktree. The `-u` sets the
+/// upstream so subsequent pushes don't need the explicit ref. Credentials
+/// are whatever git's credential helper resolves (SSH agent, GCM, …) —
+/// we don't intermediate.
+///
+/// Returns the combined stdout+stderr on success (so the UI can surface
+/// the "Branch created on remote, view at https://…" hints GitHub/GitLab
+/// emit). Errors include git's stderr verbatim so the user can act on
+/// e.g. an auth failure or a non-fast-forward.
+pub fn push_card(worktree_path: &str) -> Result<String, String> {
+    let wt = Path::new(worktree_path);
+    if !wt.exists() {
+        return Err("worktree path does not exist".into());
+    }
+    // Resolve the current branch first so we can `-u origin <branch>` even
+    // when the worktree is on a freshly-created branch (no upstream yet).
+    let branch = git_capture(wt, &["rev-parse", "--abbrev-ref", "HEAD"])?;
+    if branch == "HEAD" {
+        return Err("worktree is in detached HEAD — cannot push".into());
+    }
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(wt)
+        .arg("push")
+        .arg("-u")
+        .arg("origin")
+        .arg(&branch)
+        .output()
+        .map_err(|e| format!("git push: {e}"))?;
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if !out.status.success() {
+        return Err(stderr.trim().to_string());
+    }
+    // Most git push useful info (the "Create a pull request for X on
+    // remote" link) lands on stderr — concatenate both for the toast.
+    Ok(format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string())
+}
+
 /// Best-effort cleanup. Called from the Tauri `drop_card_worktree` command.
 /// We never call this implicitly from delete_card — the branch may have
 /// unmerged commits the user wants to keep around.
