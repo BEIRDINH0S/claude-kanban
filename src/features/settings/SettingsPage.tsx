@@ -164,14 +164,14 @@ function Toggle({
       aria-pressed={enabled}
       aria-label={ariaLabel}
       className={[
-        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors",
         enabled ? "bg-[var(--color-accent)]" : "bg-[var(--glass-stroke)]",
       ].join(" ")}
     >
       <span
         className={[
-          "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
-          enabled ? "translate-x-[18px]" : "translate-x-0.5",
+          "block size-5 rounded-full bg-white shadow transition-transform",
+          enabled ? "translate-x-5" : "translate-x-0",
         ].join(" ")}
       />
     </button>
