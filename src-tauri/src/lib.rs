@@ -1,6 +1,7 @@
 // Tauri app entry. Changes to sidecar/ don't restart the sidecar on their
 // own (it lives on `kill_on_drop` of the Rust child handle), so a Rust touch
 // is needed when iterating on host.mjs.
+mod auth;
 mod commands;
 mod db;
 mod git_fetch;
@@ -81,6 +82,14 @@ pub fn run() {
             // emit `subscription-usage-changed` for the front.
             commands::usage::spawn_subscription_poller(app.handle().clone());
 
+            // OAuth refresher — keeps the access token fresh in the
+            // background so the sidecar always reads a valid one when
+            // it queries OAuth-gated endpoints (subscription usage,
+            // future inference calls). Runs every 60 s; the actual HTTPS
+            // refresh fires only when expiry is < 5 min away. Cheap if
+            // there's no token yet (returns immediately).
+            auth::spawn_periodic_refresher(app.handle().clone());
+
             // Background git automation: periodic `git fetch --all --prune`
             // on every distinct project_path so ahead/behind badges stay
             // accurate without any user action, plus a worktree GC that
@@ -128,6 +137,10 @@ pub fn run() {
             commands::usage::usage_rebuild_index,
             commands::usage::get_subscription_usage,
             commands::user_commands::list_user_commands,
+            auth::commands::auth_status,
+            auth::commands::auth_login,
+            auth::commands::auth_logout,
+            auth::commands::auth_refresh,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

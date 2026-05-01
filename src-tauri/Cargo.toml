@@ -28,8 +28,26 @@ serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 thiserror = "1"
 uuid = { version = "1", features = ["v4"] }
-tokio = { version = "1", features = ["process", "io-util", "sync", "rt-multi-thread", "macros", "time"] }
+tokio = { version = "1", features = ["process", "io-util", "sync", "rt-multi-thread", "macros", "time", "net"] }
 # Filesystem watcher for ~/.claude/projects/**/*.jsonl. Lets the kanban catch
 # up to sessions running in the CLI (`claude` outside the app) without polling.
 notify = "8"
+# OAuth login flow (Anthropic / Claude Code) implemented natively in the app
+# so users don't need the `claude` CLI installed. `reqwest` for the token
+# exchange, `keyring` for the OS credential store (macOS Keychain, Windows
+# Credential Manager, Linux Secret Service), `sha2` + `base64` for PKCE
+# S256, `rand` for the verifier/state, `dirs` for ~/.claude lookup.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+dirs = "5"
+urlencoding = "2"
+whoami = "1"
+
+# Keychain access — macOS only, since the sidecar's `readCredentials()`
+# only consults Keychain on darwin (cf. host.mjs:530). Windows/Linux fall
+# back to ~/.claude/.credentials.json which we always write too.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
 

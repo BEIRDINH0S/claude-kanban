@@ -7,18 +7,30 @@ import {
   FileText,
   GitBranch,
   Keyboard,
+  LogIn,
+  LogOut,
   Pencil,
   Plus,
+  RefreshCw,
   RotateCcw,
   ShieldCheck,
   Terminal,
   Trash2,
   TrendingUp,
   Upload,
+  User,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import {
+  type AuthStatus,
+  getAuthStatus,
+  loginWithClaude,
+  logoutFromClaude,
+  onAuthChanged,
+  refreshAuth,
+} from "../../ipc/auth";
 import {
   exportProjectToFile,
   importProjectFromFile,
@@ -80,6 +92,10 @@ export function SettingsPage() {
          * cards inside are individual settings. Keep the order roughly
          * "user-facing toggles → data ops → diagnostics".
          */}
+
+        <Category title="Compte Claude">
+          <AccountSection />
+        </Category>
 
         <Category title="Notifications">
           <NotificationsSection />
@@ -240,6 +256,233 @@ function NotificationsSection() {
         />
       }
     />
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Compte Claude — login flow native (OAuth PKCE) handled by Rust side
+// -----------------------------------------------------------------------------
+
+/**
+ * Account / OAuth state. Three visual modes:
+ *   1. Loading — first read from disk (very fast)
+ *   2. Logged out — single "Se connecter" CTA opening the system browser
+ *   3. Logged in — email + plan badge + "Refresh" / "Se déconnecter"
+ *
+ * The Rust side emits `auth-changed` after every login, logout, and the
+ * periodic refresher tick — we subscribe so the UI auto-updates without
+ * forcing a Settings re-mount.
+ */
+function AccountSection() {
+  const [status, setStatus] = useState<AuthStatus | null>(null);
+  const [busy, setBusy] = useState<"login" | "logout" | "refresh" | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getAuthStatus()
+      .then((s) => {
+        if (!cancelled) setStatus(s);
+      })
+      .catch((e) => {
+        if (!cancelled) setErr(String(e));
+      });
+
+    let unlisten: (() => void) | null = null;
+    void onAuthChanged((next) => {
+      if (!cancelled) setStatus(next);
+    }).then((un) => {
+      if (cancelled) un();
+      else unlisten = un;
+    });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
+
+  const handleLogin = async () => {
+    if (busy) return;
+    setBusy("login");
+    setErr(null);
+    try {
+      const next = await loginWithClaude();
+      setStatus(next);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (busy) return;
+    setBusy("logout");
+    setErr(null);
+    try {
+      await logoutFromClaude();
+      // status is updated via the auth-changed event; in case the event
+      // is in flight we also clear locally so the UI flips immediately.
+      setStatus({
+        loggedIn: false,
+        email: null,
+        planName: null,
+        organizationName: null,
+        expiresAt: null,
+        expired: false,
+      });
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (busy) return;
+    setBusy("refresh");
+    setErr(null);
+    try {
+      const next = await refreshAuth();
+      setStatus(next);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (status === null) {
+    return (
+      <Card
+        icon={
+          <User
+            className="size-3.5 shrink-0 text-[var(--text-muted)]"
+            strokeWidth={1.75}
+          />
+        }
+        title="Compte Claude"
+        subtitle={
+          <span className="font-mono text-[10.5px]">chargement…</span>
+        }
+      />
+    );
+  }
+
+  if (!status.loggedIn) {
+    return (
+      <Card
+        icon={
+          <User
+            className="size-3.5 shrink-0 text-[var(--text-muted)]"
+            strokeWidth={1.75}
+          />
+        }
+        title="Pas connecté"
+        subtitle="Connecte-toi à ton compte Claude pour lancer des sessions. Le bouton ouvre ton navigateur sur la page d'autorisation Anthropic — pas besoin d'installer Claude Code séparément."
+        trailing={
+          <button
+            type="button"
+            onClick={() => void handleLogin()}
+            disabled={busy !== null}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+          >
+            <LogIn className="size-3.5" strokeWidth={1.75} />
+            {busy === "login" ? "Ouverture…" : "Se connecter"}
+          </button>
+        }
+      >
+        {busy === "login" && (
+          <p className="mt-3 font-mono text-[11px] text-[var(--text-muted)]">
+            Termine l'autorisation dans le navigateur. La fenêtre se ferme
+            automatiquement après la redirection.
+          </p>
+        )}
+        {err && (
+          <p className="mt-3 font-mono text-[11px] break-words text-red-700 dark:text-red-400">
+            {err}
+          </p>
+        )}
+      </Card>
+    );
+  }
+
+  // Logged in.
+  const expiresHuman = status.expiresAt
+    ? new Date(status.expiresAt).toLocaleString()
+    : null;
+
+  return (
+    <Card
+      icon={
+        <User
+          className="size-3.5 shrink-0 text-emerald-700 dark:text-emerald-300/80"
+          strokeWidth={1.75}
+        />
+      }
+      title={status.email ?? "Connecté"}
+      subtitle={
+        <div className="flex flex-col gap-0.5">
+          {status.planName && (
+            <span>
+              Plan{" "}
+              <span className="font-medium text-[var(--text-secondary)]">
+                {status.planName}
+              </span>
+              {status.organizationName && status.organizationName !== status.email && (
+                <> · {status.organizationName}</>
+              )}
+            </span>
+          )}
+          {expiresHuman && (
+            <span
+              className={`font-mono text-[10.5px] ${
+                status.expired
+                  ? "text-amber-700 dark:text-amber-300/90"
+                  : "text-[var(--text-muted)]"
+              }`}
+            >
+              {status.expired
+                ? `Token expiré ou expirant — refresh recommandé`
+                : `Token valide jusqu'au ${expiresHuman}`}
+            </span>
+          )}
+        </div>
+      }
+      trailing={
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => void handleRefresh()}
+            disabled={busy !== null}
+            title="Renouveler le token maintenant"
+            aria-label="Renouveler le token"
+            className="flex items-center gap-1 rounded-lg border border-[var(--glass-stroke)] px-2 py-1.5 text-[11.5px] text-[var(--text-secondary)] hover:border-[var(--color-accent-ring)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <RefreshCw
+              className={`size-3.5 ${busy === "refresh" ? "animate-spin" : ""}`}
+              strokeWidth={1.75}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            disabled={busy !== null}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-red-400 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <LogOut className="size-3.5" strokeWidth={1.75} />
+            {busy === "logout" ? "…" : "Se déconnecter"}
+          </button>
+        </div>
+      }
+    >
+      {err && (
+        <p className="mt-3 font-mono text-[11px] break-words text-red-700 dark:text-red-400">
+          {err}
+        </p>
+      )}
+    </Card>
   );
 }
 

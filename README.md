@@ -37,9 +37,14 @@ Les builds ne sont pas signés, donc le premier lancement nécessite un détour 
 - **Windows** : SmartScreen affiche « unrecognized app » → clique sur
   **More info** → **Run anyway**.
 
-**Pré-requis runtime :** `claude` (Claude Code CLI) doit être installé et
-accessible sur ton PATH (`which claude` doit renvoyer un chemin). Node est
-**bundlé dans l'app**, pas besoin de l'installer.
+**Pré-requis runtime : aucun.** Le binaire `claude` est embarqué par le
+SDK (`@anthropic-ai/claude-agent-sdk`), Node est bundlé par Tauri. Au
+premier lancement, va dans **Paramètres → Compte Claude → Se connecter**
+pour autoriser l'app via OAuth — ça ouvre ton navigateur sur
+[claude.ai/oauth/authorize](https://claude.ai/oauth/authorize), tu valides,
+et les credentials atterrissent dans `~/.claude/.credentials.json` +
+Keychain (macOS), exactement comme `claude login` aurait fait. Pas besoin
+d'installer le CLI Claude Code.
 
 ### Windows + WSL
 
