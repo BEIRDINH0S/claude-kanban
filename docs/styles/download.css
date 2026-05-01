@@ -1,0 +1,90 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Download CTA
+ *  ────────────
+ *  Big featured card with platform tiles + a "first launch" warning that
+ *  surfaces the unsigned-build caveats from the README.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+.download {
+  position: relative;
+  border-radius: var(--radius-xl);
+  padding: clamp(40px, 6vw, 80px);
+  background:
+    radial-gradient(ellipse at 20% 0%,    oklch(0.40 0.20 295 / 0.5), transparent 60%),
+    radial-gradient(ellipse at 100% 100%, oklch(0.40 0.20 250 / 0.4), transparent 60%),
+    linear-gradient(180deg, var(--bg-soft), var(--bg-mid));
+  border: 1px solid var(--glass-stroke);
+  overflow: hidden;
+}
+
+/* Same noise overlay as the page atmosphere — keeps the gradient tactile */
+.download::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity: 0.10;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+.download h2 {
+  font-size: clamp(34px, 5vw, 56px);
+  letter-spacing: -0.025em;
+  line-height: 1.04;
+  margin: 0;
+  max-width: 18ch;
+}
+.download p {
+  margin: 18px 0 0;
+  color: var(--ink-2);
+  max-width: 56ch;
+  line-height: 1.55;
+}
+
+/* Platform grid — 3 tiles, one per release asset */
+.download-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 36px;
+}
+.platform {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-stroke);
+  transition: all 220ms var(--ease-out);
+}
+.platform:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: var(--glass-stroke-2);
+  transform: translateY(-2px);
+}
+.platform .pf-icon { width: 28px; height: 28px; color: var(--ink-1); flex-shrink: 0; }
+.platform .pf-name { font-size: 14px; font-weight: 500; }
+.platform .pf-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+@media (max-width: 760px) {
+  .download-grid { grid-template-columns: 1fr; }
+}
+
+/* "First launch" callout — explains Gatekeeper + SmartScreen workarounds */
+.first-launch {
+  margin-top: 28px;
+  padding: 18px 20px;
+  background: rgba(255, 200, 100, 0.06);
+  border: 1px solid oklch(0.82 0.14 60 / 0.25);
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+.first-launch strong { color: var(--ink-1); font-weight: 600; }
+.first-launch code {
+  font-family: var(--font-mono);
+  background: rgba(0,0,0,0.2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--ink-1);
+}

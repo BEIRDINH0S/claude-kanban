@@ -1,0 +1,346 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Hero mockup — the live animated kanban
+ *  ──────────────────────────────────────
+ *  This is the "look at me" piece of the page. A faux app window with five
+ *  columns (Todo → En cours → Review → Idle → Done) and a single card —
+ *  the "traveler" — that loops through all five states on a 16s timeline.
+ *  A permission popup appears in phase Review.
+ *
+ *  Layout
+ *  ──────
+ *  .mock              window frame (titlebar + dots + usage meter)
+ *    .mock-board      CSS grid, 5 columns
+ *      .mock-col      flex column with header + static cards (.mc)
+ *      .mc.traveler   absolutely-positioned card animating across cols
+ *      .perm-pop      permission popover, appears when traveler hits Review
+ *
+ *  Animation timeline (16s loop, see @keyframes travel)
+ *  ────────────────────────────────────────────────────
+ *    0–18%   Todo
+ *    22–38%  En cours    — spinner state visible
+ *    42–58%  Review      — perm-pop fades in
+ *    62–76%  Idle        — "tour fini" badge
+ *    80–94%  Done        — archived
+ *
+ *  Responsive
+ *  ──────────
+ *  ≤880px : drop Idle and Done columns; hide traveler/perm-pop (animation
+ *           assumes 5 columns).
+ *  ≤560px : drop Review too — only Todo + En cours remain.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+.mock {
+  border-radius: var(--radius-xl);
+  background: var(--glass-bg-strong);
+  border: 1px solid var(--glass-stroke);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+/* ─── Title bar ──────────────────────────────────────────────────────────── */
+.mock-titlebar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--glass-stroke);
+  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0));
+}
+.mock-dots { display: flex; gap: 6px; }
+.mock-dots span {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+}
+.mock-dots span:nth-child(1) { background: oklch(0.70 0.18 25); }
+.mock-dots span:nth-child(2) { background: oklch(0.82 0.16 75); }
+.mock-dots span:nth-child(3) { background: oklch(0.78 0.16 145); }
+.mock-title {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  flex: 1; text-align: center;
+}
+
+/* Usage meter in the titlebar — animates between 22% and 78% to evoke the
+   real session/weekly bars in the app. */
+.mock-usage {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3);
+}
+.mock-usage .meter {
+  width: 60px; height: 4px; border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+.mock-usage .meter::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 64%;
+  background: linear-gradient(90deg, var(--green), var(--amber) 60%, var(--red));
+  animation: usage-fill 8s ease-in-out infinite alternate;
+}
+@keyframes usage-fill {
+  from { width: 22%; }
+  to   { width: 78%; }
+}
+
+/* ─── Board grid ─────────────────────────────────────────────────────────── */
+.mock-board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  padding: 18px;
+  min-height: 420px;
+  position: relative;     /* anchors .traveler + .perm-pop */
+}
+@media (max-width: 880px) {
+  .mock-board { grid-template-columns: repeat(3, 1fr); }
+  .mock-col[data-col="idle"], .mock-col[data-col="done"] { display: none; }
+  /* Animation assumes 5 columns — hide once the layout is clipped. */
+  .traveler, .perm-pop { display: none; }
+}
+@media (max-width: 560px) {
+  .mock-board { grid-template-columns: repeat(2, 1fr); padding: 12px; }
+  .mock-col[data-col="review"] { display: none; }
+}
+
+/* ─── Column ─────────────────────────────────────────────────────────────── */
+.mock-col {
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--glass-stroke);
+  padding: 10px;
+  display: flex; flex-direction: column;
+  gap: 8px;
+  min-height: 100%;
+}
+.mock-col header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 4px 4px 8px;
+  border-bottom: 1px solid var(--glass-stroke);
+}
+.mock-col header .pill {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: var(--ink-2);
+  font-size: 10px;
+}
+
+/* Per-column accent on the header label */
+.mock-col[data-col="todo"]    header { color: oklch(0.78 0.04 270); }
+.mock-col[data-col="working"] header { color: oklch(0.84 0.10 240); }
+.mock-col[data-col="review"]  header { color: oklch(0.82 0.14 60); }
+.mock-col[data-col="idle"]    header { color: oklch(0.78 0.10 295); }
+.mock-col[data-col="done"]    header { color: oklch(0.78 0.16 145); }
+
+/* ─── Card (.mc) ─────────────────────────────────────────────────────────── */
+.mc {
+  position: relative;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.045);
+  border: 1px solid var(--glass-stroke);
+  padding: 10px 12px;
+  min-height: 64px;
+  box-shadow: 0 4px 12px -4px rgba(0,0,0,0.3);
+  transition: all 700ms var(--ease-out);
+}
+.mc.live {
+  border-color: oklch(0.84 0.12 240 / 0.5);
+  box-shadow: 0 0 0 1px oklch(0.84 0.12 240 / 0.4),
+              0 6px 16px -4px oklch(0.50 0.18 250 / 0.5);
+}
+.mc.review {
+  border-color: oklch(0.82 0.14 60 / 0.5);
+  box-shadow: 0 0 0 1px oklch(0.82 0.14 60 / 0.5),
+              0 6px 16px -4px oklch(0.65 0.17 60 / 0.5);
+}
+.mc.done { opacity: 0.55; }
+
+.mc-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-1);
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+/* Preview line in a card — the "live message preview" feature in action.
+   Color is bumped from ink-3 to ink-2 for legibility at small font size. */
+.mc-preview {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-2);
+  line-height: 1.4;
+  max-height: 28px;
+  overflow: hidden;
+}
+
+/* On the "live" card (Claude is currently working), the preview gets a
+   subtle pulse + a blinking caret to evoke streaming text. */
+.mc.live .mc-preview {
+  color: oklch(0.92 0.06 240);
+  animation: mc-preview-pulse 2.4s ease-in-out infinite;
+}
+.mc.live .mc-preview::after {
+  content: "▌";
+  display: inline-block;
+  margin-left: 2px;
+  color: oklch(0.84 0.12 240);
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes mc-preview-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+.mc-meta {
+  margin-top: 8px;
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--ink-3);
+}
+.mc-meta .tag {
+  padding: 1px 5px; border-radius: 4px;
+  background: rgba(255,255,255,0.06);
+}
+
+/* ─── Spinner (used in live cards + traveler "working" state) ─────────────── */
+.spinner {
+  width: 9px; height: 9px;
+  border: 1.5px solid oklch(0.84 0.12 240 / 0.3);
+  border-top-color: oklch(0.84 0.12 240);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── The traveler — the card that loops through all 5 columns ───────────── *
+ *
+ *  Sits in slot 2 of each column (top: 156px from the board's content top).
+ *  Width matches a single column area (minus column padding), and translateX
+ *  in the @travel keyframes uses (100% + 32px) per step where 32px = column
+ *  padding (10px × 2) + gap (12px). That makes each phase land aligned with
+ *  the next column's card area.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.traveler {
+  position: absolute;
+  top: 156px;
+  left: 28px;
+  width: calc((100% - 36px - 12px*4) / 5 - 20px);
+  animation: travel 16s ease-in-out infinite,
+             traveler-style 16s linear infinite;
+  z-index: 4;
+}
+
+@keyframes travel {
+  /* Todo */
+  0%, 6%   { transform: translateX(0)                       translateY(0);    opacity: 0; }
+  8%       { transform: translateX(0)                       translateY(0);    opacity: 1; }
+  18%      { transform: translateX(0)                       translateY(0);    }
+  /* En cours */
+  22%, 38% { transform: translateX(calc((100% + 32px) * 1)) translateY(0);    }
+  /* Review */
+  42%, 58% { transform: translateX(calc((100% + 32px) * 2)) translateY(0);    }
+  /* Idle */
+  62%, 76% { transform: translateX(calc((100% + 32px) * 3)) translateY(0);    }
+  /* Done */
+  80%, 94% { transform: translateX(calc((100% + 32px) * 4)) translateY(0);    opacity: 1; }
+  100%     { transform: translateX(calc((100% + 32px) * 4)) translateY(-12px); opacity: 0; }
+}
+
+/* Border + shadow shifts to match the column the traveler is in */
+@keyframes traveler-style {
+  0%,18%   { box-shadow: 0 4px 12px -4px rgba(0,0,0,0.3);
+             border-color: var(--glass-stroke); }
+  22%,38%  { box-shadow: 0 0 0 1px oklch(0.84 0.12 240 / 0.5),
+                         0 6px 16px -4px oklch(0.50 0.18 250 / 0.5);
+             border-color: oklch(0.84 0.12 240 / 0.5); }
+  42%,58%  { box-shadow: 0 0 0 1px oklch(0.82 0.14 60 / 0.6),
+                         0 6px 16px -4px oklch(0.65 0.17 60 / 0.5);
+             border-color: oklch(0.82 0.14 60 / 0.6); }
+  62%,76%  { box-shadow: 0 0 0 1px oklch(0.78 0.10 295 / 0.4),
+                         0 6px 16px -4px oklch(0.50 0.16 295 / 0.4);
+             border-color: oklch(0.78 0.10 295 / 0.4); }
+  80%,100% { box-shadow: 0 4px 12px -4px rgba(0,0,0,0.3);
+             border-color: var(--glass-stroke);
+             opacity: 0.6; }
+}
+
+/* Per-phase state badges in the traveler's meta row.
+   Each <span class="state" data-phase="..."> is shown only during its phase
+   via display: none/flex toggled by a synced 16s keyframe. Animating the
+   `display` property is supported in Chrome 116+ / Safari 17.4+ / Firefox
+   117+ — older browsers will show all badges at once, no big deal. */
+.traveler .state { display: none; align-items: center; gap: 6px;
+                   font-family: var(--font-mono); font-size: 10px;
+                   color: var(--ink-2); }
+.traveler .state[data-phase="todo"]    { animation: phase-todo    16s linear infinite; }
+.traveler .state[data-phase="working"] { animation: phase-working 16s linear infinite; }
+.traveler .state[data-phase="review"]  { animation: phase-review  16s linear infinite; }
+.traveler .state[data-phase="idle"]    { animation: phase-idle    16s linear infinite; }
+.traveler .state[data-phase="done"]    { animation: phase-done    16s linear infinite; }
+@keyframes phase-todo    { 0%,18%        { display: flex; } 18.01%,100%  { display: none; } }
+@keyframes phase-working { 0%,21.99%     { display: none; } 22%,38%      { display: flex; } 38.01%,100%  { display: none; } }
+@keyframes phase-review  { 0%,41.99%     { display: none; } 42%,58%      { display: flex; } 58.01%,100%  { display: none; } }
+@keyframes phase-idle    { 0%,61.99%     { display: none; } 62%,76%      { display: flex; } 76.01%,100%  { display: none; } }
+@keyframes phase-done    { 0%,79.99%     { display: none; } 80%,100%     { display: flex; } }
+
+/* ─── Permission popover ─────────────────────────────────────────────────── *
+ *
+ *  Anchored just below the traveler when it's in the Review column (col 3).
+ *  Synced to the same 16s timeline: opacity 0 → 1 between 40% and 60%.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.perm-pop {
+  position: absolute;
+  top: 244px;
+  left: calc(28px + ((100% - 36px - 48px) / 5) * 2 + 12px);
+  width: 220px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(20, 18, 30, 0.92);
+  border: 1px solid oklch(0.82 0.14 60 / 0.4);
+  box-shadow: 0 18px 40px -12px rgba(0,0,0,0.6),
+              0 0 0 1px oklch(0.82 0.14 60 / 0.3);
+  backdrop-filter: blur(12px);
+  transform: translateY(8px) scale(0.96);
+  opacity: 0;
+  animation: perm-pop 16s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+@keyframes perm-pop {
+  0%,40%   { opacity: 0; transform: translateY(8px)  scale(0.96); }
+  44%,56%  { opacity: 1; transform: translateY(0)    scale(1);    }
+  60%,100% { opacity: 0; transform: translateY(-6px) scale(0.96); }
+}
+.perm-pop .perm-tool {
+  font-family: var(--font-mono); font-size: 11px;
+  color: oklch(0.85 0.14 60);
+  margin-bottom: 4px;
+}
+.perm-pop .perm-cmd {
+  font-family: var(--font-mono); font-size: 11.5px;
+  color: var(--ink-1);
+  background: rgba(255,255,255,0.05);
+  padding: 6px 8px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.perm-pop .perm-actions { display: flex; gap: 6px; }
+.perm-pop .perm-actions button {
+  flex: 1;
+  padding: 5px 8px;
+  font-family: var(--font-mono); font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-stroke);
+  color: var(--ink-2);
+}
+.perm-pop .perm-actions .approve {
+  background: oklch(0.78 0.16 145 / 0.18);
+  color: oklch(0.85 0.16 145);
+  border-color: oklch(0.78 0.16 145 / 0.4);
+}
