@@ -58,14 +58,23 @@ export function onAuthChanged(
 
 export interface CliInstallStatus {
   installed: boolean;
-  /** Resolved absolute path of the `claude` binary if found, else null. */
+  /** Resolved absolute path of the `claude` binary we'd spawn. */
   path: string | null;
+  /**
+   * Where the binary came from:
+   *  - `"bundled"` — the SDK npm sub-package shipped with the app (default,
+   *    expected case)
+   *  - `"path"` — picked up from the user's own `claude` install on PATH
+   *  - `null` — not found (broken bundle and no global install)
+   */
+  source: "bundled" | "path" | null;
 }
 
 /**
- * Pre-flight check: is the `claude` binary on PATH? When false, the
- * Settings UI surfaces an "install Claude Code first" CTA instead of the
- * login button.
+ * Pre-flight check: do we have a usable `claude` binary? Returns the
+ * bundled SDK binary when present (always, in a healthy install), or
+ * the user's own `claude` from PATH as a fallback. Only `installed:
+ * false` when both are missing — typically a corrupted bundle.
  */
 export function checkCliInstalled(): Promise<CliInstallStatus> {
   return invoke<CliInstallStatus>("auth_cli_check");
