@@ -1,0 +1,80 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Design tokens
+ *  ──────────────
+ *  Single source of truth for colors, spacing, typography, motion.
+ *  All values flow through CSS custom properties so the theme can flip at
+ *  runtime via [data-theme="light"] without recomputing styles. Anything
+ *  visual that's reused in 2+ places lives here — not in component files.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Surfaces */
+  --bg-deep: oklch(0.10 0.04 285);
+  --bg-mid:  oklch(0.13 0.045 290);
+  --bg-soft: oklch(0.18 0.045 290);
+
+  /* Ink — text scale, 1 = primary, 4 = quietest */
+  --ink-1: oklch(0.97 0.005 270);
+  --ink-2: oklch(0.78 0.012 280);
+  --ink-3: oklch(0.58 0.018 280);
+  --ink-4: oklch(0.42 0.015 280);
+
+  /* Brand + semantic colors */
+  --accent:      oklch(0.74 0.16 295);
+  --accent-hot:  oklch(0.82 0.18 305);
+  --accent-soft: oklch(0.74 0.16 295 / 0.18);
+  --accent-ring: oklch(0.74 0.16 295 / 0.45);
+  --warm:        oklch(0.82 0.14 60);
+  --green:       oklch(0.78 0.16 145);
+  --red:         oklch(0.68 0.20 25);
+  --amber:       oklch(0.80 0.16 75);
+
+  /* Glass surfaces — used by panels, cards, top bar */
+  --glass-bg:        rgba(255, 255, 255, 0.035);
+  --glass-bg-strong: rgba(255, 255, 255, 0.06);
+  --glass-stroke:    rgba(255, 255, 255, 0.08);
+  --glass-stroke-2:  rgba(255, 255, 255, 0.14);
+
+  /* Layered shadow recipe used by all "card" surfaces */
+  --shadow-card: 0 1px 0 rgba(255,255,255,0.05) inset,
+                 0 8px 32px -8px rgba(0,0,0,0.5),
+                 0 28px 64px -24px rgba(0,0,0,0.45);
+
+  /* Type stack */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  --font-display: 'Instrument Serif', 'Inter', serif;
+
+  /* Radii + layout */
+  --radius-sm: 6px;
+  --radius:    12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+  --max-w: 1240px;
+
+  /* Easing curves */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Light theme — same token names, different values. The boot script in
+   index.html sets [data-theme] before paint to avoid FOUC. */
+:root[data-theme="light"] {
+  --bg-deep: oklch(0.985 0.006 270);
+  --bg-mid:  oklch(0.97 0.012 285);
+  --bg-soft: oklch(0.95 0.018 295);
+
+  --ink-1: oklch(0.20 0.025 280);
+  --ink-2: oklch(0.42 0.02 280);
+  --ink-3: oklch(0.58 0.015 280);
+  --ink-4: oklch(0.72 0.012 280);
+
+  --glass-bg:        rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --glass-stroke:    rgba(0, 0, 0, 0.07);
+  --glass-stroke-2:  rgba(0, 0, 0, 0.12);
+
+  --shadow-card: 0 1px 1px rgba(0,0,0,0.04),
+                 0 8px 24px -8px rgba(20,20,40,0.08),
+                 0 24px 48px -16px rgba(20,20,40,0.06);
+}

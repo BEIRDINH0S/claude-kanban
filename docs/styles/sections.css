@@ -1,0 +1,136 @@
+/* ──────────────────────────────────────────────────────────────────────────
+ *  Sections — generic section frame + reveal helpers + marquee + stats
+ *  ─────────────────────────────────────────────────────────────────
+ *  Anything that's reused across multiple top-level sections (#features,
+ *  #flow, #download).
+ * ────────────────────────────────────────────────────────────────────────── */
+
+section {
+  padding: clamp(80px, 12vw, 160px) 0;
+  position: relative;
+}
+
+.section-head {
+  max-width: 760px;
+  margin-bottom: 56px;
+}
+.section-head .uppercase-tag { color: var(--accent); }
+.section-head h2 {
+  margin: 14px 0 0;
+  font-size: clamp(34px, 5vw, 56px);
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+  font-weight: 700;
+}
+.section-head p {
+  margin: 18px 0 0;
+  color: var(--ink-2);
+  font-size: clamp(15px, 1.3vw, 17.5px);
+  line-height: 1.55;
+  max-width: 60ch;
+}
+
+/* ─── Reveal-on-scroll helpers ────────────────────────────────────────────── *
+ *
+ *  Progressive enhancement: the initial hidden state is *only* applied when
+ *  scripts/reveal.js has run and added .reveals-armed to <body>. If JS fails
+ *  to load (e.g. opening the page from file:// in some browsers), content
+ *  stays visible — animation just doesn't play. No invisible content ever.
+ *
+ *  Two flavors:
+ *    .reveal           — single element fade+rise
+ *    .reveal-stagger   — children fade+rise with a cascading delay
+ * ─────────────────────────────────────────────────────────────────────────── */
+.reveals-armed .reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 800ms var(--ease-out), transform 800ms var(--ease-out);
+}
+.reveals-armed .reveal.in { opacity: 1; transform: none; }
+
+.reveals-armed .reveal-stagger > * {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 700ms var(--ease-out), transform 700ms var(--ease-out);
+}
+.reveals-armed .reveal-stagger.in > * { opacity: 1; transform: none; }
+.reveals-armed .reveal-stagger.in > *:nth-child(1) { transition-delay:  80ms; }
+.reveals-armed .reveal-stagger.in > *:nth-child(2) { transition-delay: 160ms; }
+.reveals-armed .reveal-stagger.in > *:nth-child(3) { transition-delay: 240ms; }
+.reveals-armed .reveal-stagger.in > *:nth-child(4) { transition-delay: 320ms; }
+.reveals-armed .reveal-stagger.in > *:nth-child(5) { transition-delay: 400ms; }
+.reveals-armed .reveal-stagger.in > *:nth-child(6) { transition-delay: 480ms; }
+.reveals-armed .reveal-stagger.in > *:nth-child(7) { transition-delay: 560ms; }
+
+/* ─── Marquee — infinite tech-stack strip ─────────────────────────────────── */
+.marquee {
+  margin-top: 64px;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+  border-top: 1px solid var(--glass-stroke);
+  border-bottom: 1px solid var(--glass-stroke);
+  padding: 18px 0;
+}
+.marquee-track {
+  display: flex; gap: 56px;
+  animation: marquee 36s linear infinite;
+  width: max-content;
+  font-family: var(--font-mono);
+  font-size: 12.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+.marquee-track span { display: inline-flex; align-items: center; gap: 10px; }
+.marquee-track .sep { color: var(--accent); opacity: 0.6; }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }    /* track has duplicated content */
+}
+
+/* ─── Stats row ──────────────────────────────────────────────────────────── *
+ *
+ *  4 cells. Counter values come from data-count and animate up via
+ *  scripts/counters.js when the row enters the viewport.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;                                  /* hairline grid via background */
+  background: var(--glass-stroke);
+  border: 1px solid var(--glass-stroke);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-top: -32px;                         /* lifts row over the marquee */
+}
+.stat {
+  padding: 28px;
+  background: var(--bg-mid);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.stat .num {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: clamp(40px, 5vw, 64px);
+  line-height: 1;
+  color: var(--ink-1);
+  letter-spacing: -0.02em;
+}
+.stat .num .unit {
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-size: 0.42em;
+  color: var(--ink-3);
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+.stat .label {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 880px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .stats { grid-template-columns: 1fr; } }
