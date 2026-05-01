@@ -67,7 +67,7 @@ fn run(app: AppHandle, dir: PathBuf, file: PathBuf) -> Result<(), String> {
 
     // Re-emit once at start so a UI mounted before the first event still
     // gets a fresh status. Cheap — auth_status() just reads the file.
-    let _ = app.emit("auth-changed", super::commands::auth_status());
+    let _ = app.emit("auth-changed", super::commands::auth_status(app.clone()));
 
     loop {
         match rx.recv_timeout(Duration::from_secs(60)) {
@@ -75,7 +75,7 @@ fn run(app: AppHandle, dir: PathBuf, file: PathBuf) -> Result<(), String> {
                 if !event_concerns_credentials(&event, &file) {
                     continue;
                 }
-                let _ = app.emit("auth-changed", super::commands::auth_status());
+                let _ = app.emit("auth-changed", super::commands::auth_status(app.clone()));
             }
             Ok(Err(e)) => {
                 eprintln!("[auth-watch] notify error: {e}");
@@ -84,7 +84,7 @@ fn run(app: AppHandle, dir: PathBuf, file: PathBuf) -> Result<(), String> {
                 // No event in the last 60 s — also re-emit periodically so
                 // the UI catches token-expiry crossings (the `expired` flag
                 // flips when expiresAt passes now+60s). Cheap.
-                let _ = app.emit("auth-changed", super::commands::auth_status());
+                let _ = app.emit("auth-changed", super::commands::auth_status(app.clone()));
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 return Err("watcher channel disconnected".into());

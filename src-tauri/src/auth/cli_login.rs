@@ -123,11 +123,6 @@ pub enum CliLoginEvent {
 }
 
 fn emit(app: &AppHandle, event: CliLoginEvent) {
-    // Verbose tap on every event we send to the front. Plain `eprintln!` so
-    // it lands in `npm run tauri dev`'s console without any feature flag.
-    // The variants we care about most when sign-in misbehaves are
-    // `PromptChoice` (did we detect the prompt?) and `Failed`.
-    eprintln!("[auth-cli][emit] {event:?}");
     if let Err(e) = app.emit("auth-cli-event", &event) {
         eprintln!("[auth-cli] emit failed: {e}");
     }
@@ -243,7 +238,10 @@ fn resolve_path_claude() -> Option<PathBuf> {
 /// canonical Claude Code we ship with the app. PATH is only used when
 /// something stripped the bundled binary from the install (rare — would
 /// indicate a corrupted bundle).
-fn resolve_claude(app: &AppHandle) -> Option<PathBuf> {
+///
+/// `pub(crate)` because the auth-status command shells out to
+/// `claude auth status` and needs the same resolution logic.
+pub(crate) fn resolve_claude(app: &AppHandle) -> Option<PathBuf> {
     resolve_bundled_claude(app).or_else(resolve_path_claude)
 }
 
@@ -326,14 +324,28 @@ pub fn auth_cli_login_start(app: AppHandle) -> Result<(), String> {
         .map_err(|e| format!("openpty: {e}"))?;
 
     let mut cmd = CommandBuilder::new(claude_path.clone());
+    // `claude auth login --claudeai`, NOT `claude login`:
+    //   - `login` alone is not a recognised subcommand on the v2.x binary.
+    //     If the user is already authenticated (e.g. via the macOS
+    //     Keychain), `claude login` falls through and starts a normal
+    //     interactive Claude session that treats "login" as a user prompt
+    //     — modal stays on "Starting…" forever while the CLI waits on a
+    //     workspace-trust dialog we never wired up.
+    //   - The real surface is `claude auth {login,logout,status}`. The
+    //     `--claudeai` flag pre-selects the "Claude subscription" auth
+    //     path so the CLI skips its login-method picker entirely and
+    //     prints the OAuth URL right away — no Inquirer dance, no theme
+    //     picker, ~500 bytes of clean stdout total.
+    cmd.arg("auth");
     cmd.arg("login");
+    cmd.arg("--claudeai");
     // Inherit the parent env: HOME (for ~/.claude write), PATH (so `claude`
     // can shell out to git/etc. if needed), TERM (so Inquirer renders
     // correctly inside our PTY). portable-pty's default behaviour propagates
     // the full env, which is what we want.
 
     let child = pair.slave.spawn_command(cmd).map_err(|e| {
-        format!("spawn `{} login`: {e}", claude_path.display())
+        format!("spawn `{} auth login`: {e}", claude_path.display())
     })?;
 
     // Slave drops here; the master is what we read/write. Holding the slave
@@ -442,42 +454,30 @@ fn run_reader_thread(
                     }
                 }
 
-                // Surface the CLI's interactive pickers (theme, login
-                // method, …) to the front so the user can answer them in
-                // the modal. Until they do, the CLI sits on a prompt screen
-                // and the OAuth URL never comes out — so this is the
-                // critical path of the sign-in. The user's choice comes
-                // back via `auth_cli_login_choose`.
+                // Prompt detection is dormant under `auth login --claudeai`
+                // because that flag skips the CLI's pickers entirely. We
+                // keep `detect_prompts` wired up as defensive coverage in
+                // case Anthropic re-introduces an interactive step (e.g. a
+                // first-run consent screen) — same machinery, no behaviour
+                // change when no marker matches.
                 detect_prompts(&app, &accumulated, &mut prompts);
-
-                // One-shot dump as soon as we have enough buffered to make
-                // a prompt detection decision — lets a user share the raw
-                // strip_ansi output if no marker matched. Last 600 chars is
-                // usually enough to see the full Inquirer screen.
-                static DUMPED: std::sync::atomic::AtomicBool =
-                    std::sync::atomic::AtomicBool::new(false);
-                if !DUMPED.load(std::sync::atomic::Ordering::Relaxed)
-                    && accumulated.len() > 400
-                    && prompts.emitted.is_empty()
-                {
-                    DUMPED.store(true, std::sync::atomic::Ordering::Relaxed);
-                    let tail = &accumulated[accumulated.len().saturating_sub(600)..];
-                    eprintln!(
-                        "[auth-cli][dump] accumulated tail (no prompt yet) ----\n{tail}\n----"
-                    );
-                }
 
                 if !prompts.success_signaled
                     && (contains_collapsed(&accumulated, "Logged in as")
                         || contains_collapsed(&accumulated, "Login successful"))
                 {
-                    // Credentials are written by now; the credentials watcher
-                    // will independently fire `auth-changed`. We emit
-                    // Completed ourselves and kill the CLI before it can
-                    // launch the post-login interactive session (which would
-                    // never terminate, leaving us hanging on `wait()`).
+                    // Credentials live in the Keychain on macOS for
+                    // claude v2.x — the credentials-file watcher never
+                    // fires because no file is ever written. We emit
+                    // Completed AND fan out an `auth-changed` event with
+                    // a fresh `auth_status` so the Settings card flips
+                    // to "Signed in" right away, then kill the CLI to
+                    // stop it from chaining into a never-terminating
+                    // interactive session.
                     prompts.success_signaled = true;
                     emit(&app, CliLoginEvent::Completed);
+                    let new_status = crate::auth::commands::auth_status(app.clone());
+                    let _ = app.emit("auth-changed", new_status);
                     if let Some(mut k) = session.killer.lock().unwrap().take() {
                         let _ = k.kill();
                     }
@@ -647,14 +647,7 @@ fn detect_prompts(app: &AppHandle, accumulated: &str, state: &mut PromptState) {
         if state.emitted.contains(def.id) {
             continue;
         }
-        let hit = contains_collapsed(accumulated, def.marker);
-        if hit {
-            eprintln!(
-                "[auth-cli][detect] marker '{}' matched (id={}, accumulated_len={})",
-                def.marker,
-                def.id,
-                accumulated.len()
-            );
+        if contains_collapsed(accumulated, def.marker) {
             state.emitted.insert(def.id.to_string());
             emit(
                 app,
