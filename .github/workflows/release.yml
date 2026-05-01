@@ -45,6 +45,34 @@ jobs:
       - name: Install JS dependencies
         run: npm install
 
+      # Le tag git (`vX.Y.Z`) est la source de vérité pour la version.
+      # Sans ce step, les bundles produits gardent le `0.1.0` hardcodé
+      # dans tauri.conf.json / Cargo.toml / package.json — donc le DMG
+      # s'appelle `claude-kanban_0.1.0_aarch64.dmg` et la fenêtre About
+      # affiche 0.1.0 quel que soit le tag. On patche les 3 fichiers en
+      # CI uniquement (pas commité), avant le bundle.
+      - name: Inject version from tag
+        shell: bash
+        run: |
+          set -e
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Tag = $GITHUB_REF_NAME -> version = $VERSION"
+          node -e "
+            const fs = require('fs');
+            const v = process.argv[1];
+            for (const f of ['package.json', 'src-tauri/tauri.conf.json']) {
+              const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+              j.version = v;
+              fs.writeFileSync(f, JSON.stringify(j, null, 2) + '\n');
+            }
+            const cargoPath = 'src-tauri/Cargo.toml';
+            const cargo = fs.readFileSync(cargoPath, 'utf8');
+            fs.writeFileSync(
+              cargoPath,
+              cargo.replace(/^version = \"[^\"]+\"/m, 'version = \"' + v + '\"')
+            );
+          " "$VERSION"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
