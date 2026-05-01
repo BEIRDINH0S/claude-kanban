@@ -244,7 +244,7 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
             disabled={pushing}
             title="git push -u origin <branche>"
             aria-label="Push la branche du worktree"
-            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-emerald-300 disabled:opacity-40 dark:hover:bg-white/5"
+            className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-emerald-700 disabled:opacity-40 dark:hover:bg-white/5 dark:hover:text-emerald-300"
           >
             {pushing ? (
               <LoaderCircle
@@ -485,25 +485,25 @@ function WorktreeStatusLine({
         onClick={handleOpenWorktree}
         title="Ouvrir le worktree dans le Finder"
         aria-label="Ouvrir le worktree"
-        className="shrink-0 rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-emerald-300 dark:hover:bg-white/5"
+        className="shrink-0 rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-emerald-700 dark:hover:bg-white/5 dark:hover:text-emerald-300"
       >
         <FolderOpen className="size-3" strokeWidth={1.75} />
       </button>
-      <span className="flex items-center gap-1 text-emerald-300/85">
+      <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300/85">
         <span>⎇</span>
         <span className="truncate">{branch}</span>
       </span>
       {status && (status.ahead > 0 || status.behind > 0 || status.dirty) && (
         <span className="flex items-center gap-1.5 text-[var(--text-muted)]">
           {status.ahead > 0 && (
-            <span className="text-emerald-300/90">↑{status.ahead}</span>
+            <span className="text-emerald-700 dark:text-emerald-300/90">↑{status.ahead}</span>
           )}
           {status.behind > 0 && (
-            <span className="text-rose-300/90">↓{status.behind}</span>
+            <span className="text-rose-700 dark:text-rose-300/90">↓{status.behind}</span>
           )}
           {status.dirty && (
-            <span className="flex items-center gap-1 text-amber-300/90">
-              <span className="size-1.5 rounded-full bg-amber-400" />
+            <span className="flex items-center gap-1 text-amber-700 dark:text-amber-300/90">
+              <span className="size-1.5 rounded-full bg-amber-500 dark:bg-amber-400" />
               dirty
             </span>
           )}
@@ -525,14 +525,16 @@ function WorktreeStatusLine({
 }
 
 // Same shared palette as CardItem. Kept inline to avoid a one-export module;
-// if a third surface needs it we'll lift to its own file.
+// if a third surface needs it we'll lift to its own file. Each entry has a
+// light-theme + dark-theme pair via the rebound `dark:` variant — without
+// the light variant, /20 backdrops + 200-text tones disappear on white.
 const TAG_COLORS = [
-  "bg-sky-400/20 text-sky-200 border-sky-400/40",
-  "bg-amber-400/20 text-amber-200 border-amber-400/40",
-  "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
-  "bg-violet-400/20 text-violet-200 border-violet-400/40",
-  "bg-rose-400/20 text-rose-200 border-rose-400/40",
-  "bg-cyan-400/20 text-cyan-200 border-cyan-400/40",
+  "bg-sky-100 text-sky-800 border-sky-500/50 dark:bg-sky-400/20 dark:text-sky-200 dark:border-sky-400/40",
+  "bg-amber-100 text-amber-800 border-amber-500/50 dark:bg-amber-400/20 dark:text-amber-200 dark:border-amber-400/40",
+  "bg-emerald-100 text-emerald-800 border-emerald-500/50 dark:bg-emerald-400/20 dark:text-emerald-200 dark:border-emerald-400/40",
+  "bg-violet-100 text-violet-800 border-violet-500/50 dark:bg-violet-400/20 dark:text-violet-200 dark:border-violet-400/40",
+  "bg-rose-100 text-rose-800 border-rose-500/50 dark:bg-rose-400/20 dark:text-rose-200 dark:border-rose-400/40",
+  "bg-cyan-100 text-cyan-800 border-cyan-500/50 dark:bg-cyan-400/20 dark:text-cyan-200 dark:border-cyan-400/40",
 ];
 function tagColor(tag: string): string {
   let h = 0;
@@ -824,7 +826,7 @@ function ErrorBanner({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex items-start gap-2.5 border-b border-red-400/30 bg-red-400/8 px-6 py-2.5 text-red-300/90">
+    <div className="flex items-start gap-2.5 border-b border-red-500/40 bg-red-100/40 px-6 py-2.5 text-red-700 dark:border-red-400/30 dark:bg-red-400/8 dark:text-red-300/90">
       <TriangleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
       <p className="flex-1 font-mono text-[11.5px] leading-relaxed break-words">
         {message}
@@ -833,7 +835,7 @@ function ErrorBanner({
         <button
           type="button"
           onClick={onRetry}
-          className="-mt-0.5 shrink-0 flex items-center gap-1 rounded-md border border-red-400/40 px-2 py-1 text-[11px] font-medium text-red-200 hover:bg-red-400/10"
+          className="-mt-0.5 shrink-0 flex items-center gap-1 rounded-md border border-red-500/50 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 dark:border-red-400/40 dark:text-red-200 dark:hover:bg-red-400/10"
           aria-label="Réessayer"
         >
           <RotateCw className="size-3" strokeWidth={1.75} />
@@ -843,7 +845,7 @@ function ErrorBanner({
       <button
         type="button"
         onClick={onDismiss}
-        className="-mt-1 -mr-1 shrink-0 rounded-md p-1 text-red-300/70 hover:bg-red-400/10 hover:text-red-200"
+        className="-mt-1 -mr-1 shrink-0 rounded-md p-1 text-red-600/80 hover:bg-red-100 hover:text-red-700 dark:text-red-300/70 dark:hover:bg-red-400/10 dark:hover:text-red-200"
         aria-label="Ignorer l'erreur"
       >
         <X className="size-3.5" strokeWidth={1.5} />

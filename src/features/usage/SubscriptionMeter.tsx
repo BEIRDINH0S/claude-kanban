@@ -157,7 +157,7 @@ function FullView({
           <h2 className="mt-1 text-[14px] font-semibold text-[var(--text-primary)]">
             {data?.planName ?? "—"}
             {data?.planName && stale && (
-              <span className="ml-2 font-mono text-[10.5px] text-amber-300/80">
+              <span className="ml-2 font-mono text-[10.5px] text-amber-700 dark:text-amber-300/80">
                 synchro…
               </span>
             )}
@@ -183,7 +183,7 @@ function FullView({
           Chargement…
         </p>
       ) : data.apiUnavailable && !stale ? (
-        <p className="mt-3 font-mono text-[11px] text-amber-300/80">
+        <p className="mt-3 font-mono text-[11px] text-amber-700 dark:text-amber-300/80">
           {errorHint ?? "Indisponible"}
         </p>
       ) : (
@@ -203,7 +203,7 @@ function FullView({
             stale={stale}
           />
           {errorHint && stale && (
-            <p className="font-mono text-[10.5px] text-amber-300/80">
+            <p className="font-mono text-[10.5px] text-amber-700 dark:text-amber-300/80">
               {errorHint}
             </p>
           )}

@@ -113,19 +113,21 @@ function DiffLine({ seg }: { seg: DiffSegment }) {
       </div>
     );
   }
+  // Light theme needs a stronger tint than the /10 we use in dark — over a
+  // white-ish gradient page a 10% green/red wash is essentially invisible.
   const bg =
     seg.kind === "del"
-      ? "bg-red-500/10"
+      ? "bg-red-200/60 dark:bg-red-500/10"
       : seg.kind === "add"
-      ? "bg-emerald-500/10"
+      ? "bg-emerald-200/60 dark:bg-emerald-500/10"
       : "";
   const prefixChar =
     seg.kind === "del" ? "-" : seg.kind === "add" ? "+" : " ";
   const prefixColor =
     seg.kind === "del"
-      ? "text-red-400/80"
+      ? "text-red-700 dark:text-red-400/80"
       : seg.kind === "add"
-      ? "text-emerald-400/80"
+      ? "text-emerald-700 dark:text-emerald-400/80"
       : "text-[var(--text-muted)]";
   return (
     <div className={`flex ${bg}`}>

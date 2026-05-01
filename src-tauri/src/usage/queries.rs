@@ -234,7 +234,7 @@ pub fn breakdown_by_card(
             COALESCE(SUM(u.cache_creation_1h_input_tokens), 0),
             COALESCE(SUM(u.web_search_requests), 0),
             COALESCE(SUM(u.web_fetch_requests), 0),
-            COALESCE(SUM(u.cost_usd_local), 0.0),
+            COALESCE(SUM(u.cost_usd_local), 0.0) AS cost_usd,
             COALESCE(COUNT(*), 0),
             u.card_id,
             c.title

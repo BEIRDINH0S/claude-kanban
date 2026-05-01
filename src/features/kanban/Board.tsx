@@ -288,7 +288,7 @@ export function Board() {
             <>
               <BoardHeader onCreate={() => setCreateOpen(true)} />
               {error && (
-                <div className="mx-6 mt-3 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-2 text-xs text-red-300">
+                <div className="mx-6 mt-3 rounded-xl border border-red-500/40 bg-red-100/60 px-4 py-2 text-xs text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300">
                   {error}
                 </div>
               )}

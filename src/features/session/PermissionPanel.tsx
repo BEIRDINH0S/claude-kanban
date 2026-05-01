@@ -14,19 +14,19 @@ export function PermissionPanel({ cardId }: Props) {
   if (!pending) return null;
 
   return (
-    <div className="border-t border-amber-400/30 bg-amber-400/8 px-6 py-3">
+    <div className="border-t border-amber-500/40 bg-amber-100/40 px-6 py-3 dark:border-amber-400/30 dark:bg-amber-400/8">
       <div className="mx-auto flex max-w-[760px] flex-col gap-2.5">
-        <div className="flex items-center gap-2 text-amber-300/90">
+        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300/90">
           <ShieldAlert className="size-4 shrink-0" strokeWidth={1.75} />
           <span className="text-[12px] font-medium">
             Claude veut utiliser un outil
           </span>
         </div>
-        <pre className="max-h-32 overflow-y-auto rounded-lg border border-[var(--glass-stroke)] bg-black/10 p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-[var(--text-secondary)] dark:bg-white/5">
+        <pre className="max-h-32 overflow-y-auto rounded-lg border border-[var(--glass-stroke)] bg-black/5 p-2.5 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-[var(--text-secondary)] dark:bg-white/5">
           {formatToolUse(pending.toolName, pending.input)}
         </pre>
         {err && (
-          <div className="flex items-start gap-2 rounded-lg border border-red-400/30 bg-red-400/10 px-2.5 py-2 text-red-300/90">
+          <div className="flex items-start gap-2 rounded-lg border border-red-500/40 bg-red-100/60 px-2.5 py-2 text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300/90">
             <TriangleAlert
               className="mt-0.5 size-3.5 shrink-0"
               strokeWidth={1.75}
@@ -51,7 +51,7 @@ export function PermissionPanel({ cardId }: Props) {
             onClick={() => void always()}
             disabled={!!busy}
             title={`Ajoute la règle "${suggested}" puis approuve.`}
-            className="flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs font-medium text-emerald-200 hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-600/50 bg-emerald-100/70 px-3 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-200/70 disabled:cursor-not-allowed disabled:opacity-40 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20"
           >
             <ShieldCheck className="size-3.5" strokeWidth={1.75} />
             {busy === "always" ? "…" : (

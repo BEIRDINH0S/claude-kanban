@@ -104,7 +104,7 @@ export function UsagePage() {
         </header>
 
         {error && (
-          <p className="mt-4 rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 font-mono text-[11px] text-red-300">
+          <p className="mt-4 rounded-xl border border-red-500/40 bg-red-100/60 px-3 py-2 font-mono text-[11px] text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300">
             Erreur de chargement · {error}
           </p>
         )}
