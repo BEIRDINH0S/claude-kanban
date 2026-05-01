@@ -1,5 +1,5 @@
-import { LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { LoaderCircle, Pencil, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { gitCardDiff, type DiffResult } from "../../ipc/git";
 
@@ -10,6 +10,14 @@ interface Props {
 /**
  * Diff panel for a card with a worktree. Shows `git diff <base>` rendered
  * with line-level coloring. Auto-fetches on mount + manual refresh button.
+ *
+ * Base override: by default we diff against the auto-detected base
+ * (origin/main → main → master). Click the "vs <base>" label to pin a
+ * custom ref (`origin/develop`, `HEAD~3`, a tag, …) — useful when the
+ * card branched off something other than main, or to compare against a
+ * specific point in history. The override is session-scoped (resets when
+ * navigating to another card), and the small "×" next to it goes back to
+ * auto-detect.
  *
  * Coloring rules (kept simple — no syntax highlighting yet):
  *   - `diff --git`, `index`, `---`, `+++` → muted blue, file separators
@@ -22,12 +30,16 @@ export function DiffView({ cardId }: Props) {
   const [data, setData] = useState<DiffResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // null = auto-detect (let Rust pick origin/main → main → master).
+  // A non-empty string pins a specific ref for the duration of this card view.
+  const [customBase, setCustomBase] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
-  const fetch = async () => {
+  const fetch = async (override?: string | null) => {
     setLoading(true);
     setError(null);
     try {
-      const r = await gitCardDiff(cardId);
+      const r = await gitCardDiff(cardId, override ?? undefined);
       setData(r);
     } catch (e) {
       setError(String(e));
@@ -37,17 +49,34 @@ export function DiffView({ cardId }: Props) {
   };
 
   useEffect(() => {
-    void fetch();
+    // Card change resets the override — a custom base for "card A" rarely
+    // makes sense for "card B" (different project, different branch).
+    setCustomBase(null);
+    setEditing(false);
+    void fetch(null);
     // We deliberately re-fetch only when the user navigates to a different
     // card. Fresh data after a Claude turn is delivered via the heartbeat
     // and the manual refresh button below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId]);
 
+  const applyBase = (raw: string) => {
+    const next = raw.trim() || null;
+    setCustomBase(next);
+    setEditing(false);
+    void fetch(next);
+  };
+
+  const resetBase = () => {
+    setCustomBase(null);
+    setEditing(false);
+    void fetch(null);
+  };
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--glass-stroke)] px-6 py-2">
-        <p className="font-mono text-[11px] text-[var(--text-muted)]">
+        <div className="flex min-w-0 flex-1 items-center gap-2 font-mono text-[11px] text-[var(--text-muted)]">
           {loading ? (
             <span className="flex items-center gap-1.5">
               <LoaderCircle
@@ -58,25 +87,53 @@ export function DiffView({ cardId }: Props) {
             </span>
           ) : data ? (
             <>
-              <span className="text-[var(--text-secondary)]">
-                vs {data.base || "?"}
-              </span>
+              {editing ? (
+                <BaseInput
+                  initial={customBase ?? data.base ?? ""}
+                  onApply={applyBase}
+                  onCancel={() => setEditing(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  title="Choisir une autre base de comparaison"
+                  className="group flex items-center gap-1 rounded px-1 py-0.5 -mx-1 text-[var(--text-secondary)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+                >
+                  <span>vs {data.base || "?"}</span>
+                  <Pencil
+                    className="size-2.5 opacity-0 transition-opacity group-hover:opacity-60"
+                    strokeWidth={2}
+                  />
+                </button>
+              )}
+              {customBase && !editing && (
+                <button
+                  type="button"
+                  onClick={resetBase}
+                  title="Revenir à la base auto-détectée"
+                  aria-label="Revenir à la base par défaut"
+                  className="rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+                >
+                  <X className="size-3" strokeWidth={2} />
+                </button>
+              )}
               {data.stat && (
-                <span className="ml-2 text-[var(--text-muted)]">
+                <span className="ml-1 truncate text-[var(--text-muted)]">
                   · {data.stat}
                 </span>
               )}
               {data.truncated && (
-                <span className="ml-2 text-amber-700 dark:text-amber-300/90">· tronqué</span>
+                <span className="text-amber-700 dark:text-amber-300/90">· tronqué</span>
               )}
             </>
           ) : (
             <span>—</span>
           )}
-        </p>
+        </div>
         <button
           type="button"
-          onClick={() => void fetch()}
+          onClick={() => void fetch(customBase)}
           disabled={loading}
           title="Recalculer le diff"
           aria-label="Recalculer"
@@ -109,6 +166,57 @@ export function DiffView({ cardId }: Props) {
 }
 
 /**
+ * Inline editor for the diff base ref. Auto-focuses on mount, applies on
+ * Enter, cancels on Escape, applies on blur (so a click outside commits
+ * the value rather than discarding it — matches GitHub's behaviour for
+ * inline rename fields).
+ */
+function BaseInput({
+  initial,
+  onApply,
+  onCancel,
+}: {
+  initial: string;
+  onApply: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, []);
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-[var(--text-secondary)]">vs</span>
+      <input
+        ref={ref}
+        type="text"
+        value={value}
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="off"
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onApply(value);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
+          }
+        }}
+        onBlur={() => onApply(value)}
+        placeholder="origin/main"
+        className="w-44 rounded border border-[var(--glass-stroke)] bg-transparent px-1.5 py-0.5 font-mono text-[11px] text-[var(--text-primary)] outline-none focus:border-[var(--color-accent)]"
+      />
+    </div>
+  );
+}
+
+/**
  * Pre-formatted diff body. We split-and-render so each line gets its own
  * color class — cheaper than a full syntax-highlighter and good enough for
  * review. Wraps in <pre> for monospace + whitespace preservation.
@@ -121,7 +229,7 @@ function DiffBody({ text }: { text: string }) {
     <pre className="font-mono text-[11.5px] leading-relaxed whitespace-pre">
       {lines.map((line, i) => (
         <div key={i} className={lineClass(line)}>
-          {line || " "}
+          {line || " "}
         </div>
       ))}
     </pre>
