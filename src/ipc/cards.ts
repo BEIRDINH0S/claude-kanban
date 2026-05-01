@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Card, CardColumn } from "../types/card";
+import type { Card, CardColumn, PermissionMode } from "../types/card";
 
 export function listCards(projectId: string): Promise<Card[]> {
   return invoke<Card[]>("list_cards", { projectId });
@@ -49,6 +49,40 @@ export function updateCard(id: string, patch: CardPatch): Promise<Card> {
     title: patch.title,
     projectPath: patch.projectPath,
     tags: patch.tags,
+  });
+}
+
+/**
+ * Per-card SDK options (model, permission mode, system prompt append, max
+ * turns, additional dirs). The caller passes the FULL desired state every
+ * time — this mirrors the Rust command's overwrite-all semantics and avoids
+ * a tri-state Option<Option<T>> dance that serde can't disambiguate cleanly
+ * over Tauri's wire format.
+ *
+ * `null` (or empty string / 0) on any field = "use SDK default" (= NULL in
+ * the DB column → sidecar omits the SDK option entirely).
+ */
+export interface SessionConfigInput {
+  model?: string | null;
+  permissionMode?: PermissionMode | null;
+  systemPromptAppend?: string | null;
+  maxTurns?: number | null;
+  /** Newline-separated absolute paths. Rust splits/trims/dedupes before
+   *  storing. */
+  additionalDirectories?: string | null;
+}
+
+export function setCardSessionConfig(
+  id: string,
+  cfg: SessionConfigInput,
+): Promise<Card> {
+  return invoke<Card>("set_card_session_config", {
+    id,
+    model: cfg.model ?? null,
+    permissionMode: cfg.permissionMode ?? null,
+    systemPromptAppend: cfg.systemPromptAppend ?? null,
+    maxTurns: cfg.maxTurns ?? null,
+    additionalDirectories: cfg.additionalDirectories ?? null,
   });
 }
 

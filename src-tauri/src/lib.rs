@@ -99,6 +99,7 @@ pub fn run() {
             commands::cards::delete_card,
             commands::cards::restore_card,
             commands::cards::update_card,
+            commands::cards::set_card_session_config,
             commands::cards::move_card,
             commands::cards::git_card_status,
             commands::cards::git_card_diff,
@@ -126,6 +127,7 @@ pub fn run() {
             commands::usage::usage_overview,
             commands::usage::usage_rebuild_index,
             commands::usage::get_subscription_usage,
+            commands::user_commands::list_user_commands,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

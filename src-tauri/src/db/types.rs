@@ -58,6 +58,27 @@ pub struct Card {
     /// session runs in `project_path` directly.
     #[serde(default)]
     pub worktree_path: Option<String>,
+    /// Claude model alias ("sonnet" / "opus" / "haiku") or full id. NULL =
+    /// let the SDK pick the plan default. Forwarded as `model` SDK option.
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Permission mode forwarded as the SDK's `permissionMode` option.
+    /// One of "default" | "acceptEdits" | "plan" | "bypassPermissions".
+    /// NULL = "default" (per-tool prompts).
+    #[serde(default)]
+    pub permission_mode: Option<String>,
+    /// Extra prose appended to Claude Code's built-in system prompt. The
+    /// sidecar wraps this into `systemPrompt: { type: "preset", preset:
+    /// "claude_code", append: ... }` when non-empty.
+    #[serde(default)]
+    pub system_prompt_append: Option<String>,
+    /// Hard cap on agent turns per query (`maxTurns`). NULL = no cap.
+    #[serde(default)]
+    pub max_turns: Option<i64>,
+    /// Newline-separated absolute paths granted to the SDK on top of cwd.
+    /// Forwarded verbatim (split on `\n`) as `additionalDirectories`.
+    #[serde(default)]
+    pub additional_directories: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

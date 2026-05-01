@@ -162,8 +162,59 @@ const pendingByRequest = new Map(); // requestId → SessionHandle (before init)
  */
 const pendingPermissions = new Map();
 
+/**
+ * Build the partial SDK options dict from a per-card session config blob.
+ * Rust serialises `SessionConfig` with `skip_serializing_if`, so absent
+ * fields are simply missing from the object — no need to distinguish
+ * `undefined` from `null`. Aliases ("sonnet", "opus", "haiku") are
+ * forwarded verbatim: the Anthropic SDK resolves them server-side, which
+ * keeps us out of the business of tracking the latest model ids.
+ *
+ * `systemPromptAppend` is wrapped into the SDK's preset shape — the alt
+ * (raw string) would replace the entire Claude Code system prompt and
+ * silently break tool routing. The preset+append form keeps Claude Code's
+ * defaults intact and just bolts the user's prose on the end.
+ */
+function buildSdkOptionsFromConfig(config) {
+  const out = {};
+  if (!config || typeof config !== "object") return out;
+  if (typeof config.model === "string" && config.model.trim()) {
+    out.model = config.model.trim();
+  }
+  if (
+    typeof config.permissionMode === "string" &&
+    ["default", "acceptEdits", "plan", "bypassPermissions"].includes(
+      config.permissionMode,
+    )
+  ) {
+    out.permissionMode = config.permissionMode;
+  }
+  if (
+    typeof config.systemPromptAppend === "string" &&
+    config.systemPromptAppend.trim()
+  ) {
+    out.systemPrompt = {
+      type: "preset",
+      preset: "claude_code",
+      append: config.systemPromptAppend,
+    };
+  }
+  if (typeof config.maxTurns === "number" && config.maxTurns > 0) {
+    out.maxTurns = config.maxTurns;
+  }
+  if (
+    Array.isArray(config.additionalDirectories) &&
+    config.additionalDirectories.length > 0
+  ) {
+    out.additionalDirectories = config.additionalDirectories
+      .map((s) => (typeof s === "string" ? s.trim() : ""))
+      .filter(Boolean);
+  }
+  return out;
+}
+
 class SessionHandle {
-  constructor({ requestId, cardId, title, projectPath, resumeSessionId }) {
+  constructor({ requestId, cardId, title, projectPath, resumeSessionId, config }) {
     this.requestId = requestId;
     this.cardId = cardId;
     // For a resume we pre-seed sessionId so events emitted before the new
@@ -198,6 +249,17 @@ class SessionHandle {
     // follow-up the user typed in the chat input.
     this.push(title);
 
+    // Per-card overrides (model, permissionMode, systemPrompt, maxTurns,
+    // additionalDirectories) come from the kanban DB via SessionConfig.
+    // We compute them once and merge AFTER the defaults so the user's
+    // choice always wins. `permissionMode` defaults to "default" but the
+    // override happily replaces it with "plan"/"acceptEdits"/etc.
+    //
+    // `bypassPermissions` is a special case: when the user picks it, the
+    // SDK skips its own canUseTool wiring entirely, so the kanban
+    // permission UX (auto-rules + Review parking) doesn't apply. We still
+    // pass canUseTool below — the SDK ignores it in bypass mode.
+    const cfgOptions = buildSdkOptionsFromConfig(config);
     this.q = query({
       prompt: promptIterable,
       options: {
@@ -212,6 +274,7 @@ class SessionHandle {
         ...(CLAUDE_EXEC_OVERRIDE
           ? { pathToClaudeCodeExecutable: CLAUDE_EXEC_OVERRIDE }
           : {}),
+        ...cfgOptions,
       },
     });
 

@@ -7,9 +7,65 @@ use tokio::sync::oneshot;
 
 use crate::db::{is_card_project_archived, lock_recover, DbState};
 use crate::session_host::{
-    protocol::{PermissionDecision, SidecarInbound},
+    protocol::{PermissionDecision, SessionConfig, SidecarInbound},
     SessionHost,
 };
+
+/// Read the per-card session config (model / permission mode / etc.) from
+/// the cards row and convert it to the wire-shape the sidecar expects.
+/// Empty additional_directories collapses to an empty Vec — the protocol
+/// skips it via `skip_serializing_if = Vec::is_empty` so we don't send
+/// noise across the IPC channel.
+fn load_session_config(
+    conn: &rusqlite::Connection,
+    card_id: &str,
+) -> SessionConfig {
+    let row: Result<
+        (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+            Option<String>,
+        ),
+        _,
+    > = conn.query_row(
+        r#"SELECT model, permission_mode, system_prompt_append, max_turns,
+                  additional_directories
+             FROM cards WHERE id = ?1"#,
+        [card_id],
+        |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+            ))
+        },
+    );
+    let Ok((model, permission_mode, system_prompt_append, max_turns, dirs)) =
+        row
+    else {
+        return SessionConfig::default();
+    };
+    let additional_directories: Vec<String> = dirs
+        .as_deref()
+        .map(|raw| {
+            raw.split('\n')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    SessionConfig {
+        model,
+        permission_mode,
+        system_prompt_append,
+        max_turns,
+        additional_directories,
+    }
+}
 
 const ARCHIVED_ERR: &str = "Ce projet est archivé en lecture seule.";
 
@@ -35,7 +91,9 @@ pub async fn start_session(
     //    owning project is an imported snapshot (read-only). When the card
     //    has a worktree_path, that becomes the cwd handed to the SDK so
     //    parallel cards on the same repo never collide on filesystem state.
-    let project_path = {
+    //    Also pull the per-card session config (model, permission mode, …)
+    //    in the same lock so the sidecar gets a consistent snapshot.
+    let (project_path, config) = {
         let db = app.state::<DbState>();
         let conn = lock_recover(&db.conn);
         if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
@@ -55,7 +113,8 @@ pub async fn start_session(
         if existing.is_some() {
             return Err("card already has a session — use send_message".into());
         }
-        worktree_path.unwrap_or(project_path)
+        let cfg = load_session_config(&conn, &card_id);
+        (worktree_path.unwrap_or(project_path), cfg)
     };
 
     // 2. Move the card to In Progress immediately so the user gets feedback
@@ -93,6 +152,7 @@ pub async fn start_session(
             title: prompt,
             project_path,
             resume_session_id: None,
+            config,
         })
         .map_err(|e| format!("send to sidecar: {e}"))?;
     }
@@ -223,7 +283,7 @@ pub async fn resume_session(
     if prompt.is_empty() {
         return Err("resume needs a first message".into());
     }
-    let (project_path, session_id) = {
+    let (project_path, session_id, config) = {
         let db = app.state::<DbState>();
         let conn = lock_recover(&db.conn);
         if is_card_project_archived(&conn, &card_id).unwrap_or(false) {
@@ -236,9 +296,10 @@ pub async fn resume_session(
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
             )
             .map_err(|e| format!("card not found: {e}"))?;
+        let cfg = load_session_config(&conn, &card_id);
         // Same fallback as start_session: prefer the per-card worktree if
         // we created one, fall back to the bare project_path.
-        (row.1.unwrap_or(row.0), row.2)
+        (row.1.unwrap_or(row.0), row.2, cfg)
     };
     let session_id = session_id.ok_or("card has no session to resume")?;
 
@@ -273,6 +334,7 @@ pub async fn resume_session(
             title: prompt,
             project_path,
             resume_session_id: Some(session_id),
+            config,
         })
         .map_err(|e| format!("send to sidecar: {e}"))?;
     }

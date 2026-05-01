@@ -1,0 +1,329 @@
+import type { Card, PermissionMode } from "../../types/card";
+import { useCardsStore } from "../../stores/cardsStore";
+import { useMessagesStore } from "../../stores/messagesStore";
+import { useUiStore } from "../../stores/uiStore";
+import { useUsageIndexStore } from "../../stores/usageIndexStore";
+import { useToastsStore } from "../../stores/toastsStore";
+import { stopSession as ipcStopSession } from "../../ipc/sessions";
+import type { SdkEvent } from "../../types/chat";
+
+/**
+ * Built-in slash commands surfaced in the message input. Mirrors a subset
+ * of Claude Code's CLI slash commands (`/clear`, `/cost`, `/help`, …) but
+ * adapted to the kanban context — most commands persist on the card and
+ * apply on the next session start, since we can't mutate a live SDK
+ * `query()` mid-stream.
+ *
+ * Each command exposes:
+ *   - `name` / `aliases`   — what the user types after `/`
+ *   - `summary` / `usage`  — what shows in the slash menu
+ *   - `run`                — the handler. Receives the parsed arg (text
+ *                            after the command name) and the owning card.
+ *                            Returns `void` synchronously or a Promise.
+ *
+ * Commands DO NOT echo themselves into the chat as user-input — that would
+ * leak control sequences into the SDK's transcript. They append a synthetic
+ * "system" SDK event instead, so the user sees what happened without
+ * cluttering Claude's context.
+ */
+export interface SlashCommand {
+  name: string;
+  /** Alternate spellings the parser also accepts. */
+  aliases?: string[];
+  summary: string;
+  /** "/clear" or "/model sonnet" — shown in the menu. */
+  usage: string;
+  /**
+   * @returns a short message we surface as a toast, or `void` if the
+   *          command already pushed its own UI feedback.
+   */
+  run: (args: string, card: Card) => void | string | Promise<void | string>;
+}
+
+/**
+ * Append a synthetic system row to the transcript so commands have visible
+ * feedback in the chat. We piggyback on the existing SdkEvent shape with a
+ * custom `type: "system_command"` — the MessageList will render it like
+ * any other system event (currently dropped, but keeping it future-proof).
+ * In parallel we push a toast so the user gets immediate feedback in the
+ * common case where the chat is the focused area.
+ */
+function pushFeedback(cardId: string, message: string): void {
+  const evt: SdkEvent = {
+    type: "system_command",
+    subtype: "info",
+    text: message,
+  } as SdkEvent;
+  useMessagesStore.getState().appendSdkEvent(cardId, evt);
+  useToastsStore.getState().push({ message, ttlMs: 4000 });
+}
+
+/**
+ * Set a per-card session config field while preserving the rest. We always
+ * round-trip through the store's `setSessionConfig` (which overwrites all
+ * fields) so the saved blob stays consistent.
+ */
+async function patchConfig(
+  card: Card,
+  patch: {
+    model?: string | null;
+    permissionMode?: PermissionMode | null;
+    systemPromptAppend?: string | null;
+    maxTurns?: number | null;
+    additionalDirectories?: string | null;
+  },
+): Promise<void> {
+  await useCardsStore.getState().setSessionConfig(card.id, {
+    model: patch.model !== undefined ? patch.model : card.model,
+    permissionMode:
+      patch.permissionMode !== undefined ? patch.permissionMode : card.permissionMode,
+    systemPromptAppend:
+      patch.systemPromptAppend !== undefined
+        ? patch.systemPromptAppend
+        : card.systemPromptAppend,
+    maxTurns: patch.maxTurns !== undefined ? patch.maxTurns : card.maxTurns,
+    additionalDirectories:
+      patch.additionalDirectories !== undefined
+        ? patch.additionalDirectories
+        : card.additionalDirectories,
+  });
+}
+
+/** Format USD with 4 decimals like the rest of the app. */
+function formatCost(cost: number): string {
+  return `$${cost.toFixed(4)}`;
+}
+
+export const SLASH_COMMANDS: SlashCommand[] = [
+  {
+    name: "help",
+    aliases: ["?"],
+    summary: "Liste les commandes disponibles",
+    usage: "/help",
+    run: (_args, card) => {
+      const lines = SLASH_COMMANDS.map(
+        (c) => `${c.usage} — ${c.summary}`,
+      ).join("\n");
+      pushFeedback(card.id, `Commandes disponibles :\n${lines}`);
+    },
+  },
+  {
+    name: "clear",
+    summary: "Efface le transcript local (la session SDK n'est pas affectée)",
+    usage: "/clear",
+    run: (_args, card) => {
+      // Clear the in-memory chat. The on-disk JSONL stays intact — the SDK
+      // still has its own context. Re-zooming the card will rehydrate from
+      // disk, so this is a "give me a clean visual workspace" gesture, not
+      // a true conversation reset.
+      useMessagesStore.getState().clear(card.id);
+      useToastsStore.getState().push({
+        message:
+          "Transcript local effacé. La session SDK garde son contexte ; ferme et rouvre la carte pour rehydrater depuis disque.",
+        ttlMs: 5000,
+      });
+    },
+  },
+  {
+    name: "cost",
+    summary: "Affiche le coût cumulé pour cette carte",
+    usage: "/cost",
+    run: (_args, card) => {
+      const data = useUsageIndexStore.getState().data;
+      const row = data?.byCard.find((c) => c.cardId === card.id);
+      const cost = row?.summary.costUsd ?? 0;
+      const tokens = row?.summary;
+      const breakdown = tokens
+        ? `\nTokens · in ${tokens.inputTokens} · out ${tokens.outputTokens} · cache_read ${tokens.cacheReadTokens} · cache_create ${tokens.cacheCreationTokens}`
+        : "";
+      pushFeedback(
+        card.id,
+        `Coût pour cette carte : ${formatCost(cost)}${breakdown}`,
+      );
+    },
+  },
+  {
+    name: "plan",
+    summary: "Active Plan mode pour la prochaine session",
+    usage: "/plan",
+    run: async (_args, card) => {
+      await patchConfig(card, { permissionMode: "plan" });
+      pushFeedback(
+        card.id,
+        "Plan mode activé. Au prochain démarrage, Claude rédigera un plan avant d'exécuter.",
+      );
+    },
+  },
+  {
+    name: "accept-edits",
+    aliases: ["acceptEdits"],
+    summary: "Mode acceptEdits (auto-approve Edit/Write/MultiEdit)",
+    usage: "/accept-edits",
+    run: async (_args, card) => {
+      await patchConfig(card, { permissionMode: "acceptEdits" });
+      pushFeedback(
+        card.id,
+        "Mode acceptEdits activé pour la prochaine session. Bash & co restent en demande.",
+      );
+    },
+  },
+  {
+    name: "default-mode",
+    aliases: ["default"],
+    summary: "Repasse en mode default (demande pour chaque outil)",
+    usage: "/default-mode",
+    run: async (_args, card) => {
+      await patchConfig(card, { permissionMode: null });
+      pushFeedback(
+        card.id,
+        "Mode permission réinitialisé au défaut. Chaque outil sera redemandé.",
+      );
+    },
+  },
+  {
+    name: "bypass",
+    aliases: ["bypassPermissions"],
+    summary: "⚠️ bypassPermissions — Claude exécute tout sans confirmation",
+    usage: "/bypass",
+    run: async (_args, card) => {
+      await patchConfig(card, { permissionMode: "bypassPermissions" });
+      pushFeedback(
+        card.id,
+        "⚠️ bypassPermissions activé. Aucune demande de permission au prochain démarrage.",
+      );
+    },
+  },
+  {
+    name: "model",
+    summary: "Change le modèle (sonnet/opus/haiku ou claude-…). Vide = défaut.",
+    usage: "/model <sonnet|opus|haiku|claude-…>",
+    run: async (args, card) => {
+      const next = args.trim();
+      // Validate before persisting so the toast carries the failure rather
+      // than the IPC error stack. Same predicates as the Rust side.
+      if (next) {
+        const isAlias = next === "sonnet" || next === "opus" || next === "haiku";
+        const isFull = next.startsWith("claude-");
+        if (!isAlias && !isFull) {
+          throw new Error(
+            `Modèle invalide « ${next} » — attendu sonnet/opus/haiku ou claude-…`,
+          );
+        }
+      }
+      await patchConfig(card, { model: next || null });
+      pushFeedback(
+        card.id,
+        next
+          ? `Modèle réglé sur « ${next} » pour la prochaine session.`
+          : "Modèle remis au défaut du SDK.",
+      );
+    },
+  },
+  {
+    name: "max-turns",
+    aliases: ["maxTurns"],
+    summary: "Plafonne le nombre de tours (vide ou 0 = pas de limite)",
+    usage: "/max-turns <n>",
+    run: async (args, card) => {
+      const trimmed = args.trim();
+      if (!trimmed) {
+        await patchConfig(card, { maxTurns: null });
+        pushFeedback(card.id, "max-turns : limite retirée.");
+        return;
+      }
+      const n = Number.parseInt(trimmed, 10);
+      if (!Number.isFinite(n) || n <= 0) {
+        throw new Error(`max-turns invalide « ${trimmed} » — entier > 0 attendu`);
+      }
+      await patchConfig(card, { maxTurns: n });
+      pushFeedback(card.id, `max-turns : ${n} pour la prochaine session.`);
+    },
+  },
+  {
+    name: "stop",
+    summary: "Stoppe la session live (équivalent du bouton Stop)",
+    usage: "/stop",
+    run: async (_args, card) => {
+      const liveSessionIds = useUiStore.getState().liveSessionIds;
+      if (!card.sessionId || !liveSessionIds.has(card.sessionId)) {
+        throw new Error("Aucune session live à stopper.");
+      }
+      await ipcStopSession(card.id);
+      pushFeedback(card.id, "Session stoppée.");
+    },
+  },
+  {
+    name: "config",
+    summary: "Affiche la configuration courante de la carte",
+    usage: "/config",
+    run: (_args, card) => {
+      const lines: string[] = [];
+      lines.push(`model               = ${card.model ?? "(défaut SDK)"}`);
+      lines.push(`permissionMode      = ${card.permissionMode ?? "(défaut)"}`);
+      lines.push(
+        `maxTurns            = ${card.maxTurns != null ? card.maxTurns : "(illimité)"}`,
+      );
+      const dirs = card.additionalDirectories
+        ? card.additionalDirectories.split("\n").filter(Boolean)
+        : [];
+      lines.push(
+        `additionalDirs      = ${dirs.length === 0 ? "(aucun)" : dirs.join(", ")}`,
+      );
+      lines.push(
+        `systemPromptAppend  = ${
+          card.systemPromptAppend
+            ? card.systemPromptAppend.length > 80
+              ? `${card.systemPromptAppend.slice(0, 80)}…`
+              : card.systemPromptAppend
+            : "(vide)"
+        }`,
+      );
+      pushFeedback(card.id, `Config carte :\n${lines.join("\n")}`);
+    },
+  },
+];
+
+/**
+ * Index by name + aliases so lookups are constant time. Built once on
+ * module load — the registry is static.
+ */
+const COMMAND_INDEX: Map<string, SlashCommand> = (() => {
+  const m = new Map<string, SlashCommand>();
+  for (const cmd of SLASH_COMMANDS) {
+    m.set(cmd.name, cmd);
+    for (const a of cmd.aliases ?? []) m.set(a, cmd);
+  }
+  return m;
+})();
+
+/**
+ * Parse a textarea content as a slash command. Returns the matched command
+ * + the trailing argument (everything after the first whitespace), or null
+ * if the text isn't a known command.
+ */
+export function parseSlashCommand(
+  text: string,
+): { command: SlashCommand; args: string } | null {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("/")) return null;
+  const rest = trimmed.slice(1);
+  // Split on the first run of whitespace — keeps multi-word args intact.
+  const wsIdx = rest.search(/\s/);
+  const head = wsIdx === -1 ? rest : rest.slice(0, wsIdx);
+  const args = wsIdx === -1 ? "" : rest.slice(wsIdx + 1);
+  const cmd = COMMAND_INDEX.get(head);
+  return cmd ? { command: cmd, args } : null;
+}
+
+/**
+ * Filter the command list against the slash query (substring on name).
+ * Mirrors the convention of `filterTemplates`.
+ */
+export function filterSlashCommands(query: string): SlashCommand[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return SLASH_COMMANDS;
+  return SLASH_COMMANDS.filter((c) => {
+    if (c.name.toLowerCase().includes(q)) return true;
+    return (c.aliases ?? []).some((a) => a.toLowerCase().includes(q));
+  });
+}
