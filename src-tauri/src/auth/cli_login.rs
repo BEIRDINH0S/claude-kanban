@@ -437,8 +437,8 @@ fn run_reader_thread(
                 detect_prompts(&app, &accumulated, &mut prompts);
 
                 if !prompts.success_signaled
-                    && (accumulated.contains("Logged in as")
-                        || accumulated.contains("Login successful"))
+                    && (contains_collapsed(&accumulated, "Logged in as")
+                        || contains_collapsed(&accumulated, "Login successful"))
                 {
                     // Credentials are written by now; the credentials watcher
                     // will independently fire `auth-changed`. We emit
@@ -587,6 +587,25 @@ struct PromptState {
     success_signaled: bool,
 }
 
+/// Whitespace-insensitive substring match.
+///
+/// Why: `claude login` lays out its Inquirer prompts using cursor-move ANSI
+/// sequences (`\x1b[5C` = "advance the terminal cursor 5 columns"), not by
+/// printing literal spaces. After `strip_ansi` consumes those escapes,
+/// "Choose the text style" arrives in our buffer as "Choosethetextstyle"
+/// with the spaces gone — every space on the visible screen was a cursor
+/// move, not a character. A naive `contains` therefore misses every marker
+/// we care about and the modal sits forever on "Starting claude login…".
+///
+/// We sidestep the entire ANSI-vs-space mess by stripping whitespace from
+/// both sides before searching. The markers stay readable in the source.
+fn contains_collapsed(haystack: &str, needle: &str) -> bool {
+    fn collapse(s: &str) -> String {
+        s.chars().filter(|c| !c.is_whitespace()).collect()
+    }
+    collapse(haystack).contains(&collapse(needle))
+}
+
 /// If `accumulated` contains a known prompt marker that we haven't surfaced
 /// yet, emit a `PromptChoice` event so the modal can render the question +
 /// options as a radio group. We do *not* answer on behalf of the user:
@@ -597,7 +616,7 @@ fn detect_prompts(app: &AppHandle, accumulated: &str, state: &mut PromptState) {
         if state.emitted.contains(def.id) {
             continue;
         }
-        if accumulated.contains(def.marker) {
+        if contains_collapsed(accumulated, def.marker) {
             state.emitted.insert(def.id.to_string());
             emit(
                 app,
@@ -915,6 +934,30 @@ mod tests {
             m(buf).as_deref(),
             Some("https://platform.claude.com/oauth/authorize?response_type=code")
         );
+    }
+
+    #[test]
+    fn contains_collapsed_matches_when_spaces_are_eaten_by_cursor_moves() {
+        // After strip_ansi, "Choose the text style" arrives as one word
+        // because the visible spaces were cursor-move escape sequences,
+        // not literal spaces. The marker has spaces; the buffer doesn't.
+        // Both should still match.
+        assert!(super::contains_collapsed(
+            "Choosethetextstylethatlooksbestwithyourterminal",
+            "Choose the text style",
+        ));
+        assert!(super::contains_collapsed(
+            "Logged in as foo@bar.com",
+            "Logged in as",
+        ));
+        assert!(super::contains_collapsed(
+            "Loggedinasfoo@bar.com",
+            "Logged in as",
+        ));
+        assert!(!super::contains_collapsed(
+            "totally unrelated text",
+            "Logged in as",
+        ));
     }
 
     #[test]
