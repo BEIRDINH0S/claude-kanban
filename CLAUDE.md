@@ -99,3 +99,23 @@ claude-kanban/
   push d'un tag `v*` et build les 3 plateformes (macOS arm64/x64,
   Windows x64). Pour rebuild un tag existant après un fix critique,
   cf. README §Publier une nouvelle version.
+
+## Maintien de ce fichier
+
+Mets ce fichier à jour **dans la même PR** quand un de ces 3 triggers
+concrets arrive :
+
+1. **Nouvelle zone fonctionnelle** — tu ajoutes un dossier sous
+   `src/features/` ou `src-tauri/src/` qui n'a pas de ligne dans le
+   tableau de routage → ajoute une ligne.
+2. **Renommage / déplacement** — un fichier ou dossier listé ici a
+   bougé → fixe le chemin.
+3. **Anti-pattern découvert** — tu corriges un bug ou un refacto qui
+   révèle une classe d'erreur non listée dans **Anti-patterns** →
+   ajoute un bullet (1-3 lignes max).
+
+Ne **PAS** mettre à jour pour : changements internes à un module (la
+docstring du module fait le boulot), refacto cosmétique, fix de typo,
+nouvelle dépendance qui ne change pas le shape du code. Ce fichier est
+du routage, pas un changelog — chaque ligne ajoutée doit gagner sa
+place.
