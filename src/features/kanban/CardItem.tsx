@@ -16,13 +16,17 @@ import { parseTags, type Card } from "../../types/card";
  * cards so the user can scan visually. Hash kept tiny — we only need a
  * stable mod into a 6-element table.
  */
+// Tag pill palette. Each entry pairs a saturated light-theme variant
+// (700-text on a 100-bg, AA contrast) with the original semi-transparent
+// dark-theme look (200-text on a /20 backdrop) via Tailwind's `dark:`
+// variant, which we rebound to `data-theme="dark"` in globals.css.
 const TAG_COLORS = [
-  "bg-sky-400/20 text-sky-200 border-sky-400/40",
-  "bg-amber-400/20 text-amber-200 border-amber-400/40",
-  "bg-emerald-400/20 text-emerald-200 border-emerald-400/40",
-  "bg-violet-400/20 text-violet-200 border-violet-400/40",
-  "bg-rose-400/20 text-rose-200 border-rose-400/40",
-  "bg-cyan-400/20 text-cyan-200 border-cyan-400/40",
+  "bg-sky-100 text-sky-800 border-sky-500/50 dark:bg-sky-400/20 dark:text-sky-200 dark:border-sky-400/40",
+  "bg-amber-100 text-amber-800 border-amber-500/50 dark:bg-amber-400/20 dark:text-amber-200 dark:border-amber-400/40",
+  "bg-emerald-100 text-emerald-800 border-emerald-500/50 dark:bg-emerald-400/20 dark:text-emerald-200 dark:border-emerald-400/40",
+  "bg-violet-100 text-violet-800 border-violet-500/50 dark:bg-violet-400/20 dark:text-violet-200 dark:border-violet-400/40",
+  "bg-rose-100 text-rose-800 border-rose-500/50 dark:bg-rose-400/20 dark:text-rose-200 dark:border-rose-400/40",
+  "bg-cyan-100 text-cyan-800 border-cyan-500/50 dark:bg-cyan-400/20 dark:text-cyan-200 dark:border-cyan-400/40",
 ];
 function tagColor(tag: string): string {
   let h = 0;
@@ -156,7 +160,7 @@ export function CardItem({ card, overlay }: Props) {
             from Tailwind's built-in `animate-pulse`. */}
         {isLive && !isWorking && (
           <span
-            className="mt-1 size-2 shrink-0 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_6px_rgb(74,222,128,0.6)]"
+            className="mt-1 size-2 shrink-0 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_6px_rgb(16,185,129,0.7)] dark:bg-emerald-400 dark:shadow-[0_0_6px_rgb(74,222,128,0.6)]"
             title="Session active dans le sidecar"
             aria-label="Session active"
           />
@@ -210,14 +214,14 @@ export function CardItem({ card, overlay }: Props) {
                 strokeWidth={2}
               />
               {gitStatus.ahead > 0 && (
-                <span className="text-emerald-300/90">↑{gitStatus.ahead}</span>
+                <span className="text-emerald-700 dark:text-emerald-300/90">↑{gitStatus.ahead}</span>
               )}
               {gitStatus.behind > 0 && (
-                <span className="text-rose-300/90">↓{gitStatus.behind}</span>
+                <span className="text-rose-700 dark:text-rose-300/90">↓{gitStatus.behind}</span>
               )}
               {gitStatus.dirty && (
                 <span
-                  className="size-1.5 rounded-full bg-amber-400"
+                  className="size-1.5 rounded-full bg-amber-500 dark:bg-amber-400"
                   aria-label="Modifications non commitées"
                 />
               )}

@@ -340,7 +340,7 @@ function PermissionRulesSection() {
     <Card
       icon={
         <ShieldCheck
-          className="size-3.5 shrink-0 text-emerald-300/80"
+          className="size-3.5 shrink-0 text-emerald-700 dark:text-emerald-300/80"
           strokeWidth={1.75}
         />
       }
@@ -382,7 +382,7 @@ function PermissionRulesSection() {
       </div>
 
       {err && (
-        <p className="mt-2 font-mono text-[11px] text-red-400 break-words">
+        <p className="mt-2 font-mono text-[11px] text-red-700 dark:text-red-400 break-words">
           {err}
         </p>
       )}
@@ -572,14 +572,14 @@ function ClaudeRuntimeSection() {
           </span>
         </p>
         {showRestartHint && (
-          <p className="mt-1 text-[11px] text-amber-300/90">
+          <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300/90">
             Redémarre l'app pour appliquer le nouveau runtime ({pref}).
           </p>
         )}
       </div>
 
       {err && (
-        <p className="mt-2 font-mono text-[11px] text-red-400 break-words">
+        <p className="mt-2 font-mono text-[11px] text-red-700 dark:text-red-400 break-words">
           {err}
         </p>
       )}
@@ -713,7 +713,9 @@ function ProjectDataSection() {
       {message && (
         <p
           className={`font-mono text-[11.5px] break-words ${
-            message.kind === "ok" ? "text-emerald-300/90" : "text-red-400"
+            message.kind === "ok"
+              ? "text-emerald-700 dark:text-emerald-300/90"
+              : "text-red-700 dark:text-red-400"
           }`}
         >
           {message.text}
@@ -815,7 +817,7 @@ function PromptTemplatesSection() {
       </div>
 
       {err && (
-        <p className="mt-2 font-mono text-[11px] text-red-400 break-words">
+        <p className="mt-2 font-mono text-[11px] text-red-700 dark:text-red-400 break-words">
           {err}
         </p>
       )}
@@ -1144,7 +1146,7 @@ function ShortcutsSection() {
       </ShortcutGroup>
 
       {conflictMsg && (
-        <p className="mt-3 font-mono text-[11px] text-amber-300/90">
+        <p className="mt-3 font-mono text-[11px] text-amber-700 dark:text-amber-300/90">
           {conflictMsg}
         </p>
       )}

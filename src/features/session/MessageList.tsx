@@ -169,9 +169,14 @@ function stringifyToolResult(content: unknown): string {
 
 function RenderedRow({ row }: { row: Row }) {
   if (row.kind === "user-text") {
+    // In light theme the default `glass-strong` is white-on-white-gradient
+    // and the bubble disappears as a shape. We keep the glass blur/shadow
+    // from the component class but override the background with the accent
+    // tint so the "you said this" bubble pops in light mode. Dark mode
+    // re-applies the original glass background.
     return (
       <div className="flex justify-end">
-        <div className="glass-strong max-w-[80%] rounded-2xl rounded-br-sm px-4 py-2.5 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap">
+        <div className="glass-strong max-w-[80%] rounded-2xl rounded-br-sm bg-[var(--color-accent-soft)] px-4 py-2.5 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap text-[var(--text-primary)] dark:bg-[var(--glass-bg-strong)]">
           {row.text}
         </div>
       </div>
@@ -192,14 +197,14 @@ function RenderedRow({ row }: { row: Row }) {
   if (row.kind === "auto-approved") {
     return (
       <div
-        className="flex items-center gap-2 self-start rounded-lg border border-emerald-400/25 bg-emerald-400/8 px-2.5 py-1.5"
+        className="flex items-center gap-2 self-start rounded-lg border border-emerald-600/40 bg-emerald-100/70 px-2.5 py-1.5 dark:border-emerald-400/25 dark:bg-emerald-400/8"
         title="Auto-approuvé par une règle"
       >
         <ShieldCheck
-          className="size-3 shrink-0 text-emerald-300/90"
+          className="size-3 shrink-0 text-emerald-700 dark:text-emerald-300/90"
           strokeWidth={1.75}
         />
-        <span className="font-mono text-[11.5px] text-emerald-200/80">
+        <span className="font-mono text-[11.5px] text-emerald-800 dark:text-emerald-200/80">
           {formatToolUse(row.name, row.input)}
         </span>
       </div>
@@ -309,7 +314,7 @@ function ToolResultRow({
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-2.5 py-1.5 transition-colors hover:bg-black/5 dark:hover:bg-white/5 ${
-          isError ? "text-red-400" : "text-[var(--text-muted)]"
+          isError ? "text-red-600 dark:text-red-400" : "text-[var(--text-muted)]"
         }`}
         aria-expanded={open}
       >
