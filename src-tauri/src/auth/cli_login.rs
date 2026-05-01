@@ -114,6 +114,11 @@ pub enum CliLoginEvent {
 }
 
 fn emit(app: &AppHandle, event: CliLoginEvent) {
+    // Verbose tap on every event we send to the front. Plain `eprintln!` so
+    // it lands in `npm run tauri dev`'s console without any feature flag.
+    // The variants we care about most when sign-in misbehaves are
+    // `PromptChoice` (did we detect the prompt?) and `Failed`.
+    eprintln!("[auth-cli][emit] {event:?}");
     if let Err(e) = app.emit("auth-cli-event", &event) {
         eprintln!("[auth-cli] emit failed: {e}");
     }
@@ -436,6 +441,23 @@ fn run_reader_thread(
                 // back via `auth_cli_login_choose`.
                 detect_prompts(&app, &accumulated, &mut prompts);
 
+                // One-shot dump as soon as we have enough buffered to make
+                // a prompt detection decision — lets a user share the raw
+                // strip_ansi output if no marker matched. Last 600 chars is
+                // usually enough to see the full Inquirer screen.
+                static DUMPED: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
+                if !DUMPED.load(std::sync::atomic::Ordering::Relaxed)
+                    && accumulated.len() > 400
+                    && prompts.emitted.is_empty()
+                {
+                    DUMPED.store(true, std::sync::atomic::Ordering::Relaxed);
+                    let tail = &accumulated[accumulated.len().saturating_sub(600)..];
+                    eprintln!(
+                        "[auth-cli][dump] accumulated tail (no prompt yet) ----\n{tail}\n----"
+                    );
+                }
+
                 if !prompts.success_signaled
                     && (contains_collapsed(&accumulated, "Logged in as")
                         || contains_collapsed(&accumulated, "Login successful"))
@@ -616,7 +638,14 @@ fn detect_prompts(app: &AppHandle, accumulated: &str, state: &mut PromptState) {
         if state.emitted.contains(def.id) {
             continue;
         }
-        if contains_collapsed(accumulated, def.marker) {
+        let hit = contains_collapsed(accumulated, def.marker);
+        if hit {
+            eprintln!(
+                "[auth-cli][detect] marker '{}' matched (id={}, accumulated_len={})",
+                def.marker,
+                def.id,
+                accumulated.len()
+            );
             state.emitted.insert(def.id.to_string());
             emit(
                 app,
