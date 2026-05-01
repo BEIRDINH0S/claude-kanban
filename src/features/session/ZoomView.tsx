@@ -22,8 +22,6 @@ import {
   sendMessage as ipcSendMessage,
 } from "../../ipc/sessions";
 import { useCardsStore } from "../../stores/cardsStore";
-import { useUsageIndexStore } from "../../stores/usageIndexStore";
-import { formatCost } from "../usage/format";
 import { useErrorsStore } from "../../stores/errorsStore";
 import { useGitStatusStore } from "../../stores/gitStatusStore";
 import { useMessagesStore } from "../../stores/messagesStore";
@@ -86,14 +84,6 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   const archived = useProjectsStore((s) =>
     s.projects.find((p) => p.id === card.projectId)?.archived ?? false,
   );
-  // Per-card cost from the precise SQLite-backed index. Falls back to 0
-  // until the index has loaded (first paint after boot).
-  const cost = useUsageIndexStore((s) => {
-    if (!s.data) return 0;
-    return (
-      s.data.byCard.find((c) => c.cardId === card.id)?.summary.costUsd ?? 0
-    );
-  });
   const pushToastHeader = useToastsStore((s) => s.push);
 
   // Quick toggle for Claude Code's plan mode. Same one-click semantics as
@@ -211,14 +201,6 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
               ? `session ${card.sessionId.slice(0, 8)}…`
               : "no session"}
           </span>
-          {cost > 0 && (
-            <>
-              {" · "}
-              <span className="font-mono normal-case tracking-normal">
-                {formatCost(cost)}
-              </span>
-            </>
-          )}
           {/* Surface custom model / permission mode so the user sees at a
               glance what's pinned on this card without having to open the
               Config tab. Hidden when defaults — keeps the row clean. */}

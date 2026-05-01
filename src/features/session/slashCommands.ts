@@ -2,7 +2,6 @@ import type { Card, PermissionMode } from "../../types/card";
 import { useCardsStore } from "../../stores/cardsStore";
 import { useMessagesStore } from "../../stores/messagesStore";
 import { useUiStore } from "../../stores/uiStore";
-import { useUsageIndexStore } from "../../stores/usageIndexStore";
 import { useToastsStore } from "../../stores/toastsStore";
 import { stopSession as ipcStopSession } from "../../ipc/sessions";
 import type { SdkEvent } from "../../types/chat";
@@ -89,11 +88,6 @@ async function patchConfig(
   });
 }
 
-/** Format USD with 4 decimals like the rest of the app. */
-function formatCost(cost: number): string {
-  return `$${cost.toFixed(4)}`;
-}
-
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: "help",
@@ -122,24 +116,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
           "Local transcript cleared. The SDK session keeps its context; close and reopen the card to rehydrate from disk.",
         ttlMs: 5000,
       });
-    },
-  },
-  {
-    name: "cost",
-    summary: "Show the running cost for this card",
-    usage: "/cost",
-    run: (_args, card) => {
-      const data = useUsageIndexStore.getState().data;
-      const row = data?.byCard.find((c) => c.cardId === card.id);
-      const cost = row?.summary.costUsd ?? 0;
-      const tokens = row?.summary;
-      const breakdown = tokens
-        ? `\nTokens · in ${tokens.inputTokens} · out ${tokens.outputTokens} · cache_read ${tokens.cacheReadTokens} · cache_create ${tokens.cacheCreationTokens}`
-        : "";
-      pushFeedback(
-        card.id,
-        `Cost for this card: ${formatCost(cost)}${breakdown}`,
-      );
     },
   },
   {

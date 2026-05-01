@@ -450,41 +450,6 @@ class SessionHandle {
 }
 
 // ---------------------------------------------------------------------------
-// Subscription usage — DISABLED (Claude-Code-only policy)
-// ---------------------------------------------------------------------------
-//
-// We previously hit `api.anthropic.com/api/oauth/usage` with the bearer
-// token `claude login` writes, in order to render the % of the user's
-// subscription windows in the BoardHeader / Usage page. That endpoint is
-// reserved for the official `claude` CLI (it requires the `anthropic-beta:
-// oauth-2025-04-20` header and is gated by the OAuth scope set by the CLI),
-// so impersonating it from a third-party app risked the user's subscription
-// being flagged or banned.
-//
-// Policy now: this app NEVER speaks to Anthropic's APIs directly. The only
-// way to use the subscription is through the bundled `claude` binary the
-// SDK spawns. The subscription % feature is therefore disabled — we keep
-// the IPC plumbing so the UI can render a friendly "unavailable — security"
-// message rather than crash, but the function is a pure stub that performs
-// no network call, no credential read, no cache I/O.
-//
-// If a future Anthropic API gives third-party apps a documented way to
-// query subscription usage, this is the one place to re-enable.
-
-async function getSubscriptionUsage() {
-  return {
-    planName: null,
-    fiveHour: null,
-    sevenDay: null,
-    fiveHourResetAt: null,
-    sevenDayResetAt: null,
-    apiUnavailable: true,
-    // Stable code the UI matches against to render the disabled message.
-    apiError: "claude-only-policy",
-  };
-}
-
-// ---------------------------------------------------------------------------
 
 const rl = readline.createInterface({ input: process.stdin });
 
@@ -531,16 +496,6 @@ rl.on("line", (line) => {
     case "stop_session": {
       const handle = sessionsById.get(msg.sessionId);
       if (handle) handle.endInput();
-      return;
-    }
-    case "get_subscription_usage": {
-      // Stub — see getSubscriptionUsage above for the why. The IPC stays
-      // wired so the front gets a deterministic "indisponible" response
-      // instead of a hung promise.
-      const requestId = msg.requestId;
-      void getSubscriptionUsage().then((data) => {
-        send({ type: "subscription_usage_result", requestId, data });
-      });
       return;
     }
     case "permission_response": {

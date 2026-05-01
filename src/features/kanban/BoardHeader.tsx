@@ -5,7 +5,6 @@ import { useCardsStore } from "../../stores/cardsStore";
 import { useProjectsStore } from "../../stores/projectsStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { CardColumn } from "../../types/card";
-import { SubscriptionMeter } from "../usage/SubscriptionMeter";
 import { COLUMNS } from "./columns";
 
 interface Props {
@@ -36,8 +35,6 @@ export function BoardHeader({ onCreate }: Props) {
   );
   const nonEmpty = COLUMNS.filter((c) => counts[c.id] > 0);
 
-  const setView = useUiStore((s) => s.setView);
-
   return (
     <header className="flex items-center justify-between gap-3 border-b border-[var(--glass-stroke)] px-6 py-3">
       <div className="min-w-0 flex-1">
@@ -64,11 +61,6 @@ export function BoardHeader({ onCreate }: Props) {
           </div>
         )}
       </div>
-
-      {/* Headline metric: % of subscription windows. Stays in the topbar
-          so it's always visible while you trigger sessions; clicks open
-          the full Usage page where you can see the breakdown. */}
-      <SubscriptionMeter compact onClick={() => setView("usage")} />
 
       <SearchBox />
 

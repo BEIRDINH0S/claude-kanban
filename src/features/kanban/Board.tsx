@@ -48,7 +48,6 @@ import { CreateCardModal } from "../card-create/CreateCardModal";
 import { ProjectsPage } from "../projects/ProjectsPage";
 import { Sidebar } from "../projects/Sidebar";
 import { SettingsPage } from "../settings/SettingsPage";
-import { UsagePage } from "../usage/UsagePage";
 import { isTextInputTarget } from "../../lib/shortcuts";
 import { selectByColumn, useCardsStore } from "../../stores/cardsStore";
 import { matchShortcut } from "../../stores/shortcutsStore";
@@ -311,8 +310,6 @@ export function Board() {
             <SettingsPage />
           ) : view === "projects" ? (
             <ProjectsPage />
-          ) : view === "usage" ? (
-            <UsagePage />
           ) : (
             <>
               <BoardHeader onCreate={() => setCreateOpen(true)} />

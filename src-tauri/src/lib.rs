@@ -8,11 +8,10 @@ mod git_fetch;
 mod jsonl_watcher;
 mod permissions;
 mod session_host;
-mod usage;
 mod worktree;
 
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -60,20 +59,6 @@ pub fn run() {
             // start is non-fatal — the app still works without the auto-
             // refresh of CLI sessions.
             jsonl_watcher::spawn(app.handle().clone());
-
-            // Bootstrap the usage index in the background. Walks
-            // ~/.claude/projects and ingests every JSONL we haven't seen
-            // yet. Idempotent — re-running is a no-op once cursors are up
-            // to date. Runs on a worker thread so it doesn't block boot;
-            // emits `usage-changed` when done so a Usage page that's
-            // already mounted refreshes itself.
-            let bootstrap_handle = app.handle().clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                if let Err(e) = usage::ingest::bootstrap_scan(&bootstrap_handle) {
-                    eprintln!("[usage] bootstrap scan failed: {e}");
-                }
-                let _ = bootstrap_handle.emit("usage-changed", ());
-            });
 
             // Auth credentials watcher — re-emits `auth-changed` whenever
             // ~/.claude/.credentials.json is created/modified/deleted. The
@@ -126,9 +111,6 @@ pub fn run() {
             commands::permissions::remove_permission_rule,
             commands::prefs::get_pref,
             commands::prefs::set_pref,
-            commands::usage::usage_overview,
-            commands::usage::usage_rebuild_index,
-            commands::usage::get_subscription_usage,
             commands::user_commands::list_user_commands,
             auth::commands::auth_status,
             auth::commands::auth_logout,

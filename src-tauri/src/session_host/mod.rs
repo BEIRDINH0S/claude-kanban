@@ -12,7 +12,7 @@ use tokio::process::{Child, Command};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::db::{lock_recover, DbState};
-use protocol::{SidecarInbound, SidecarOutbound, SubscriptionUsageData};
+use protocol::{SidecarInbound, SidecarOutbound};
 
 /// Resolves to either the assigned session_id or a sidecar error message.
 pub type StartResult = Result<String, String>;
@@ -20,11 +20,6 @@ pub type StartResult = Result<String, String>;
 pub struct SessionHost {
     stdin_tx: mpsc::UnboundedSender<String>,
     pending: Mutex<HashMap<String, oneshot::Sender<StartResult>>>,
-    /// Separate map for subscription-usage requests. The result type
-    /// differs (`SubscriptionUsageData`) so we don't munge it through the
-    /// `StartResult` channel.
-    pending_subscription:
-        Mutex<HashMap<String, oneshot::Sender<SubscriptionUsageData>>>,
     /// Holds the child so it gets killed (kill_on_drop) when the app exits.
     _child: Mutex<Option<Child>>,
 }
@@ -41,24 +36,6 @@ impl SessionHost {
 
     pub fn take_pending(&self, request_id: &str) -> Option<oneshot::Sender<StartResult>> {
         lock_recover(&self.pending).remove(request_id)
-    }
-
-    pub fn register_pending_subscription(
-        &self,
-        request_id: String,
-        tx: oneshot::Sender<SubscriptionUsageData>,
-    ) {
-        self.pending_subscription
-            .lock()
-            .unwrap()
-            .insert(request_id, tx);
-    }
-
-    pub fn take_pending_subscription(
-        &self,
-        request_id: &str,
-    ) -> Option<oneshot::Sender<SubscriptionUsageData>> {
-        self.pending_subscription.lock().unwrap().remove(request_id)
     }
 }
 
@@ -185,7 +162,6 @@ pub async fn spawn(app: AppHandle, runtime_pref: String) -> Result<SessionHost, 
     Ok(SessionHost {
         stdin_tx,
         pending: Mutex::new(HashMap::new()),
-        pending_subscription: Mutex::new(HashMap::new()),
         _child: Mutex::new(Some(child)),
     })
 }
@@ -261,13 +237,6 @@ async fn handle_outbound(app: &AppHandle, line: &str) {
                     }),
                 );
                 return;
-            }
-            // Persist OK — back-link any historical usage rows ingested
-            // before this session was associated with the card.
-            {
-                let db = app.state::<DbState>();
-                let conn = lock_recover(&db.conn);
-                let _ = crate::usage::ingest::relink_card(&conn, &session_id, &card_id);
             }
             // Resolve the start_session command's oneshot.
             if let Some(tx) = host.take_pending(&request_id) {
@@ -396,25 +365,6 @@ async fn handle_outbound(app: &AppHandle, line: &str) {
                 }),
             );
             let _ = app.emit("cards-changed", ());
-        }
-
-        SidecarOutbound::SubscriptionUsageResult { request_id, data } => {
-            // Resolve the pending oneshot — the requester (commands::usage)
-            // is awaiting it. Also broadcast on the global event channel so
-            // any front view that mounted later picks up the latest value
-            // without firing its own request.
-            let host = app.state::<SessionHost>();
-            if let Some(tx) = host.take_pending_subscription(&request_id) {
-                let _ = tx.send(data.clone());
-            }
-            let payload = match serde_json::to_value(&data) {
-                Ok(v) => v,
-                Err(e) => {
-                    eprintln!("[host] serialise SubscriptionUsageData: {e}");
-                    json!({})
-                }
-            };
-            let _ = app.emit("subscription-usage-changed", payload);
         }
 
         SidecarOutbound::Error {

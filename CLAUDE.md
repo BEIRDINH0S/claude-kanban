@@ -14,7 +14,6 @@ anyway.
 | **kanban / drag & drop** | `src/features/kanban/Board.tsx` (orchestrator + DnD + shortcuts)<br>`src/stores/cardsStore.ts` (state + optimistic moves)<br>`src-tauri/src/commands/cards.rs` (CRUD + position renumbering in a single transaction) |
 | **DB / SQLite** | `src-tauri/src/db/mod.rs` (open + WAL + boot repair)<br>`src-tauri/src/db/migrations.rs` (versioned schema, append-only)<br>`src-tauri/src/db/types.rs` (`Card`, `Project`, `CardColumn`)<br>⚠ **Never edit a past migration** — always append a new one. |
 | **tool-call permissions** | `src-tauri/src/permissions.rs` (parse + glob + `is_allowed`)<br>`src-tauri/src/commands/permissions.rs` (thin Tauri CRUD wrapper)<br>`src/features/settings/SettingsPage.tsx::PermissionRulesSection` (UI) |
-| **usage / costs / tokens** | `src-tauri/src/usage/{ingest,parser,pricing,queries}.rs` (JSONL → SQLite → aggregations pipeline)<br>`src-tauri/src/usage/pricing.rs` (USD/M tokens table — bump it when Anthropic changes prices) |
 | **git / worktrees** | `src-tauri/src/worktree.rs` (shells out to `git worktree`)<br>`src-tauri/src/git_fetch.rs` (fetch workers + GC) |
 | **JSONL watcher** | `src-tauri/src/jsonl_watcher.rs` (`~/.claude/projects/**/*.jsonl` → `external-jsonl-update`) |
 | **slash commands** | `src-tauri/src/commands/user_commands.rs` (discovery: `~/.claude/commands/*.md` + `<project>/.claude/commands/*.md`) |

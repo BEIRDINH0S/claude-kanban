@@ -2,9 +2,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
-  ArrowRight,
   Bell,
-  Database,
   Download,
   ExternalLink,
   FileText,
@@ -19,7 +17,6 @@ import {
   ShieldCheck,
   Terminal,
   Trash2,
-  TrendingUp,
   Upload,
   User,
   X,
@@ -75,13 +72,6 @@ import {
   useTemplatesStore,
 } from "../../stores/templatesStore";
 import { useUiStore } from "../../stores/uiStore";
-import {
-  selectSessionLimit,
-  selectWeeklyLimit,
-  useUsageStore,
-} from "../../stores/usageStore";
-import { RateLimitMeter } from "../usage/RateLimitMeter";
-
 export function SettingsPage() {
   return (
     <div className="flex flex-1 overflow-y-auto">
@@ -137,10 +127,6 @@ export function SettingsPage() {
 
         <Category title="Data">
           <ProjectDataSection />
-        </Category>
-
-        <Category title="Usage">
-          <UsageSection />
         </Category>
       </div>
     </div>
@@ -1794,67 +1780,6 @@ function PromptTemplateRow({
         </button>
       </div>
     </li>
-  );
-}
-
-// -----------------------------------------------------------------------------
-// Usage — rate limit meters (read-only diagnostics)
-// -----------------------------------------------------------------------------
-
-function UsageSection() {
-  const usageByType = useUsageStore((s) => s.byType);
-  const session = selectSessionLimit(usageByType);
-  const weekly = selectWeeklyLimit(usageByType);
-  const hasUsage = !!session || !!weekly;
-  const setView = useUiStore((s) => s.setView);
-
-  return (
-    <>
-      <Card
-        icon={
-          <Database
-            className="size-3.5 shrink-0 text-[var(--text-muted)]"
-            strokeWidth={1.75}
-          />
-        }
-        title="Live Claude limits"
-        subtitle="Exact percentage reported by the Anthropic SDK on every turn. Sparse — only shows up after a threshold is crossed (50/80/95 %)."
-      >
-        <div className="mt-3 flex flex-col gap-2">
-          {!hasUsage && (
-            <p className="font-mono text-[11px] text-[var(--text-muted)]">
-              No data — start a session to populate usage.
-            </p>
-          )}
-          {session && <RateLimitMeter label="session" info={session} />}
-          {weekly && <RateLimitMeter label="weekly" info={weekly} />}
-        </div>
-      </Card>
-
-      {/* Pointer to the real Usage page: exact tokens, breakdown by
-          model/project/card, rolling 5h/7d windows computed from the local
-          JSONL. */}
-      <Card
-        icon={
-          <TrendingUp
-            className="size-3.5 shrink-0 text-[var(--text-muted)]"
-            strokeWidth={1.75}
-          />
-        }
-        title="Full Usage page"
-        subtitle="Tokens (input/output/cache), USD cost, breakdown by model, project and card. Indexed locally from ~/.claude/projects."
-        trailing={
-          <button
-            type="button"
-            onClick={() => setView("usage")}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)]"
-          >
-            Open
-            <ArrowRight className="size-3.5" strokeWidth={1.75} />
-          </button>
-        }
-      />
-    </>
   );
 }
 
