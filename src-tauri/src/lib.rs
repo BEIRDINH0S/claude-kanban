@@ -134,6 +134,7 @@ pub fn run() {
             auth::commands::auth_logout,
             auth::cli_login::auth_cli_check,
             auth::cli_login::auth_cli_login_start,
+            auth::cli_login::auth_cli_login_choose,
             auth::cli_login::auth_cli_login_submit_code,
             auth::cli_login::auth_cli_login_cancel,
         ])

@@ -99,6 +99,24 @@ export function submitCliLoginCode(code: string): Promise<void> {
 }
 
 /**
+ * Answer one of the CLI's list-style prompts (theme, login method, …) the
+ * user just picked in the modal. The Rust side translates the pair into an
+ * arrow-key sequence + Enter so the underlying Inquirer prompt resolves
+ * exactly as if the user had pressed the keys in a terminal.
+ *
+ * `defaultIndex` is the index Inquirer pre-selected for that prompt — we
+ * need it to compute how many arrow-down (or up) presses to send. The front
+ * gets it from the matching `prompt-choice` event, so this stays trivial to
+ * wire up.
+ */
+export function submitCliLoginChoice(
+  target: number,
+  defaultIndex: number,
+): Promise<void> {
+  return invoke<void>("auth_cli_login_choose", { target, defaultIndex });
+}
+
+/**
  * Kill the in-flight CLI. Idempotent — no error if the flow already
  * finished. Used by the modal's close button.
  */
@@ -119,6 +137,21 @@ export function cancelCliLogin(): Promise<void> {
  */
 export type CliLoginEvent =
   | { kind: "progress"; message: string }
+  /**
+   * The CLI is on a list-style prompt (theme picker, login-method picker,
+   * …). The modal renders this as a radio group; the user's pick goes
+   * back via `submitCliLoginChoice(target, defaultIndex)`.
+   *
+   * `id` lets the front react differently per prompt if needed; `options`
+   * and `defaultIndex` are everything required to render and answer it.
+   */
+  | {
+      kind: "prompt-choice";
+      id: string;
+      question: string;
+      options: string[];
+      defaultIndex: number;
+    }
   | { kind: "auth-url"; url: string }
   | { kind: "completed" }
   | { kind: "failed"; message: string };

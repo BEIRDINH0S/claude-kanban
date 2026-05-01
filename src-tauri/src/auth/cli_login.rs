@@ -83,6 +83,22 @@ pub enum CliLoginEvent {
     /// We dedupe consecutive identical lines on the Rust side so Inquirer
     /// spinners don't flood the channel.
     Progress { message: String },
+    /// `claude login` is asking the user to pick from a list (theme, login
+    /// method, etc.). The Rust side detects each known prompt by a stable
+    /// substring marker and forwards a clean version of the question +
+    /// options to the front, which renders a radio group. The user's choice
+    /// comes back through `auth_cli_login_choose` — see that command for
+    /// how the index is translated into PTY arrow-key bytes.
+    ///
+    /// The set of prompts is hard-coded (see `PROMPT_DEFS`). When Anthropic
+    /// adds a new one, the modal's stall detector kicks in after 15 s and
+    /// the user can cancel + retry — no silent hang.
+    PromptChoice {
+        id: String,
+        question: String,
+        options: Vec<String>,
+        default_index: usize,
+    },
     /// First moment the front has something actionable: open this URL in the
     /// browser (the CLI may have already done it on its own — we still emit
     /// so the UI can fall back to "click to open" if not).
@@ -412,14 +428,13 @@ fn run_reader_thread(
                     }
                 }
 
-                // Drive the CLI through its interactive prompts. The CLI
-                // gates the OAuth URL behind a theme picker and a login-
-                // method picker, and after a successful login it queues a
-                // chain of "Press Enter to continue" + workspace-trust
-                // prompts before launching an interactive session that
-                // would never exit. We pick the right defaults silently so
-                // the user never sees those questions.
-                advance_prompts(&accumulated, &session, &mut prompts);
+                // Surface the CLI's interactive pickers (theme, login
+                // method, …) to the front so the user can answer them in
+                // the modal. Until they do, the CLI sits on a prompt screen
+                // and the OAuth URL never comes out — so this is the
+                // critical path of the sign-in. The user's choice comes
+                // back via `auth_cli_login_choose`.
+                detect_prompts(&app, &accumulated, &mut prompts);
 
                 if !prompts.success_signaled
                     && (accumulated.contains("Logged in as")
@@ -507,61 +522,94 @@ fn run_reader_thread(
     }
 }
 
-/// Tracks which interactive prompts we've already auto-confirmed during a
-/// `claude login` run. Each prompt is one-shot: once we've sent its Enter we
-/// flip the flag so a redraw of the same screen doesn't make us spam input.
+/// Static description of an Inquirer-style picker we know how to mirror in
+/// the UI. We don't parse the CLI's prompt screen at runtime — that screen is
+/// repainted with ANSI escapes on every keystroke and is brittle to extract
+/// from. Instead, we hard-code the option list we expect for each prompt and
+/// pair it with a stable substring `marker` that confirms the prompt is on
+/// screen. `default_index` mirrors the option Inquirer pre-selects (the one
+/// shown with the `❯` cursor); the front uses it to compute the right number
+/// of arrow-key presses.
+struct PromptDef {
+    id: &'static str,
+    marker: &'static str,
+    question: &'static str,
+    options: &'static [&'static str],
+    default_index: usize,
+}
+
+/// All prompts `claude login` v2.1.x throws up *before* printing the OAuth
+/// URL. Captured from a real run with HOME=/tmp/<isolated>, so the labels
+/// match the CLI 1:1. If Anthropic adds a new prompt here, the modal's
+/// stall detector (15 s without progress) catches it and the user can
+/// cancel + retry — no silent hang.
+const PROMPT_DEFS: &[PromptDef] = &[
+    PromptDef {
+        id: "theme",
+        marker: "Choose the text style",
+        question: "Pick a theme for the Claude CLI",
+        options: &[
+            "Auto (match terminal)",
+            "Dark mode",
+            "Light mode",
+            "Dark mode (colorblind-friendly)",
+            "Light mode (colorblind-friendly)",
+            "Dark mode (ANSI colors only)",
+            "Light mode (ANSI colors only)",
+        ],
+        default_index: 1, // Dark mode
+    },
+    PromptDef {
+        id: "method",
+        marker: "Select login method",
+        question: "How do you want to sign in?",
+        options: &[
+            "Claude subscription (Pro / Max / Team / Enterprise)",
+            "Anthropic Console account (API usage billing)",
+            "Third-party platform (Bedrock, Foundry, Vertex)",
+        ],
+        default_index: 0,
+    },
+];
+
+/// Tracks lifecycle of the in-flight login: which prompts we've already
+/// surfaced to the UI (so a screen redraw doesn't re-emit them), and whether
+/// we've signalled success ourselves.
 ///
-/// `success_signaled` is the kill switch: once we've seen "Logged in as" we
-/// emit `Completed` and kill the CLI ourselves, and downstream logic must
-/// stop reasoning about exit status (because the kill makes it nonzero).
+/// `success_signaled` is the kill switch — once "Logged in as" appears we
+/// fire `Completed` and kill the CLI before it queues post-login prompts and
+/// drops into an interactive session that would never terminate. Downstream
+/// code must stop reasoning about exit status when this flag is set, because
+/// the kill makes the exit code nonzero.
 #[derive(Default)]
 struct PromptState {
-    /// "Choose the text style that looks best with your terminal" — first
-    /// wall the CLI puts up on the very first run. We confirm the default
-    /// (Dark mode) so the OAuth step can come up.
-    theme_confirmed: bool,
-    /// "Select login method" — the user is meant to be on a Claude
-    /// subscription (Pro/Max/Team/Enterprise), which is option 1 and the
-    /// default. The Console-account path is for API-billing customers and
-    /// is not what claude-kanban targets.
-    method_confirmed: bool,
-    /// We've seen the success marker, fired Completed, and killed the child.
-    /// Everything from here is teardown — don't emit Failed on the kill.
+    emitted: std::collections::HashSet<String>,
     success_signaled: bool,
 }
 
-/// If `accumulated` contains a known prompt marker we haven't answered yet,
-/// write `\r` into the PTY to confirm the default and flip the flag. We do
-/// this from the reader thread because that's where we observe the prompt
-/// arrive — same thread, same `accumulated` buffer, no races.
-fn advance_prompts(accumulated: &str, session: &Arc<ActiveSession>, state: &mut PromptState) {
-    // Markers picked from the captured raw output of `claude login` (v2.1.x).
-    // If Anthropic renames a prompt, the marker won't match and we fall back
-    // to the previous "user stares at a frozen modal" failure mode — which
-    // the front-end stall detector now surfaces as a hint after 15 s. Cheaper
-    // than parsing Inquirer state.
-    if !state.theme_confirmed && accumulated.contains("Choose the text style") {
-        if send_enter(session) {
-            state.theme_confirmed = true;
+/// If `accumulated` contains a known prompt marker that we haven't surfaced
+/// yet, emit a `PromptChoice` event so the modal can render the question +
+/// options as a radio group. We do *not* answer on behalf of the user:
+/// hard-coding "always pick subscription" was wrong for anyone on Console
+/// API-billing or on Bedrock/Vertex.
+fn detect_prompts(app: &AppHandle, accumulated: &str, state: &mut PromptState) {
+    for def in PROMPT_DEFS {
+        if state.emitted.contains(def.id) {
+            continue;
+        }
+        if accumulated.contains(def.marker) {
+            state.emitted.insert(def.id.to_string());
+            emit(
+                app,
+                CliLoginEvent::PromptChoice {
+                    id: def.id.to_string(),
+                    question: def.question.to_string(),
+                    options: def.options.iter().map(|s| (*s).to_string()).collect(),
+                    default_index: def.default_index,
+                },
+            );
         }
     }
-    if !state.method_confirmed && accumulated.contains("Select login method") {
-        if send_enter(session) {
-            state.method_confirmed = true;
-        }
-    }
-}
-
-/// Write a single `\r` (Enter) into the PTY's stdin. Returns true on success;
-/// false if the writer slot is already empty (taken by `submit_code`, or the
-/// session has been torn down). Failure here isn't fatal — the prompt will
-/// just sit unanswered, which is exactly the bug the stall detector covers.
-fn send_enter(session: &Arc<ActiveSession>) -> bool {
-    let mut slot = session.writer.lock().unwrap();
-    let Some(writer) = slot.as_mut() else {
-        return false;
-    };
-    writer.write_all(b"\r").and_then(|_| writer.flush()).is_ok()
 }
 
 /// Flush `line_buf` as a Progress event if it has content and isn't the same
@@ -607,6 +655,51 @@ fn wait_with_timeout(
         }
         thread::sleep(Duration::from_millis(50));
     }
+}
+
+// =============================================================================
+// Submit a list-prompt choice
+// =============================================================================
+
+/// Forward the user's pick on an Inquirer list prompt. We translate the
+/// (target, default) pair into the exact key sequence the CLI expects:
+/// `(target - default)` arrow-down (or arrow-up if negative) presses to move
+/// the cursor onto the right row, then `\r` to submit.
+///
+/// We pass `default_index` from the front rather than tracking it server-side
+/// because the front already has it (it came in the `prompt-choice` event)
+/// and keeping the writer thread stateless about prompt mechanics is simpler.
+/// The terminal doesn't care if we send a no-op number of arrows when the
+/// user picks the default — `\r` alone is fine.
+#[tauri::command]
+pub fn auth_cli_login_choose(target: usize, default_index: usize) -> Result<(), String> {
+    let session = current_session().ok_or_else(|| "No sign-in in progress.".to_string())?;
+    let mut writer_slot = session.writer.lock().unwrap();
+    let writer = writer_slot
+        .as_mut()
+        .ok_or_else(|| "Writer unavailable (already torn down).".to_string())?;
+
+    // ANSI cursor keys understood by Inquirer / readline.
+    const ARROW_DOWN: &[u8] = b"\x1b[B";
+    const ARROW_UP: &[u8] = b"\x1b[A";
+
+    let mut buf: Vec<u8> = Vec::new();
+    if target > default_index {
+        for _ in 0..(target - default_index) {
+            buf.extend_from_slice(ARROW_DOWN);
+        }
+    } else if target < default_index {
+        for _ in 0..(default_index - target) {
+            buf.extend_from_slice(ARROW_UP);
+        }
+    }
+    buf.push(b'\r');
+
+    writer
+        .write_all(&buf)
+        .and_then(|_| writer.flush())
+        .map_err(|e| format!("writing CLI stdin: {e}"))?;
+    Ok(())
 }
 
 // =============================================================================

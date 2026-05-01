@@ -37,6 +37,7 @@ import {
   onAuthChanged,
   onCliLoginEvent,
   startCliLogin,
+  submitCliLoginChoice,
   submitCliLoginCode,
 } from "../../ipc/auth";
 import {
@@ -506,10 +507,19 @@ function AccountSection() {
 /** State machine for the modal — drives which UI block is visible. */
 type LoginPhase =
   | "starting" // PTY spawned, waiting for the auth URL
+  | "awaiting-choice" // CLI is on a list prompt (theme / login method); user must pick
   | "awaiting-paste" // URL received, paste box shown
   | "submitting" // user submitted the code, CLI is exchanging it
   | "completed" // credentials written, modal will auto-close
   | "failed"; // CLI exited non-zero or spawn error
+
+/** Shape of a list prompt the CLI threw at us, mirrored as a radio group. */
+type Prompt = {
+  id: string;
+  question: string;
+  options: string[];
+  defaultIndex: number;
+};
 
 /**
  * Wraps the full `claude login` lifecycle in a single modal. We never show
@@ -550,6 +560,16 @@ function CliLoginModal({
   // "this is taking longer than usual" hint with a Cancel + Retry escape
   // hatch so the user is never stuck staring at a spinner.
   const [stalled, setStalled] = useState(false);
+  // Active list-prompt the CLI just put up (theme picker, login method, …).
+  // Cleared as soon as the user submits, so the modal flips back to a busy
+  // state while the CLI moves to the next screen.
+  const [prompt, setPrompt] = useState<Prompt | null>(null);
+  // Local selection inside the radio group — defaults to the CLI's default
+  // option, gets bumped as the user clicks.
+  const [pickedIndex, setPickedIndex] = useState(0);
+  // Disables the radio group while we're sending the keys, so a quick
+  // double-click can't fire two choices for the same prompt.
+  const [submittingChoice, setSubmittingChoice] = useState(false);
   const codeRef = useRef<HTMLTextAreaElement>(null);
 
   // Bind the lifecycle: spawn the CLI, listen for events, kill on unmount.
@@ -581,6 +601,21 @@ function CliLoginModal({
           // Replaces the previous progress line — we only show the latest
           // one. The Rust side already dedupes spinner re-draws.
           setProgress(e.message);
+          break;
+        case "prompt-choice":
+          // CLI is on a list prompt. Stop the spinner, show the radio
+          // group, pre-select the CLI's default. Clear any pending
+          // progress line — the prompt screen makes it stale.
+          setPrompt({
+            id: e.id,
+            question: e.question,
+            options: e.options,
+            defaultIndex: e.defaultIndex,
+          });
+          setPickedIndex(e.defaultIndex);
+          setSubmittingChoice(false);
+          setProgress(null);
+          setPhase("awaiting-choice");
           break;
         case "auth-url":
           setAuthUrl(e.url);
@@ -621,14 +656,17 @@ function CliLoginModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Esc closes only when not actively submitting (so we don't kill mid-exchange).
+  // Esc closes only when we're not mid-write to the CLI's stdin — closing
+  // during `submitting` (code paste) or `submittingChoice` (radio confirm)
+  // would race the kill against a half-written line.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && phase !== "submitting") onClose();
+      const busy = phase === "submitting" || submittingChoice;
+      if (e.key === "Escape" && !busy) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase, onClose]);
+  }, [phase, submittingChoice, onClose]);
 
   // Stall detector: if we sit in a busy phase for 15+ seconds without the
   // CLI producing the next event, surface a "this is taking longer than
@@ -657,6 +695,23 @@ function CliLoginModal({
     }
   };
 
+  const handleConfirmChoice = async () => {
+    if (!prompt || submittingChoice) return;
+    setSubmittingChoice(true);
+    setError(null);
+    try {
+      await submitCliLoginChoice(pickedIndex, prompt.defaultIndex);
+      // Optimistically flip back to "starting" — we're waiting for either
+      // the next prompt, the auth URL, or a failure. The CLI's next screen
+      // arrives within a second or two on a healthy connection.
+      setPrompt(null);
+      setPhase("starting");
+    } catch (e) {
+      setError(String(e));
+      setSubmittingChoice(false);
+    }
+  };
+
   const handleCopyUrl = async () => {
     if (!authUrl) return;
     try {
@@ -679,7 +734,8 @@ function CliLoginModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md"
       onMouseDown={(e) => {
-        if (e.target === e.currentTarget && phase !== "submitting") onClose();
+        const busy = phase === "submitting" || submittingChoice;
+        if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
       <div className="glass-strong w-full max-w-[520px] rounded-2xl p-6 shadow-2xl">
@@ -716,6 +772,73 @@ function CliLoginModal({
             stalledHint="The first sign-in can take 10–30 seconds while the CLI checks for updates."
             onCancel={onClose}
           />
+        )}
+
+        {phase === "awaiting-choice" && prompt && (
+          <div className="mt-5 flex flex-col gap-4">
+            <div>
+              <p className="text-[12.5px] font-medium text-[var(--text-primary)]">
+                {prompt.question}
+              </p>
+              <p className="mt-0.5 text-[11.5px] text-[var(--text-muted)]">
+                The Claude CLI is asking you to pick. Choose here and we'll
+                forward your answer.
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {prompt.options.map((label, idx) => {
+                const checked = idx === pickedIndex;
+                return (
+                  <label
+                    key={idx}
+                    className={`flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-[12px] transition ${
+                      checked
+                        ? "border-[var(--color-accent-ring)] bg-[var(--color-accent)]/5 text-[var(--text-primary)]"
+                        : "border-[var(--glass-stroke)] text-[var(--text-secondary)] hover:border-[var(--color-accent-ring)]/60"
+                    } ${submittingChoice ? "pointer-events-none opacity-60" : ""}`}
+                  >
+                    <input
+                      type="radio"
+                      name={`prompt-${prompt.id}`}
+                      checked={checked}
+                      onChange={() => setPickedIndex(idx)}
+                      disabled={submittingChoice}
+                      className="size-3.5 accent-[var(--color-accent)]"
+                    />
+                    <span className="flex-1">{label}</span>
+                    {idx === prompt.defaultIndex && (
+                      <span className="font-mono text-[10px] text-[var(--text-muted)]">
+                        default
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+            {error && (
+              <p className="font-mono text-[11px] break-words text-red-700 dark:text-red-400">
+                {error}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submittingChoice}
+                className="rounded-lg px-3 py-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmChoice()}
+                disabled={submittingChoice}
+                className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+              >
+                {submittingChoice ? "Sending…" : "Confirm"}
+              </button>
+            </div>
+          </div>
         )}
 
         {phase === "awaiting-paste" && authUrl && (
