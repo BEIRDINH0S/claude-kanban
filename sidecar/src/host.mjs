@@ -323,7 +323,7 @@ class SessionHandle {
         log(`canUseTool ${toolName} TIMEOUT req=${requestId}`);
         entry.resolve({
           behavior: "deny",
-          message: "Délai de réponse dépassé.",
+          message: "Response timeout exceeded.",
         });
       }, PERMISSION_TIMEOUT_MS);
       // Stash the original input alongside resolve: when Rust replies with
@@ -442,7 +442,7 @@ class SessionHandle {
         pendingPermissions.delete(rid);
         entry.resolve({
           behavior: "deny",
-          message: "Session terminée avant la réponse.",
+          message: "Session ended before the response arrived.",
         });
       }
     }
@@ -464,7 +464,7 @@ class SessionHandle {
 // Policy now: this app NEVER speaks to Anthropic's APIs directly. The only
 // way to use the subscription is through the bundled `claude` binary the
 // SDK spawns. The subscription % feature is therefore disabled — we keep
-// the IPC plumbing so the UI can render a friendly "indisponible — sécurité"
+// the IPC plumbing so the UI can render a friendly "unavailable — security"
 // message rather than crash, but the function is a pure stub that performs
 // no network call, no credential read, no cache I/O.
 //
@@ -563,7 +563,7 @@ rl.on("line", (line) => {
       } else {
         resolve({
           behavior: "deny",
-          message: msg.message ?? "Refusé par l'utilisateur",
+          message: msg.message ?? "Refused by the user",
           interrupt: !!msg.interrupt,
         });
       }

@@ -37,7 +37,7 @@ use crate::db::{
     is_card_project_archived, is_project_archived, Card, CardColumn, DbState,
 };
 
-const ARCHIVED_ERR: &str = "Ce projet est archivé en lecture seule.";
+const ARCHIVED_ERR: &str = "This project is archived as read only.";
 
 fn now_ms() -> i64 {
     SystemTime::now()
@@ -295,7 +295,7 @@ pub fn set_card_session_config(
         let is_full = s.starts_with("claude-");
         if !is_alias && !is_full {
             return Err(format!(
-                "model invalide : « {s} » — attendu sonnet/opus/haiku ou claude-…"
+                "invalid model: \"{s}\" — expected sonnet/opus/haiku or claude-…"
             ));
         }
     }
@@ -308,7 +308,7 @@ pub fn set_card_session_config(
     if let Some(s) = permission_mode.as_deref() {
         if !matches!(s, "default" | "acceptEdits" | "plan" | "bypassPermissions") {
             return Err(format!(
-                "permission_mode invalide : « {s} »"
+                "invalid permission_mode: \"{s}\""
             ));
         }
     }
@@ -323,7 +323,7 @@ pub fn set_card_session_config(
 
     if let Some(n) = max_turns {
         if n <= 0 {
-            return Err("max_turns doit être > 0".into());
+            return Err("max_turns must be > 0".into());
         }
     }
 

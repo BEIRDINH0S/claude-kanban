@@ -109,7 +109,7 @@ fn load_session_config(
     }
 }
 
-const ARCHIVED_ERR: &str = "Ce projet est archivé en lecture seule.";
+const ARCHIVED_ERR: &str = "This project is archived as read only.";
 
 fn now_ms() -> i64 {
     SystemTime::now()

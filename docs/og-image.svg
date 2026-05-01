@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OpenGraph / Twitter Card image for claude-kanban.
+  1200×630 — the standard 1.91:1 aspect ratio used by Twitter, Slack,
+  Discord, Facebook, LinkedIn previews. Designed in SVG so it stays crisp
+  and easy to tweak. To rasterize for crawlers that don't render SVG:
+
+      npx @resvg/resvg-js-cli docs/og-image.svg docs/og-image.png \
+        --width 1200 --height 630
+
+  (or any SVG→PNG tool — Figma/Inkscape/Chrome screenshot works too).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- Deep night background with a soft purple glow top-left,
+         echoing the website's atmosphere. -->
+    <radialGradient id="glow" cx="20%" cy="15%" r="70%">
+      <stop offset="0%"  stop-color="#3a1d6e" stop-opacity="0.55"/>
+      <stop offset="60%" stop-color="#0e0a1f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#0b0918"/>
+      <stop offset="100%" stop-color="#070512"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"  stop-color="#b89cff"/>
+      <stop offset="100%" stop-color="#7e6bff"/>
+    </linearGradient>
+    <!-- Subtle column tint -->
+    <linearGradient id="col-active" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#1a1635"/>
+      <stop offset="100%" stop-color="#120f28"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Mini kanban: 4 columns of cards on the right side. Just enough
+       to show the product type without making the image busy. -->
+  <g transform="translate(620, 90)" opacity="0.9">
+    <!-- Column frames -->
+    <g font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="14" fill="#9b95b8" letter-spacing="0.06em">
+      <text x="0"   y="0">TODO</text>
+      <text x="130" y="0">IN PROGRESS</text>
+      <text x="290" y="0">REVIEW</text>
+      <text x="420" y="0">DONE</text>
+    </g>
+
+    <!-- Column 1: Todo -->
+    <g transform="translate(0, 20)">
+      <rect width="115" height="56" rx="10" fill="#13102a" stroke="#2a2451" stroke-width="1"/>
+      <rect x="12" y="14" width="70" height="6" rx="3" fill="#cbc4f0"/>
+      <rect x="12" y="28" width="42" height="4" rx="2" fill="#5a4f8d" opacity="0.7"/>
+    </g>
+    <g transform="translate(0, 90)">
+      <rect width="115" height="56" rx="10" fill="#13102a" stroke="#2a2451" stroke-width="1"/>
+      <rect x="12" y="14" width="60" height="6" rx="3" fill="#cbc4f0"/>
+      <rect x="12" y="28" width="36" height="4" rx="2" fill="#5a4f8d" opacity="0.7"/>
+    </g>
+
+    <!-- Column 2: In Progress (active card with accent) -->
+    <g transform="translate(130, 20)">
+      <rect width="145" height="56" rx="10" fill="url(#col-active)" stroke="#7e6bff" stroke-width="1.5"/>
+      <circle cx="14" cy="20" r="4" fill="#7e6bff">
+        <animate attributeName="opacity" values="1;0.4;1" dur="1.6s" repeatCount="indefinite"/>
+      </circle>
+      <rect x="26" y="14" width="80" height="6" rx="3" fill="#e9e4ff"/>
+      <rect x="26" y="28" width="50" height="4" rx="2" fill="#7e6bff" opacity="0.6"/>
+      <rect x="26" y="38" width="32" height="4" rx="2" fill="#5a4f8d" opacity="0.5"/>
+    </g>
+    <g transform="translate(130, 90)">
+      <rect width="145" height="56" rx="10" fill="url(#col-active)" stroke="#7e6bff" stroke-width="1.5"/>
+      <circle cx="14" cy="20" r="4" fill="#7e6bff">
+        <animate attributeName="opacity" values="1;0.4;1" dur="1.6s" begin="0.4s" repeatCount="indefinite"/>
+      </circle>
+      <rect x="26" y="14" width="70" height="6" rx="3" fill="#e9e4ff"/>
+      <rect x="26" y="28" width="44" height="4" rx="2" fill="#7e6bff" opacity="0.6"/>
+    </g>
+
+    <!-- Column 3: Review (amber stroke) -->
+    <g transform="translate(290, 20)">
+      <rect width="115" height="56" rx="10" fill="#13102a" stroke="#d6a05a" stroke-width="1"/>
+      <rect x="12" y="14" width="64" height="6" rx="3" fill="#cbc4f0"/>
+      <rect x="12" y="28" width="40" height="4" rx="2" fill="#d6a05a" opacity="0.6"/>
+    </g>
+
+    <!-- Column 4: Done -->
+    <g transform="translate(420, 20)">
+      <rect width="115" height="56" rx="10" fill="#13102a" stroke="#2a2451" stroke-width="1" opacity="0.6"/>
+      <rect x="12" y="14" width="58" height="6" rx="3" fill="#7d77a0"/>
+      <rect x="12" y="28" width="32" height="4" rx="2" fill="#3e3868" opacity="0.7"/>
+    </g>
+  </g>
+
+  <!-- Title block, left side -->
+  <g transform="translate(80, 230)" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+    <!-- accent rule -->
+    <rect x="0" y="0" width="56" height="3" rx="1.5" fill="url(#accent)"/>
+
+    <text x="0" y="64" font-size="74" font-weight="700" fill="#f3f0ff" letter-spacing="-0.025em">claude-kanban</text>
+
+    <text x="0" y="118" font-size="28" font-weight="500" fill="#bfb7e0" letter-spacing="-0.005em">Run Claude Code agents in parallel.</text>
+    <text x="0" y="156" font-size="28" font-weight="500" fill="#bfb7e0" letter-spacing="-0.005em">Kanban for AI workflows.</text>
+
+    <!-- Bullet row -->
+    <g transform="translate(0, 220)" font-size="18" fill="#9b95b8">
+      <g>
+        <circle cx="6" cy="-5" r="3" fill="#7ee0a0"/>
+        <text x="20" y="0">No account-ban risk — drives the official claude binary</text>
+      </g>
+      <g transform="translate(0, 32)">
+        <circle cx="6" cy="-5" r="3" fill="#7ee0a0"/>
+        <text x="20" y="0">N parallel sessions, one per kanban card</text>
+      </g>
+      <g transform="translate(0, 64)">
+        <circle cx="6" cy="-5" r="3" fill="#7ee0a0"/>
+        <text x="20" y="0">Per-card git worktree, click-to-approve tools</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Footer mark -->
+  <g transform="translate(80, 580)" font-family="ui-monospace, 'JetBrains Mono', Menlo, monospace" font-size="14" fill="#6b6493">
+    <text>github.com/BEIRDINH0S/claude-kanban</text>
+  </g>
+  <g transform="translate(1120, 580)" font-family="ui-monospace, 'JetBrains Mono', Menlo, monospace" font-size="14" fill="#6b6493" text-anchor="end">
+    <text>MIT · Tauri · React</text>
+  </g>
+</svg>

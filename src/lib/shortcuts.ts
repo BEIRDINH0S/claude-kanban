@@ -59,75 +59,75 @@ export type ShortcutId = (typeof SHORTCUT_IDS)[number];
 export const SHORTCUTS: ShortcutDefinition[] = [
   {
     id: "global.palette",
-    label: "Ouvrir la palette",
-    description: "Cherche projets, cartes, actions.",
+    label: "Open the command palette",
+    description: "Search projects, cards, actions.",
     scope: "global",
     defaults: [{ key: "k", meta: true }],
   },
   {
     id: "global.search",
-    label: "Rechercher dans le board",
-    description: "Filtre les cartes par titre, repo ou tag.",
+    label: "Search the board",
+    description: "Filter cards by title, repo or tag.",
     scope: "global",
     defaults: [{ key: "f", meta: true }],
   },
   {
     id: "board.moveDown",
-    label: "Carte suivante (bas)",
+    label: "Next card (down)",
     scope: "board",
     defaults: [{ key: "j" }, { key: "ArrowDown" }],
   },
   {
     id: "board.moveUp",
-    label: "Carte précédente (haut)",
+    label: "Previous card (up)",
     scope: "board",
     defaults: [{ key: "k" }, { key: "ArrowUp" }],
   },
   {
     id: "board.moveLeft",
-    label: "Colonne à gauche",
+    label: "Column to the left",
     scope: "board",
     defaults: [{ key: "h" }, { key: "ArrowLeft" }],
   },
   {
     id: "board.moveRight",
-    label: "Colonne à droite",
+    label: "Column to the right",
     scope: "board",
     defaults: [{ key: "l" }, { key: "ArrowRight" }],
   },
   {
     id: "board.openCard",
-    label: "Ouvrir la carte sélectionnée",
+    label: "Open the selected card",
     scope: "board",
     defaults: [{ key: "Enter" }, { key: "o" }],
   },
   {
     id: "board.newTask",
-    label: "Nouvelle tâche",
+    label: "New task",
     scope: "board",
     defaults: [{ key: "n" }],
   },
   {
     id: "board.openSearch",
-    label: "Recherche du board",
+    label: "Board search",
     scope: "board",
     defaults: [{ key: "/" }],
   },
   {
     id: "board.archive",
-    label: "Archiver (déplacer en Done)",
+    label: "Archive (move to Done)",
     scope: "board",
     defaults: [{ key: "a" }],
   },
   {
     id: "board.duplicate",
-    label: "Dupliquer",
+    label: "Duplicate",
     scope: "board",
     defaults: [{ key: "y" }],
   },
   {
     id: "board.delete",
-    label: "Supprimer",
+    label: "Delete",
     scope: "board",
     defaults: [{ key: "d" }, { key: "Backspace" }, { key: "Delete" }],
   },
@@ -210,13 +210,13 @@ function formatKeyLabel(k: string): string {
     case "Backspace":
       return "⌫";
     case "Delete":
-      return "Suppr";
+      return "Del";
     case "Escape":
       return "Esc";
     case "Tab":
       return "⇥";
     case " ":
-      return "Espace";
+      return "Space";
     default:
       return SINGLE_CHAR(k) ? k.toUpperCase() : k;
   }

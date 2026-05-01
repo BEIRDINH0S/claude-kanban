@@ -87,17 +87,17 @@ export function CreateCardModal({ onClose }: Props) {
         <header className="flex items-start justify-between">
           <div>
             <p className="text-[11px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-              Nouvelle tâche
+              New task
             </p>
             <h2 className="mt-1 text-lg font-semibold text-[var(--text-primary)]">
-              Crée une carte
+              Create a card
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="-mt-1 -mr-1 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-            aria-label="Fermer"
+            aria-label="Close"
           >
             <X className="size-4" strokeWidth={1.5} />
           </button>
@@ -105,25 +105,25 @@ export function CreateCardModal({ onClose }: Props) {
 
         <label className="mt-5 block">
           <span className="text-xs font-medium text-[var(--text-secondary)]">
-            Titre
+            Title
           </span>
           <input
             ref={titleRef}
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Une étiquette courte pour t'y retrouver"
+            placeholder="A short label so you can find it later"
             className="mt-1.5 w-full rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] outline-none focus:border-[var(--color-accent-ring)] focus:ring-2 focus:ring-[var(--color-accent-ring)] dark:bg-white/5"
           />
           <span className="mt-1 block text-[10.5px] text-[var(--text-muted)]">
-            Le titre est juste un libellé. Le premier message à Claude se tape
-            ensuite dans la conversation.
+            The title is just a label. You'll type the first message to Claude
+            inside the conversation.
           </span>
         </label>
 
         <label className="mt-4 block">
           <span className="text-xs font-medium text-[var(--text-secondary)]">
-            Répertoire de travail
+            Working directory
           </span>
           <button
             type="button"
@@ -136,7 +136,7 @@ export function CreateCardModal({ onClose }: Props) {
                 projectPath ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"
               }`}
             >
-              {projectPath ?? "Choisir un dossier…"}
+              {projectPath ?? "Pick a folder…"}
             </span>
           </button>
         </label>
@@ -155,20 +155,20 @@ export function CreateCardModal({ onClose }: Props) {
                 strokeWidth={1.75}
               />
               <span className="text-[12px] font-medium text-[var(--text-primary)]">
-                Créer un git worktree dédié
+                Create a dedicated git worktree
               </span>
             </div>
             <p className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">
-              Si le dossier choisi est un repo git, on crée une branche{" "}
+              If the chosen folder is a git repo, we create a{" "}
               <code className="font-mono text-[10.5px]">
                 claude-kanban/card-…
               </code>{" "}
-              dans{" "}
+              branch in{" "}
               <code className="font-mono text-[10.5px]">
                 .claude-kanban-worktrees/
               </code>{" "}
-              à côté du repo. Évite que plusieurs cartes parallèles se
-              piétinent. Sinon, la session tourne directement dans le dossier.
+              next to the repo. Stops parallel cards from stepping on each
+              other. Otherwise the session runs directly in the folder.
             </p>
           </div>
         </label>
@@ -183,14 +183,14 @@ export function CreateCardModal({ onClose }: Props) {
             onClick={onClose}
             className="rounded-lg px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5"
           >
-            Annuler
+            Cancel
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
             className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white shadow-[0_0_24px_var(--color-accent-ring)] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
-            {submitting ? "Création…" : "Créer"}
+            {submitting ? "Creating…" : "Create"}
           </button>
         </div>
       </form>

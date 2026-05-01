@@ -1,121 +1,122 @@
-# CLAUDE.md — carte du repo pour les agents
+# CLAUDE.md — repo map for agents
 
-Pas une doc, pas un wiki. Juste un fichier de **routage** qui dit où aller
-selon ce que tu touches. Pour les détails, lis le top-of-file de la
-destination — ils sont à jour parce que c'est dans le fichier qu'on touche
-de toute façon.
+Not a doc, not a wiki. Just a **routing** file that tells you where to go
+based on what you're touching. For details, read the top-of-file of the
+destination — they're up to date because that's the file you're editing
+anyway.
 
-## Si tu touches…
+## If you touch…
 
-| Sujet | Va voir |
+| Topic | Go look at |
 |---|---|
-| **auth / login** | `src-tauri/src/auth/cli_login.rs` (PTY runner pour `claude login`)<br>`src-tauri/src/auth/credentials_watch.rs` (file watcher → `auth-changed`)<br>`src-tauri/src/auth/storage.rs` (lecture de `~/.claude/.credentials.json`)<br>⚠ **Politique stricte** : ne JAMAIS ajouter d'appel à `*.anthropic.com`. Cf. README §Sécurité. |
-| **sessions Claude** | `src-tauri/src/session_host/mod.rs` (spawn du sidecar, dispatch JSON-lines)<br>`src-tauri/src/session_host/protocol.rs` (enums `SidecarInbound` / `SidecarOutbound`)<br>`src-tauri/src/commands/sessions.rs` (commandes Tauri exposées au front)<br>`sidecar/src/host.mjs::SessionHandle` (le pendant Node) |
-| **kanban / drag & drop** | `src/features/kanban/Board.tsx` (orchestrateur + DnD + raccourcis)<br>`src/stores/cardsStore.ts` (state + optimistic moves)<br>`src-tauri/src/commands/cards.rs` (CRUD + position renumbering en transaction) |
-| **DB / SQLite** | `src-tauri/src/db/mod.rs` (open + WAL + repair boot)<br>`src-tauri/src/db/migrations.rs` (schéma versionné, append-only)<br>`src-tauri/src/db/types.rs` (`Card`, `Project`, `CardColumn`)<br>⚠ **Jamais éditer une migration passée** — toujours en ajouter une nouvelle. |
-| **permissions tool-call** | `src-tauri/src/permissions.rs` (parse + glob + `is_allowed`)<br>`src-tauri/src/commands/permissions.rs` (CRUD Tauri thin wrapper)<br>`src/features/settings/SettingsPage.tsx::PermissionRulesSection` (UI) |
-| **usage / coûts / tokens** | `src-tauri/src/usage/{ingest,parser,pricing,queries}.rs` (pipeline JSONL → SQLite → aggregations)<br>`src-tauri/src/usage/pricing.rs` (table USD/M tokens — à bumper quand Anthropic change ses prix) |
-| **git / worktrees** | `src-tauri/src/worktree.rs` (shell-out `git worktree`)<br>`src-tauri/src/git_fetch.rs` (workers fetch + GC) |
+| **auth / login** | `src-tauri/src/auth/cli_login.rs` (PTY runner for `claude login`)<br>`src-tauri/src/auth/credentials_watch.rs` (file watcher → `auth-changed`)<br>`src-tauri/src/auth/storage.rs` (reads `~/.claude/.credentials.json`)<br>⚠ **Strict policy**: never add a call to `*.anthropic.com`. See README §Security. |
+| **Claude sessions** | `src-tauri/src/session_host/mod.rs` (sidecar spawn + JSON-lines dispatch)<br>`src-tauri/src/session_host/protocol.rs` (`SidecarInbound` / `SidecarOutbound` enums)<br>`src-tauri/src/commands/sessions.rs` (Tauri commands exposed to the front)<br>`sidecar/src/host.mjs::SessionHandle` (the Node-side counterpart) |
+| **kanban / drag & drop** | `src/features/kanban/Board.tsx` (orchestrator + DnD + shortcuts)<br>`src/stores/cardsStore.ts` (state + optimistic moves)<br>`src-tauri/src/commands/cards.rs` (CRUD + position renumbering in a single transaction) |
+| **DB / SQLite** | `src-tauri/src/db/mod.rs` (open + WAL + boot repair)<br>`src-tauri/src/db/migrations.rs` (versioned schema, append-only)<br>`src-tauri/src/db/types.rs` (`Card`, `Project`, `CardColumn`)<br>⚠ **Never edit a past migration** — always append a new one. |
+| **tool-call permissions** | `src-tauri/src/permissions.rs` (parse + glob + `is_allowed`)<br>`src-tauri/src/commands/permissions.rs` (thin Tauri CRUD wrapper)<br>`src/features/settings/SettingsPage.tsx::PermissionRulesSection` (UI) |
+| **usage / costs / tokens** | `src-tauri/src/usage/{ingest,parser,pricing,queries}.rs` (JSONL → SQLite → aggregations pipeline)<br>`src-tauri/src/usage/pricing.rs` (USD/M tokens table — bump it when Anthropic changes prices) |
+| **git / worktrees** | `src-tauri/src/worktree.rs` (shells out to `git worktree`)<br>`src-tauri/src/git_fetch.rs` (fetch workers + GC) |
 | **JSONL watcher** | `src-tauri/src/jsonl_watcher.rs` (`~/.claude/projects/**/*.jsonl` → `external-jsonl-update`) |
-| **slash commands** | `src-tauri/src/commands/user_commands.rs` (discovery `~/.claude/commands/*.md` + `<project>/.claude/commands/*.md`) |
-| **prefs (clé/valeur)** | `src-tauri/src/commands/prefs.rs` (table `app_prefs`, accessible depuis JS et depuis le boot Rust) |
-| **UI Settings** | `src/features/settings/SettingsPage.tsx` (toutes les sections dans ce seul fichier — `AccountSection`, `ClaudeRuntimeSection`, etc.) |
+| **slash commands** | `src-tauri/src/commands/user_commands.rs` (discovery: `~/.claude/commands/*.md` + `<project>/.claude/commands/*.md`) |
+| **prefs (key/value)** | `src-tauri/src/commands/prefs.rs` (`app_prefs` table, accessible from JS and from Rust boot) |
+| **Settings UI** | `src/features/settings/SettingsPage.tsx` (every section in one file — `AccountSection`, `ClaudeRuntimeSection`, etc.) |
 
 ## Conventions
 
-- **Langue** : tous les commentaires + messages d'erreur user-facing en
-  français. Code (variables, types, identifiants) en anglais.
-- **Pas d'emojis** dans le code, jamais. Seulement dans l'UI quand
-  délibéré (icônes lucide-react).
-- **Tauri commands** : `snake_case` côté Rust (`#[tauri::command] pub fn
-  start_session`), exposés en `camelCase` côté TS via les wrappers de
-  `src/ipc/`. La conversion se fait par serde (`rename_all = "camelCase"`).
-- **Erreurs Tauri** : `Result<T, String>`. La string est rendue telle
-  quelle à l'utilisateur, donc lisible FR.
-- **State côté front** : Zustand. Un slice par concern, jamais de
-  Redux-like reducers.
-- **Top-of-file docstrings** : module-level doc avec `//!` (Rust) ou
-  JSDoc `/** */` (TS). Explique **quoi + pourquoi**, pas comment. Si tu
-  touches le module et que la docstring devient fausse, fixe-la dans
-  le même commit.
+- **Language**: every comment, docstring, and user-facing string is in
+  **English**. Variables, types, identifiers obviously too.
+- **No emojis** in code, ever. Only in UI when deliberate (lucide-react
+  icons).
+- **Tauri commands**: `snake_case` on the Rust side
+  (`#[tauri::command] pub fn start_session`), exposed as `camelCase` on
+  the TS side via the `src/ipc/` wrappers. Conversion via serde
+  (`rename_all = "camelCase"`).
+- **Tauri errors**: `Result<T, String>`. The string is rendered as-is to
+  the user, so keep it readable English.
+- **Front-end state**: Zustand. One slice per concern, never
+  Redux-style reducers.
+- **Top-of-file docstrings**: module-level doc with `//!` (Rust) or
+  JSDoc `/** */` (TS). Explains **what + why**, not how. If you touch
+  the module and the docstring becomes stale, fix it in the same commit.
 
-## Anti-patterns à NE PAS introduire
+## Anti-patterns NOT to introduce
 
-- **Appel HTTP direct à `*.anthropic.com`** — c'est exactement ce qu'on a
-  réécrit en v0.8.0. Toute la com avec Anthropic passe par le binaire
-  `claude` officiel bundlé. Si tu penses avoir besoin, tu te trompes :
-  drive le CLI dans une PTY (cf. `auth::cli_login`).
-- **`Command::new("claude")`** — passe par `auth::cli_login::resolve_claude`
-  (priorité au binaire bundlé `node_modules/@anthropic-ai/claude-agent-sdk-{plat}-{arch}/claude`,
-  fallback PATH). Sinon tu casses les installs sans `claude` global.
-- **Polling où un watcher fait le job** — cf. `credentials_watch.rs`,
-  `jsonl_watcher.rs`. Si tu te retrouves à appeler `setInterval` ou
-  `tokio::time::interval` sur du state qui peut émettre, c'est un signe.
-- **Refresh manuel des tokens OAuth** — c'est le CLI qui refresh, jamais
-  nous. Si tu vois du code qui essaye d'appeler `console.anthropic.com/v1/oauth/token`,
-  vire-le.
-- **Editer une migration SQL passée** — toujours append. Le schéma est
-  versionné via `PRAGMA user_version`, retoucher l'historique casse
-  les bases existantes.
-- **Optimisation prématurée du renumbering de cards** — ne saute PAS le
-  pass close-hole/open-hole sur les moves intra-colonne. C'est tentant
-  mais ça casse les positions adjacentes. Cf. `commands/cards.rs::move_card`.
+- **Direct HTTP call to `*.anthropic.com`** — that's exactly what we
+  rewrote in v0.8.0. All Anthropic communication goes through the
+  bundled official `claude` binary. If you think you need it, you don't:
+  drive the CLI in a PTY (see `auth::cli_login`).
+- **`Command::new("claude")`** — go through
+  `auth::cli_login::resolve_claude` (priority on the bundled binary
+  `node_modules/@anthropic-ai/claude-agent-sdk-{plat}-{arch}/claude`,
+  PATH fallback). Otherwise you break installs without a global `claude`.
+- **Polling where a watcher does the job** — see
+  `credentials_watch.rs`, `jsonl_watcher.rs`. If you find yourself
+  calling `setInterval` or `tokio::time::interval` on state that can
+  emit, that's a sign.
+- **Manual OAuth token refresh** — the CLI refreshes, never us. If you
+  see code trying to call `console.anthropic.com/v1/oauth/token`, kill
+  it.
+- **Editing a past SQL migration** — always append. The schema is
+  versioned via `PRAGMA user_version`; rewriting history breaks
+  existing databases.
+- **Premature optimization of card position renumbering** — do NOT
+  skip the close-hole / open-hole pass on intra-column moves. Tempting
+  but it breaks adjacent positions. See
+  `commands/cards.rs::move_card`.
 
-## Structure (memo rapide)
+## Layout (quick memo)
 
 ```
 claude-kanban/
 ├── src/                          React + Zustand + dnd-kit
 │   ├── features/{kanban,session,card-create,usage,settings,projects,palette,toasts}/
-│   ├── stores/                   slices Zustand
-│   ├── ipc/                      wrappers typés autour de invoke()
-│   └── types/                    types partagés (camelCase, miroirs des shapes Rust)
+│   ├── stores/                   Zustand slices
+│   ├── ipc/                      typed wrappers around invoke()
+│   └── types/                    shared types (camelCase, mirrors of the Rust shapes)
 ├── src-tauri/src/                Rust (Tauri)
 │   ├── auth/                     login + credentials watcher + storage
-│   ├── commands/                 toutes les Tauri commands (un fichier par concern)
-│   ├── db/                       open + migrations + types Card/Project
-│   ├── usage/                    pipeline JSONL → SQLite + queries
-│   ├── session_host/             sidecar Node spawn + protocole JSON-lines
-│   ├── git_fetch.rs              workers fetch + GC
-│   ├── worktree.rs               wrappers `git worktree`
-│   ├── permissions.rs            règles d'auto-approve + glob matcher
-│   ├── jsonl_watcher.rs          watch ~/.claude/projects/**/*.jsonl
-│   └── lib.rs                    setup() + invoke_handler! + spawn workers
-└── sidecar/                      process Node
+│   ├── commands/                 every Tauri command (one file per concern)
+│   ├── db/                       open + migrations + Card / Project types
+│   ├── usage/                    JSONL → SQLite pipeline + queries
+│   ├── session_host/             sidecar spawn + JSON-lines protocol
+│   ├── git_fetch.rs              fetch workers + GC
+│   ├── worktree.rs               wrappers around `git worktree`
+│   ├── permissions.rs            auto-approve rules + glob matcher
+│   ├── jsonl_watcher.rs          watches ~/.claude/projects/**/*.jsonl
+│   └── lib.rs                    setup() + invoke_handler! + worker spawn
+└── sidecar/                      Node process
     ├── node_modules/@anthropic-ai/claude-agent-sdk-{plat}-{arch}/claude
-    │                             binaire `claude` officiel — utilisé par
-    │                             les sessions ET par auth::cli_login
-    └── src/host.mjs              multiplexeur de sessions, canUseTool round-trip
+    │                             official `claude` binary — used both by
+    │                             sessions AND by auth::cli_login
+    └── src/host.mjs              session multiplexer, canUseTool round-trip
 ```
 
-## Workflow de PR
+## PR workflow
 
-- Branches : `claude-kanban/<topic>` ou `claude-kanban/card-<id>` selon
-  l'origine. Squash-merge systématique.
-- Messages de commit : descriptif en français, em-dash (`—`) pour
-  séparer le titre court du qualificatif. Pattern fréquent : `Fix: X`,
-  `X — fini Y`. Cf. `git log --oneline` pour le ton.
-- Tags release : `v0.X.Y`. Le workflow `release.yml` se déclenche sur
-  push d'un tag `v*` et build les 3 plateformes (macOS arm64/x64,
-  Windows x64). Pour rebuild un tag existant après un fix critique,
-  cf. README §Publier une nouvelle version.
+- Branches: `claude-kanban/<topic>` or `claude-kanban/card-<id>`
+  depending on origin. Always squash-merge.
+- Commit messages: short and descriptive in English, em-dash (`—`) to
+  separate the short title from a qualifier. Frequent patterns:
+  `Fix: X`, `X — done with Y`. See `git log --oneline` for the tone.
+- Release tags: `v0.X.Y`. The `release.yml` workflow triggers on
+  pushing a `v*` tag and builds the 3 platforms (macOS arm64/x64,
+  Windows x64). To rebuild an existing tag after a critical fix, see
+  README §Releasing a new version.
 
-## Maintien de ce fichier
+## Maintaining this file
 
-Mets ce fichier à jour **dans la même PR** quand un de ces 3 triggers
-concrets arrive :
+Update this file **in the same PR** when one of these 3 concrete
+triggers happens:
 
-1. **Nouvelle zone fonctionnelle** — tu ajoutes un dossier sous
-   `src/features/` ou `src-tauri/src/` qui n'a pas de ligne dans le
-   tableau de routage → ajoute une ligne.
-2. **Renommage / déplacement** — un fichier ou dossier listé ici a
-   bougé → fixe le chemin.
-3. **Anti-pattern découvert** — tu corriges un bug ou un refacto qui
-   révèle une classe d'erreur non listée dans **Anti-patterns** →
-   ajoute un bullet (1-3 lignes max).
+1. **New functional area** — you add a folder under `src/features/` or
+   `src-tauri/src/` that has no row in the routing table → add a row.
+2. **Rename / move** — a file or folder listed here moved → fix the
+   path.
+3. **Anti-pattern discovered** — you fix a bug or refactor that reveals
+   an error class not listed under **Anti-patterns** → add a bullet
+   (1-3 lines max).
 
-Ne **PAS** mettre à jour pour : changements internes à un module (la
-docstring du module fait le boulot), refacto cosmétique, fix de typo,
-nouvelle dépendance qui ne change pas le shape du code. Ce fichier est
-du routage, pas un changelog — chaque ligne ajoutée doit gagner sa
-place.
+Do **NOT** update for: changes internal to a module (the module
+docstring covers it), cosmetic refactors, typo fixes, or a new
+dependency that doesn't change the shape of the code. This file is
+routing, not a changelog — every line you add must earn its spot.

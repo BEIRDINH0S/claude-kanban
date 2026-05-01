@@ -20,23 +20,44 @@
                                     timeline drives every animated state)
   ▸ Plugging a real demo video    → see docs/assets/README.md
 -->
-<html lang="fr" data-theme="dark">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark light" />
-  <title>claude-kanban — Plusieurs Claude Code, un kanban vivant</title>
-  <meta name="description" content="App desktop locale qui orchestre plusieurs sessions Claude Code en parallèle dans un kanban glassy. Permissions visuelles, transitions automatiques, usage tracking, reprise de session — sans jamais toucher au CLI." />
+  <title>claude-kanban — Run Claude Code agents in parallel</title>
+  <meta name="description" content="A local desktop app that runs N Claude Code sessions in parallel, one per kanban card. Each session lives in its own git worktree. Drives the official claude binary in a hidden PTY — no impersonation, no risk of getting your Anthropic account suspended." />
 
-  <!-- Open Graph / Twitter -->
-  <meta property="og:title" content="claude-kanban" />
-  <meta property="og:description" content="Plusieurs Claude. Un kanban vivant. Pilote tes sessions Claude Code en parallèle." />
+  <!-- Canonical URL — update if you switch from GitHub Pages to a custom domain. -->
+  <link rel="canonical" href="https://beirdinh0s.github.io/claude-kanban/" />
+
+  <!-- Open Graph / Twitter Cards.
+       og-image.png is the rasterized version of og-image.svg (1200×630).
+       See the SVG header for the conversion command. The SVG itself is
+       served as a fallback for crawlers that accept it (Slack, Discord,
+       LinkedIn). Twitter requires PNG/JPG, so keep the .png up to date. -->
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://beirdinh0s.github.io/claude-kanban/" />
+  <meta property="og:site_name" content="claude-kanban" />
+  <meta property="og:title" content="claude-kanban — Run Claude Code agents in parallel" />
+  <meta property="og:description" content="N parallel Claude Code sessions, kanban-driven. Drives the official claude binary in a hidden PTY — won't get your Anthropic account suspended." />
+  <meta property="og:image" content="https://beirdinh0s.github.io/claude-kanban/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="claude-kanban — kanban board with parallel Claude Code sessions" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="claude-kanban — Run Claude Code agents in parallel" />
+  <meta name="twitter:description" content="N parallel Claude Code sessions, kanban-driven. Drives the official claude binary in a hidden PTY — won't get your Anthropic account suspended." />
+  <meta name="twitter:image" content="https://beirdinh0s.github.io/claude-kanban/og-image.png" />
 
   <!-- Favicon — inline SVG of the kanban motif in accent purple -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='6' width='6' height='20' rx='1.5' fill='%23a78bfa' opacity='0.35'/><rect x='13' y='6' width='6' height='14' rx='1.5' fill='%23a78bfa' opacity='0.7'/><rect x='23' y='6' width='6' height='8' rx='1.5' fill='%23a78bfa'/></svg>" />
+
+  <!-- Plausible analytics — privacy-friendly, no cookies, GDPR-clean. The
+       data-domain MUST match the domain configured in your Plausible
+       dashboard. If you don't have one yet, comment out this script;
+       leaving it in just hits 404 silently and doesn't break the page. -->
+  <script defer data-domain="beirdinh0s.github.io" src="https://plausible.io/js/script.js"></script>
 
   <!-- Fonts: Inter (body), JetBrains Mono (mono/UI), Instrument Serif (italic emphasis) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -96,19 +117,20 @@
       </a>
 
       <nav class="nav-links" aria-label="Sections">
+        <a href="#why">Why</a>
         <a href="#features">Features</a>
-        <a href="#flow">Cycle de vie</a>
-        <a href="#download">Télécharger</a>
+        <a href="#flow">Lifecycle</a>
+        <a href="#download">Download</a>
         <a href="https://github.com/BEIRDINH0S/claude-kanban" target="_blank" rel="noopener">GitHub</a>
       </nav>
 
       <div class="nav-actions">
-        <button class="theme-toggle" id="themeToggle" aria-label="Changer le thème" title="Thème">
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Theme">
           <!-- icon swapped at runtime by scripts/theme.js -->
         </button>
         <a class="btn btn-primary" href="https://github.com/BEIRDINH0S/claude-kanban/releases" target="_blank" rel="noopener">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Télécharger
+          Download
         </a>
       </div>
     </div>
@@ -123,36 +145,36 @@
         <div class="reveal-stagger">
           <span class="eyebrow">
             <span class="dot" aria-hidden="true"></span>
-            v0.1 · open source · macOS · Windows · WSL
+            v0.1 · MIT · macOS · Windows · WSL
             <span class="arrow" aria-hidden="true">→</span>
           </span>
 
           <h1>
-            Plusieurs Claude.<br>
-            Un kanban <span class="em-serif">vivant</span>.
+            Run Claude Code agents<br>
+            in <span class="em-serif">parallel</span>.
           </h1>
 
           <p class="lede">
-            Une app desktop qui orchestre <b style="color:var(--ink-1)">autant de sessions Claude Code en parallèle que tu veux</b>,
-            chacune dans son propre git worktree. Les cartes se déplacent toutes seules selon ce que fait Claude — code,
-            attend une permission, finit son tour. Tu valides à la souris, jamais dans un terminal.
+            A desktop app that runs <b style="color:var(--ink-1)">as many Claude Code sessions in parallel as you want</b>,
+            each in its own git worktree. Cards move themselves based on what Claude is doing — coding,
+            waiting on a permission, finishing a turn. You approve tools with a click, never in a terminal.
           </p>
 
           <div class="hero-ctas">
             <a class="btn btn-primary" href="https://github.com/BEIRDINH0S/claude-kanban/releases" target="_blank" rel="noopener">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Télécharger pour macOS, Windows
+              Download for macOS, Windows
             </a>
             <a class="btn btn-ghost" href="https://github.com/BEIRDINH0S/claude-kanban" target="_blank" rel="noopener">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.57.1.78-.25.78-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18.92-.26 1.9-.39 2.88-.39.98 0 1.96.13 2.88.39 2.2-1.49 3.16-1.18 3.16-1.18.62 1.59.23 2.76.11 3.05.74.81 1.18 1.83 1.18 3.09 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.13 0 1.54-.01 2.79-.01 3.17 0 .31.21.66.79.55C20.21 21.39 23.5 17.08 23.5 12 23.5 5.65 18.35.5 12 .5z"/></svg>
-              Voir le code source
+              View source
             </a>
           </div>
 
           <div class="hero-meta">
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Tauri 2 · React 19 · Rust</span>
-            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Build non signés (~)</span>
-            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Setup en 30s</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Unsigned builds</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 30-second setup</span>
           </div>
         </div>
 
@@ -169,11 +191,11 @@
             </video>
             -->
 
-            <div class="mock" role="img" aria-label="Aperçu animé du kanban en action">
+            <div class="mock" role="img" aria-label="Animated preview of the kanban in action">
 
               <div class="mock-titlebar">
                 <div class="mock-dots"><span></span><span></span><span></span></div>
-                <div class="mock-title">claude-kanban — projets/api-refactor</div>
+                <div class="mock-title">claude-kanban — projects/api-refactor</div>
                 <div class="mock-usage">
                   <span>session 5h</span>
                   <span class="meter" aria-hidden="true"></span>
@@ -186,22 +208,22 @@
                 <div class="mock-col" data-col="todo">
                   <header><span>Todo</span><span class="pill">1</span></header>
                   <div class="mc">
-                    <div class="mc-title">Migrer le routeur vers v7</div>
+                    <div class="mc-title">Migrate the router to v7</div>
                     <div class="mc-preview">~/code/api-refactor</div>
-                    <div class="mc-meta"><span class="tag">3 fichiers</span></div>
+                    <div class="mc-meta"><span class="tag">3 files</span></div>
                   </div>
                 </div>
 
-                <!-- EN COURS -->
+                <!-- IN PROGRESS -->
                 <div class="mock-col" data-col="working">
-                  <header><span>En cours</span><span class="pill">1</span></header>
+                  <header><span>In progress</span><span class="pill">1</span></header>
                   <div class="mc live">
-                    <div class="mc-title">Refactor du module <span class="mono">auth</span></div>
-                    <div class="mc-preview">Je remplace l'ancien middleware par le nouveau pattern…</div>
+                    <div class="mc-title">Refactor the <span class="mono">auth</span> module</div>
                     <div class="mc-meta">
                       <span class="spinner" aria-hidden="true"></span>
-                      <span>claude bosse</span>
-                      <span class="tag">12 tools</span>
+                      <span>claude working</span>
+                      <span class="tag">card-a1</span>
+                      <span class="tag ahead">+3</span>
                     </div>
                   </div>
                 </div>
@@ -210,11 +232,10 @@
                 <div class="mock-col" data-col="review">
                   <header><span>Review</span><span class="pill">1</span></header>
                   <div class="mc review">
-                    <div class="mc-title">Setup CI GitHub Actions</div>
-                    <div class="mc-preview">demande à exécuter <span class="mono">npm install</span>…</div>
+                    <div class="mc-title">Set up CI on GitHub Actions</div>
                     <div class="mc-meta">
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="oklch(0.82 0.14 60)" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                      <span>permission requise</span>
+                      <span>permission required</span>
                     </div>
                   </div>
                 </div>
@@ -223,9 +244,8 @@
                 <div class="mock-col" data-col="idle">
                   <header><span>Idle</span><span class="pill">1</span></header>
                   <div class="mc">
-                    <div class="mc-title">Doc API openapi.yaml</div>
-                    <div class="mc-preview">Voilà la doc générée. Tu veux que j'ajoute des exemples ?</div>
-                    <div class="mc-meta"><span class="tag">tour fini</span></div>
+                    <div class="mc-title">openapi.yaml API docs</div>
+                    <div class="mc-meta"><span class="tag">turn ended</span></div>
                   </div>
                 </div>
 
@@ -234,21 +254,21 @@
                   <header><span>Done</span><span class="pill">2</span></header>
                   <div class="mc done">
                     <div class="mc-title">Fix flaky test <span class="mono">user.spec.ts</span></div>
-                    <div class="mc-meta"><span class="tag">archivé</span></div>
+                    <div class="mc-meta"><span class="tag">archived</span></div>
                   </div>
                 </div>
 
                 <!-- TRAVELER — the card that loops through all 5 columns.
                      See styles/mock.css @keyframes travel for the timeline. -->
                 <div class="mc traveler" aria-hidden="true">
-                  <div class="mc-title">Implémenter le rate limiter</div>
+                  <div class="mc-title">Implement the rate limiter</div>
                   <div class="mc-preview">~/code/api-refactor/src/middleware</div>
                   <div class="mc-meta">
-                    <span class="state" data-phase="todo"><span class="tag">prêt</span></span>
+                    <span class="state" data-phase="todo"><span class="tag">ready</span></span>
                     <span class="state" data-phase="working"><span class="spinner"></span>edits 3/8</span>
                     <span class="state" data-phase="review"><span style="color:oklch(0.82 0.14 60)">⚠</span> bash permission</span>
-                    <span class="state" data-phase="idle"><span class="tag" style="color:oklch(0.82 0.10 295)">tour fini</span></span>
-                    <span class="state" data-phase="done"><span class="tag" style="color:oklch(0.82 0.16 145)">✓ archivé</span></span>
+                    <span class="state" data-phase="idle"><span class="tag" style="color:oklch(0.82 0.10 295)">turn ended</span></span>
+                    <span class="state" data-phase="done"><span class="tag" style="color:oklch(0.82 0.16 145)">✓ archived</span></span>
                   </div>
                 </div>
 
@@ -257,8 +277,8 @@
                   <div class="perm-tool">⚠ Bash · permission</div>
                   <div class="perm-cmd">$ cargo test --release</div>
                   <div class="perm-actions">
-                    <button>Refuser</button>
-                    <button class="approve">Approuver</button>
+                    <button>Refuse</button>
+                    <button class="approve">Approve</button>
                   </div>
                 </div>
 
@@ -275,23 +295,71 @@
           <div class="marquee-track">
             <span>Tauri 2</span><span class="sep">✦</span>
             <span>React 19</span><span class="sep">✦</span>
-            <span>SQLite bundlé</span><span class="sep">✦</span>
-            <span>Sidecar Node</span><span class="sep">✦</span>
-            <span>SDK Anthropic officiel</span><span class="sep">✦</span>
+            <span>Bundled SQLite</span><span class="sep">✦</span>
+            <span>Node sidecar</span><span class="sep">✦</span>
+            <span>Official Anthropic SDK</span><span class="sep">✦</span>
             <span>Git worktrees</span><span class="sep">✦</span>
-            <span>WSL bridge auto</span><span class="sep">✦</span>
-            <span>Reprise JSONL</span><span class="sep">✦</span>
-            <span>Permissions visuelles</span><span class="sep">✦</span>
+            <span>Auto WSL bridge</span><span class="sep">✦</span>
+            <span>JSONL session resume</span><span class="sep">✦</span>
+            <span>Click-to-approve tools</span><span class="sep">✦</span>
             <span>Tauri 2</span><span class="sep">✦</span>
             <span>React 19</span><span class="sep">✦</span>
-            <span>SQLite bundlé</span><span class="sep">✦</span>
-            <span>Sidecar Node</span><span class="sep">✦</span>
-            <span>SDK Anthropic officiel</span><span class="sep">✦</span>
+            <span>Bundled SQLite</span><span class="sep">✦</span>
+            <span>Node sidecar</span><span class="sep">✦</span>
+            <span>Official Anthropic SDK</span><span class="sep">✦</span>
             <span>Git worktrees</span><span class="sep">✦</span>
-            <span>WSL bridge auto</span><span class="sep">✦</span>
-            <span>Reprise JSONL</span><span class="sep">✦</span>
-            <span>Permissions visuelles</span><span class="sep">✦</span>
+            <span>Auto WSL bridge</span><span class="sep">✦</span>
+            <span>JSONL session resume</span><span class="sep">✦</span>
+            <span>Click-to-approve tools</span><span class="sep">✦</span>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── WHY (security-first 3-bullet pitch) ──────────────────────── -->
+    <section id="why" style="padding-top: clamp(40px, 6vw, 80px); padding-bottom: clamp(40px, 6vw, 80px);">
+      <div class="wrap">
+
+        <div class="section-head reveal">
+          <span class="uppercase-tag" style="color: oklch(0.85 0.16 145);">Why claude-kanban</span>
+          <h2>The thing other Claude Code wrappers can't <span class="em-serif">copy</span>.</h2>
+        </div>
+
+        <!-- Re-uses the .bento grid: 3 tiles, each spans 2 cols on the 6-col grid. -->
+        <div class="bento reveal-stagger">
+
+          <article class="tile t-third" style="grid-column: span 2;">
+            <span class="uppercase-tag" style="color: oklch(0.85 0.16 145);">Won't get you banned</span>
+            <h3>No OAuth impersonation. Period.</h3>
+            <p>
+              Most Claude Code wrappers reuse the official <span class="mono">client_id</span> to call
+              <span class="mono">api.anthropic.com</span> directly — that's TOS-violating impersonation,
+              detectable by Anthropic, and grounds for suspending your Max/Pro subscription.
+              claude-kanban drives the official <span class="mono">claude</span> binary in a hidden PTY,
+              so every request looks identical to a normal CLI user.
+            </p>
+          </article>
+
+          <article class="tile t-third" style="grid-column: span 2;">
+            <span class="uppercase-tag" style="color: var(--accent);">Parallel by default</span>
+            <h3>One card, one Claude session. Run a dozen.</h3>
+            <p>
+              The Node sidecar multiplexes <span class="mono">query()</span> calls from the official
+              Anthropic Agent SDK. Kick off three refactors and walk away — the kanban tracks each
+              session's state and moves cards automatically.
+            </p>
+          </article>
+
+          <article class="tile t-third" style="grid-column: span 2;">
+            <span class="uppercase-tag" style="color: var(--accent);">No terminal babysitting</span>
+            <h3>Approve tools with a click.</h3>
+            <p>
+              Every <span class="mono">canUseTool</span> request surfaces in the UI: see the command,
+              click approve / refuse / always-allow. No more chained CLI prompts to validate one at
+              a time.
+            </p>
+          </article>
+
         </div>
       </div>
     </section>
@@ -304,18 +372,18 @@
             <!-- No data-count: shown as a static glyph, the counter script
                  ignores .num elements without a data-count attribute. -->
             <div class="num">∞<span class="unit">sessions //</span></div>
-            <div class="label">aucune limite, un worktree chacune</div>
+            <div class="label">no app-side cap, one worktree each</div>
           </div>
           <div class="stat">
-            <div class="num" data-count="0">0<span class="unit">prompt CLI</span></div>
-            <div class="label">tu valides à la souris</div>
+            <div class="num" data-count="0">0<span class="unit">CLI prompts</span></div>
+            <div class="label">you approve with a click</div>
           </div>
           <div class="stat">
             <div class="num" data-count="100">0<span class="unit">% local</span></div>
-            <div class="label">SQLite, pas de cloud</div>
+            <div class="label">SQLite, no cloud</div>
           </div>
           <div class="stat">
-            <div class="num" data-count="3">0<span class="unit">plateformes</span></div>
+            <div class="num" data-count="3">0<span class="unit">platforms</span></div>
             <div class="label">macOS arm64, x64 · Windows</div>
           </div>
         </div>
@@ -327,11 +395,11 @@
       <div class="wrap">
 
         <div class="section-head reveal">
-          <span class="uppercase-tag">Ce qu'on a vraiment construit</span>
-          <h2>Onze choses que <span class="em-serif">Claude Code</span> ne fait pas tout&nbsp;seul.</h2>
+          <span class="uppercase-tag">What we actually built</span>
+          <h2>Ten things <span class="em-serif">Claude Code</span> doesn't do on its&nbsp;own.</h2>
           <p>
-            Les features qu'on a passé du temps à coder. Le terminal, le tool-use, la complétion — c'est Claude Code.
-            Le reste, c'est l'app.
+            The features we spent real time coding. The terminal, the tool-use, the completion — that's Claude Code.
+            The rest is the app.
           </p>
         </div>
 
@@ -339,15 +407,15 @@
 
           <!-- 01 · Parallel kanban -->
           <article class="tile t-wide">
-            <span class="uppercase-tag" style="color: var(--accent);">01 — Parallèle</span>
-            <h3>Autant de sessions Claude que tu veux. En parallèle.</h3>
-            <p>Une carte = une session. Le sidecar Node multiplexe les <span class="mono">query()</span> du SDK Anthropic.
-              Tu lances trois refactors et tu pars chercher un café — ils continuent en parallèle. Aucun cap fixé par l'app.</p>
+            <span class="uppercase-tag" style="color: var(--accent);">01 — Parallel</span>
+            <h3>As many Claude sessions as you want. In parallel.</h3>
+            <p>One card = one session. The Node sidecar multiplexes <span class="mono">query()</span> calls from the
+              official Anthropic SDK. Kick off three refactors and grab a coffee — they keep running. No app-side cap.</p>
             <div class="tile-art">
               <div class="trans-art" style="grid-template-columns: repeat(5, 1fr); gap: 6px;">
                 <div class="col-mini" style="opacity: 0.4">Todo</div>
-                <div class="col-mini b1">En cours</div>
-                <div class="col-mini b1">En cours</div>
+                <div class="col-mini b1">Working</div>
+                <div class="col-mini b1">Working</div>
                 <div class="col-mini b2">Review</div>
                 <div class="col-mini" style="opacity: 0.4">Idle</div>
               </div>
@@ -357,11 +425,11 @@
           <!-- 02 · Auto-transitions -->
           <article class="tile t-third">
             <span class="uppercase-tag" style="color: var(--accent);">02 — Auto-flow</span>
-            <h3>Les cartes bougent toutes seules.</h3>
-            <p>Dès que Claude demande une permission, la carte saute en Review. Tour fini → Idle. Reprise → En cours.</p>
+            <h3>Cards move themselves.</h3>
+            <p>Claude asks for a permission → card jumps to Review. Turn ends → Idle. You resume → In progress.</p>
             <div class="tile-art">
               <div class="trans-art">
-                <div class="col-mini b1">En cours</div>
+                <div class="col-mini b1">Working</div>
                 <div class="arrow">→</div>
                 <div class="col-mini b2">Review</div>
               </div>
@@ -371,14 +439,14 @@
           <!-- 03 · Git worktree per card -->
           <article class="tile t-half">
             <span class="uppercase-tag" style="color: var(--accent);">03 — Worktrees</span>
-            <h3>Un git worktree par carte. Zéro conflit.</h3>
-            <p>Quand tu crées la carte, l'app crée un worktree dédié dans <span class="mono">.claude-kanban-worktrees/</span>
-              sur une branche <span class="mono">claude-kanban/card-…</span>. Tes Claude éditent en parallèle, jamais le
-              même fichier deux fois. Badges live ahead / behind / dirty par carte.</p>
+            <h3>One git worktree per card. Zero conflicts.</h3>
+            <p>When you create a card, the app spins up a dedicated worktree under <span class="mono">.claude-kanban-worktrees/</span>
+              on a <span class="mono">claude-kanban/card-…</span> branch. Your Claudes edit in parallel, never touch the
+              same file twice. Live ahead / behind / dirty badges per card.</p>
             <div class="tile-art">
               <div class="worktree-art">
                 <div class="wt-head">~/code/api-refactor</div>
-                <div class="wt-row"><span class="wt-branch">main</span> <span class="wt-tag">repo principal</span></div>
+                <div class="wt-row"><span class="wt-branch">main</span> <span class="wt-tag">main repo</span></div>
                 <div class="wt-fork">
                   <div class="wt-row"><span class="wt-branch">claude-kanban/card-a1</span> <span class="wt-badge ahead">+3</span><span class="wt-badge dirty">●</span></div>
                   <div class="wt-row"><span class="wt-branch">claude-kanban/card-b2</span> <span class="wt-badge ahead">+1</span></div>
@@ -391,43 +459,28 @@
           <!-- 04 · Permission UI -->
           <article class="tile t-half">
             <span class="uppercase-tag" style="color: var(--accent);">04 — Permissions</span>
-            <h3>Approuver à la souris, pas dans un terminal.</h3>
-            <p>Chaque tool-call passe par un round-trip <span class="mono">canUseTool</span>. Tu vois la commande,
-              tu cliques. Pas de prompt CLI à valider à la chaîne.</p>
+            <h3>Approve with a click, not in a terminal.</h3>
+            <p>Every tool-call goes through a <span class="mono">canUseTool</span> round-trip. You see the command,
+              you click. No chained CLI prompts to validate one at a time.</p>
             <div class="tile-art">
               <div class="perm-art">
                 <div class="row">
                   <span class="tool"><b>Bash</b> · cargo test --release</span>
-                  <div class="actions"><span class="no">refuser</span><span class="yes">approuver</span></div>
+                  <div class="actions"><span class="no">refuse</span><span class="yes">approve</span></div>
                 </div>
                 <div class="row">
                   <span class="tool"><b>Edit</b> · src/auth/middleware.ts</span>
-                  <div class="actions"><span class="no">refuser</span><span class="yes">approuver</span></div>
+                  <div class="actions"><span class="no">refuse</span><span class="yes">approve</span></div>
                 </div>
               </div>
             </div>
           </article>
 
-          <!-- 05 · Live preview -->
+          <!-- 05 · Diff viewer -->
           <article class="tile t-half">
-            <span class="uppercase-tag" style="color: var(--accent);">05 — Live preview</span>
-            <h3>Le dernier message, dans la carte.</h3>
-            <p>Pas besoin d'ouvrir la session pour savoir où elle en est : les deux derniers messages s'affichent
-              en live dans la carte, mis à jour en streaming.</p>
-            <div class="tile-art">
-              <div class="preview-card">
-                <div class="pc-title">Refactor du module auth</div>
-                <div class="pc-msg">je vais d'abord lister les call-sites…</div>
-                <div class="pc-msg live">replacing middleware in 3 files</div>
-              </div>
-            </div>
-          </article>
-
-          <!-- 06 · Diff viewer -->
-          <article class="tile t-half">
-            <span class="uppercase-tag" style="color: var(--accent);">06 — Zoom + diff</span>
-            <h3>Mode plein écran, diff intégré.</h3>
-            <p>Double-clic sur une carte : chat en grand, tool-uses chippés, et le diff des fichiers édités juste à côté.</p>
+            <span class="uppercase-tag" style="color: var(--accent);">05 — Zoom + diff</span>
+            <h3>Full-screen mode with inline diff.</h3>
+            <p>Double-click a card: chat in big, tool-uses chipped, diff of edited files right next to it.</p>
             <div class="tile-art">
               <div class="diff-mini">
                 <div class="d-head">src/auth/middleware.ts</div>
@@ -440,12 +493,12 @@
             </div>
           </article>
 
-          <!-- 07 · Usage tracking -->
+          <!-- 06 · Usage tracking -->
           <article class="tile t-half">
-            <span class="uppercase-tag" style="color: var(--accent);">07 — Usage</span>
-            <h3>Combien il te reste avant le rate-limit.</h3>
-            <p>Barre <span class="mono">session</span> 5h glissante + barre <span class="mono">weekly</span> indexée
-              sur le max des trois limites hebdo. Gradient vert → ambre → rouge, countdown reset visible.</p>
+            <span class="uppercase-tag" style="color: var(--accent);">06 — Usage</span>
+            <h3>How much you have left before the rate-limit.</h3>
+            <p>Rolling 5h <span class="mono">session</span> bar + a <span class="mono">weekly</span> bar indexed on the
+              max of the three weekly caps. Green → amber → red gradient, visible countdown to reset.</p>
             <div class="tile-art usage-art">
               <div class="usage-bar b1">
                 <span class="label">session</span>
@@ -460,26 +513,26 @@
             </div>
           </article>
 
-          <!-- 08 · Command palette -->
-          <article class="tile t-half">
-            <span class="uppercase-tag" style="color: var(--accent);">08 — Palette</span>
-            <h3>Tout au clavier. Templates de prompts inclus.</h3>
-            <p>Cmd+K pour la palette de commandes. Templates de prompts réutilisables — tu lances un "review PR"
-              ou un "refactor module" en deux frappes.</p>
+          <!-- 07 · Command palette -->
+          <article class="tile t-wide">
+            <span class="uppercase-tag" style="color: var(--accent);">07 — Palette</span>
+            <h3>Keyboard-first. Prompt templates included.</h3>
+            <p>Cmd+K opens the command palette. Reusable prompt templates — fire a "Review PR" or
+              "Refactor module" in two keystrokes.</p>
             <div class="tile-art">
               <div class="palette-mock">
-                <div class="pi"><span style="color: var(--ink-3);">⌘</span> Créer une carte<span class="kbd">N</span></div>
+                <div class="pi"><span style="color: var(--ink-3);">⌘</span> Create card<span class="kbd">N</span></div>
                 <div class="pi active">📝 Template · Review PR <span class="kbd">↵</span></div>
-                <div class="pi"><span style="color: var(--ink-3);">⌘</span> Aller à Settings<span class="kbd">,</span></div>
+                <div class="pi"><span style="color: var(--ink-3);">⌘</span> Go to Settings<span class="kbd">,</span></div>
               </div>
             </div>
           </article>
 
-          <!-- 09 · Session resume -->
+          <!-- 08 · Session resume -->
           <article class="tile t-third">
-            <span class="uppercase-tag" style="color: var(--accent);">09 — Reprise</span>
-            <h3>Tes sessions Claude Code, hydratées.</h3>
-            <p>L'app lit les <span class="mono">~/.claude/projects/**/*.jsonl</span> et reconstruit l'historique au boot.</p>
+            <span class="uppercase-tag" style="color: var(--accent);">08 — Resume</span>
+            <h3>Your Claude Code sessions, rehydrated.</h3>
+            <p>The app reads <span class="mono">~/.claude/projects/**/*.jsonl</span> and rebuilds session history at boot.</p>
             <div class="tile-art">
               <div class="resume-art">
                 <div class="json-line"><span class="json-key">"role"</span>: <span class="json-str">"user"</span>,</div>
@@ -491,24 +544,24 @@
             </div>
           </article>
 
-          <!-- 10 · Crash repair -->
-          <article class="tile t-third">
-            <span class="uppercase-tag" style="color: var(--accent);">10 — Repair</span>
-            <h3>Crash ? L'app rattrape les cartes coincées.</h3>
-            <p>Au boot, repair des cartes restées en <span class="mono">in_progress</span> après un kill du process.</p>
+          <!-- 09 · Crash repair -->
+          <article class="tile t-half">
+            <span class="uppercase-tag" style="color: var(--accent);">09 — Repair</span>
+            <h3>Crash? The app catches stuck cards.</h3>
+            <p>At boot, the app repairs cards left in <span class="mono">in_progress</span> after a process kill.</p>
             <div class="tile-art">
               <div class="repair-art">
                 <span class="rdot"></span>
-                <span>3 cartes récupérées au démarrage</span>
+                <span>3 cards recovered at startup</span>
               </div>
             </div>
           </article>
 
-          <!-- 11 · WSL bridge -->
-          <article class="tile t-third">
-            <span class="uppercase-tag" style="color: var(--accent);">11 — WSL</span>
-            <h3>Ton claude vit dans WSL ? Aucun souci.</h3>
-            <p>Le sidecar génère un shim <span class="mono">wsl claude %*</span> à la volée. Aucun <span class="mono">claude.bat</span> manuel.</p>
+          <!-- 10 · WSL bridge -->
+          <article class="tile t-half">
+            <span class="uppercase-tag" style="color: var(--accent);">10 — WSL</span>
+            <h3>Your <span class="mono">claude</span> lives in WSL? No problem.</h3>
+            <p>The sidecar generates a <span class="mono">wsl claude %*</span> shim on the fly. No manual <span class="mono">claude.bat</span> required.</p>
             <div class="tile-art">
               <div class="wsl-art">
                 <div>$ which claude</div>
@@ -528,10 +581,10 @@
       <div class="wrap">
 
         <div class="section-head reveal">
-          <span class="uppercase-tag">Cycle de vie</span>
-          <h2>Une carte, <span class="em-serif">cinq</span> états. Aucune main d'œuvre.</h2>
-          <p>Tu crées la carte, tu pars. L'app détecte les events du SDK et déplace la carte dans la bonne colonne
-            sans que tu touches à rien.</p>
+          <span class="uppercase-tag">Lifecycle</span>
+          <h2>One card, <span class="em-serif">five</span> states. Zero hand-holding.</h2>
+          <p>You create the card, you walk away. The app listens to SDK events and moves the card to the right column
+            without you touching it.</p>
         </div>
 
         <div class="flow reveal-stagger">
@@ -539,39 +592,39 @@
           <div class="flow-node" data-step="todo">
             <svg class="flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>
             <div class="flow-label">01 · Todo</div>
-            <h4>Tu crées une carte</h4>
-            <p>Titre + dossier de travail. La session est créée, prête à recevoir le premier prompt.</p>
+            <h4>You create a card</h4>
+            <p>Title + working directory. The session is created and ready to receive its first prompt.</p>
           </div>
 
           <div class="flow-node" data-step="working">
             <svg class="flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            <div class="flow-label">02 · En cours</div>
-            <h4>Claude bosse</h4>
-            <p>Premier message envoyé → carte en <span class="mono">in_progress</span>. Tu vois les tool-uses
-              et la preview live.</p>
+            <div class="flow-label">02 · In progress</div>
+            <h4>Claude is working</h4>
+            <p>First message sent → card in <span class="mono">in_progress</span>. You see tool-uses and a live
+              activity indicator on the card.</p>
           </div>
 
           <div class="flow-node" data-step="review">
             <svg class="flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             <div class="flow-label">03 · Review</div>
-            <h4>Permission demandée</h4>
-            <p>Le SDK déclenche <span class="mono">canUseTool</span>. La carte saute en Review, popup avec
-              Approuver / Refuser. Tu cliques, ça redémarre.</p>
+            <h4>Permission requested</h4>
+            <p>The SDK fires <span class="mono">canUseTool</span>. The card jumps to Review with an
+              Approve / Refuse popup. You click, Claude resumes.</p>
           </div>
 
           <div class="flow-node" data-step="idle">
             <svg class="flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <div class="flow-label">04 · Idle</div>
-            <h4>Tour fini</h4>
-            <p>Event <span class="mono">result</span> du SDK. Claude attend un follow-up. La carte est en pause,
-              tu reprends quand tu veux.</p>
+            <h4>Turn ended</h4>
+            <p>SDK <span class="mono">result</span> event. Claude is waiting for a follow-up. The card is paused;
+              you resume whenever.</p>
           </div>
 
           <div class="flow-node" data-step="done">
             <svg class="flow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             <div class="flow-label">05 · Done</div>
-            <h4>Tu archives</h4>
-            <p>Drag manuel vers Done quand t'as merge la PR ou validé le résultat. La session est arrêtée proprement.</p>
+            <h4>You archive</h4>
+            <p>Drag manually to Done once the PR is merged or the result is validated. The session is stopped cleanly.</p>
           </div>
 
         </div>
@@ -583,38 +636,44 @@
       <div class="wrap">
         <div class="download reveal">
           <span class="uppercase-tag" style="color: oklch(0.92 0.10 295);">Download</span>
-          <h2>Prêt en <span class="em-serif">trente</span> secondes.</h2>
-          <p>Va sur la page Releases, prends l'asset qui correspond à ta machine. Pré-requis : <span class="mono">claude</span> (Claude Code CLI) installé et dans ton PATH. Node est bundlé dans l'app.</p>
+          <h2>Ready in <span class="em-serif">thirty</span> seconds.</h2>
+          <p>Pick the asset that matches your machine. The <span class="mono">claude</span> binary and Node are
+            both bundled inside the app — nothing else to install.</p>
 
+          <!--
+            Each .platform link gets a data-pf attribute so scripts/downloads.js
+            can rewrite the href to the direct .dmg / .msi URL of the latest
+            release. If the GitHub API is unreachable the fallback href below
+            still takes the user to the Releases page.
+          -->
           <div class="download-grid">
-            <a class="platform" href="https://github.com/BEIRDINH0S/claude-kanban/releases" target="_blank" rel="noopener">
+            <a class="platform" data-pf="macos-arm64" href="https://github.com/BEIRDINH0S/claude-kanban/releases/latest" target="_blank" rel="noopener">
               <svg class="pf-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.45z"/></svg>
               <div>
                 <div class="pf-name">macOS Apple Silicon</div>
-                <div class="pf-meta">.dmg · arm64</div>
+                <div class="pf-meta"><span class="pf-version">latest</span> · .dmg · arm64</div>
               </div>
             </a>
-            <a class="platform" href="https://github.com/BEIRDINH0S/claude-kanban/releases" target="_blank" rel="noopener">
+            <a class="platform" data-pf="macos-x64" href="https://github.com/BEIRDINH0S/claude-kanban/releases/latest" target="_blank" rel="noopener">
               <svg class="pf-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.45z"/></svg>
               <div>
                 <div class="pf-name">macOS Intel</div>
-                <div class="pf-meta">.dmg · x64</div>
+                <div class="pf-meta"><span class="pf-version">latest</span> · .dmg · x64</div>
               </div>
             </a>
-            <a class="platform" href="https://github.com/BEIRDINH0S/claude-kanban/releases" target="_blank" rel="noopener">
+            <a class="platform" data-pf="windows-x64" href="https://github.com/BEIRDINH0S/claude-kanban/releases/latest" target="_blank" rel="noopener">
               <svg class="pf-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.479L9.766 4.55v6.628H3V5.48zm0 13.04L9.766 19.45v-6.628H3v5.696zm7.485-13.97L21 3.5v8.18h-10.515V4.55zM10.485 12.82H21v8.18l-10.515-1.05V12.82z"/></svg>
               <div>
                 <div class="pf-name">Windows</div>
-                <div class="pf-meta">.msi · x64</div>
+                <div class="pf-meta"><span class="pf-version">latest</span> · .msi · x64</div>
               </div>
             </a>
           </div>
 
           <div class="first-launch">
-            <strong>Premier lancement.</strong> Les builds ne sont pas signés.
-            <strong>macOS</strong> : clic-droit sur l'app dans Applications → <strong>Ouvrir</strong>, puis confirme dans le dialog Gatekeeper. Une seule fois.
-            <strong>Windows</strong> : SmartScreen affiche « unrecognized app » → <strong>More info</strong> → <strong>Run anyway</strong>.
-            Pré-requis runtime : <code>which claude</code> doit renvoyer un chemin.
+            <strong>First launch.</strong> Builds are unsigned.
+            <strong>macOS</strong>: right-click the app in Applications → <strong>Open</strong>, then confirm in the Gatekeeper dialog. Once is enough.
+            <strong>Windows</strong>: SmartScreen shows "unrecognized app" → <strong>More info</strong> → <strong>Run anyway</strong>.
           </div>
         </div>
       </div>
@@ -626,12 +685,13 @@
   <footer>
     <div class="wrap footer-inner">
       <div>
-        <span class="mono">claude-kanban</span> · open source · <span style="color: var(--ink-2);">2026</span>
+        <span class="mono">claude-kanban</span> · MIT-licensed · <span style="color: var(--ink-2);">2026</span>
       </div>
       <div class="footer-links">
         <a href="https://github.com/BEIRDINH0S/claude-kanban" target="_blank" rel="noopener">GitHub</a>
         <a href="https://github.com/BEIRDINH0S/claude-kanban/releases" target="_blank" rel="noopener">Releases</a>
         <a href="https://github.com/BEIRDINH0S/claude-kanban/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/BEIRDINH0S/claude-kanban/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
       </div>
     </div>
   </footer>
@@ -646,5 +706,6 @@
   <script defer src="scripts/counters.js"></script>
   <script defer src="scripts/tilt.js"></script>
   <script defer src="scripts/tiles.js"></script>
+  <script defer src="scripts/downloads.js"></script>
 </body>
 </html>

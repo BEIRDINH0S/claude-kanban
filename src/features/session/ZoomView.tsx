@@ -113,13 +113,13 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
       });
       pushToastHeader({
         message: planActive
-          ? "Plan mode désactivé — la prochaine session demandera pour chaque outil."
-          : "Plan mode activé — Claude rédigera un plan avant d'exécuter.",
+          ? "Plan mode disabled — the next session will ask for every tool."
+          : "Plan mode enabled — Claude will draft a plan before running anything.",
         ttlMs: 4500,
       });
     } catch (e) {
       pushToastHeader({
-        message: `Plan mode — échec : ${String(e).slice(0, 220)}`,
+        message: `Plan mode — failed: ${String(e).slice(0, 220)}`,
         ttlMs: 6000,
       });
     }
@@ -153,7 +153,7 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
       });
     } catch (e) {
       pushToastHeader({
-        message: `Push échoué — ${String(e).slice(0, 220)}`,
+        message: `Push failed — ${String(e).slice(0, 220)}`,
         ttlMs: 8000,
       });
     } finally {
@@ -184,7 +184,7 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   const handleExportMarkdown = async () => {
     const items = useMessagesStore.getState().byCard[card.id] ?? [];
     if (items.length === 0) {
-      pushToast({ message: "Pas de transcript à exporter pour l'instant." });
+      pushToast({ message: "No transcript to export yet." });
       return;
     }
     try {
@@ -195,9 +195,9 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
       if (typeof path !== "string") return; // user cancelled
       const md = transcriptToMarkdown(card, items);
       await exportSessionMarkdown(md, path);
-      pushToast({ message: `Transcript exporté vers ${path}` });
+      pushToast({ message: `Transcript exported to ${path}` });
     } catch (e) {
-      pushToast({ message: `Export échoué — ${String(e)}` });
+      pushToast({ message: `Export failed — ${String(e)}` });
     }
   };
 
@@ -270,10 +270,10 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
             onClick={() => void togglePlan()}
             title={
               planActive
-                ? "Plan mode actif — clique pour repasser en demande par outil"
-                : "Activer Plan mode — Claude rédigera un plan avant d'exécuter"
+                ? "Plan mode active — click to revert to per-tool prompts"
+                : "Enable Plan mode — Claude will draft a plan before running anything"
             }
-            aria-label={planActive ? "Désactiver Plan mode" : "Activer Plan mode"}
+            aria-label={planActive ? "Disable Plan mode" : "Enable Plan mode"}
             aria-pressed={planActive}
             className={[
               "rounded-lg p-1.5 transition-colors",
@@ -318,8 +318,8 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
         <button
           type="button"
           onClick={() => void handleExportMarkdown()}
-          title="Exporter le transcript en Markdown"
-          aria-label="Exporter le transcript"
+          title="Export transcript as Markdown"
+          aria-label="Export transcript"
           className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
         >
           <Download className="size-4" strokeWidth={1.75} />
@@ -328,8 +328,8 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
           <button
             type="button"
             onClick={handleArchive}
-            title="Archiver dans Done"
-            aria-label="Archiver"
+            title="Archive to Done"
+            aria-label="Archive"
             className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
           >
             <Archive className="size-4" strokeWidth={1.75} />
@@ -339,7 +339,7 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
           type="button"
           onClick={onClose}
           className="-mt-1 -mr-1 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-          aria-label="Fermer"
+          aria-label="Close"
         >
           <X className="size-4" strokeWidth={1.5} />
         </button>
@@ -471,8 +471,8 @@ function EditablePath({ value, disabled, onCommit, onOpen }: EditablePathProps) 
       <button
         type="button"
         onClick={onOpen}
-        title="Ouvrir le dossier"
-        aria-label="Ouvrir le dossier"
+        title="Open folder"
+        aria-label="Open folder"
         className="shrink-0 rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
       >
         <FolderOpen className="size-3" strokeWidth={1.75} />
@@ -484,8 +484,8 @@ function EditablePath({ value, disabled, onCommit, onOpen }: EditablePathProps) 
         <button
           type="button"
           onClick={() => setEditing(true)}
-          title="Modifier le chemin"
-          aria-label="Modifier le chemin"
+          title="Edit path"
+          aria-label="Edit path"
           className="shrink-0 rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-black/5 hover:text-[var(--text-primary)] group-hover:opacity-100 dark:hover:bg-white/5"
         >
           <Pencil className="size-3" strokeWidth={1.75} />
@@ -543,8 +543,8 @@ function WorktreeStatusLine({
       <button
         type="button"
         onClick={handleOpenWorktree}
-        title="Ouvrir le worktree dans le Finder"
-        aria-label="Ouvrir le worktree"
+        title="Open the worktree in Finder"
+        aria-label="Open worktree"
         className="shrink-0 rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-emerald-700 dark:hover:bg-white/5 dark:hover:text-emerald-300"
       >
         <FolderOpen className="size-3" strokeWidth={1.75} />
@@ -781,12 +781,12 @@ function Body({ card }: { card: Card }) {
 
   const placeholder =
     isStarting
-      ? "La session démarre…"
+      ? "Session starting…"
       : mode === "fresh"
-      ? "Premier message à Claude…"
+      ? "First message to Claude…"
       : mode === "resume"
-      ? "Reprends la conversation avec un message…"
-      : "Réponds à Claude…";
+      ? "Resume the conversation with a message…"
+      : "Reply to Claude…";
 
   // Tab switcher between the chat transcript, the worktree diff, and the
   // per-card session config. Diff is hidden entirely for cards without a
@@ -902,7 +902,7 @@ function ErrorBanner({
 }: {
   message: string;
   onDismiss: () => void;
-  /** Optional — when present, surfaces a "Réessayer" button. Only set by
+  /** Optional — when present, surfaces a "Retry" button. Only set by
    *  callers that have a meaningful retry action (e.g. JSONL hydration). */
   onRetry?: () => void;
 }) {
@@ -917,17 +917,17 @@ function ErrorBanner({
           type="button"
           onClick={onRetry}
           className="-mt-0.5 shrink-0 flex items-center gap-1 rounded-md border border-red-500/50 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-100 dark:border-red-400/40 dark:text-red-200 dark:hover:bg-red-400/10"
-          aria-label="Réessayer"
+          aria-label="Retry"
         >
           <RotateCw className="size-3" strokeWidth={1.75} />
-          Réessayer
+          Retry
         </button>
       )}
       <button
         type="button"
         onClick={onDismiss}
         className="-mt-1 -mr-1 shrink-0 rounded-md p-1 text-red-600/80 hover:bg-red-100 hover:text-red-700 dark:text-red-300/70 dark:hover:bg-red-400/10 dark:hover:text-red-200"
-        aria-label="Ignorer l'erreur"
+        aria-label="Dismiss error"
       >
         <X className="size-3.5" strokeWidth={1.5} />
       </button>
@@ -944,7 +944,7 @@ function Footer({ working }: { working: boolean }) {
           className="size-3 animate-spin text-[var(--color-accent)]"
           strokeWidth={2}
         />
-        Claude réfléchit…
+        Claude is thinking…
       </div>
     </div>
   );

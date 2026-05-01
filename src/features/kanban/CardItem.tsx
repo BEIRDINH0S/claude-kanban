@@ -180,9 +180,9 @@ export function CardItem({ card, overlay }: Props) {
                 e.stopPropagation();
                 void duplicate(card.id);
               }}
-              title="Dupliquer (clone titre + chemin, fresh session)"
+              title="Duplicate (clone title + path, fresh session)"
               className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-              aria-label="Dupliquer la carte"
+              aria-label="Duplicate card"
             >
               <Copy className="size-3.5" strokeWidth={1.5} />
             </button>
@@ -193,9 +193,9 @@ export function CardItem({ card, overlay }: Props) {
                 e.stopPropagation();
                 void remove(card.id);
               }}
-              title="Supprimer (annulable via toast)"
+              title="Delete (undoable via toast)"
               className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 dark:hover:bg-white/5"
-              aria-label="Supprimer la carte"
+              aria-label="Delete card"
             >
               <Trash2 className="size-3.5" strokeWidth={1.5} />
             </button>
@@ -222,7 +222,7 @@ export function CardItem({ card, overlay }: Props) {
               {gitStatus.dirty && (
                 <span
                   className="size-1.5 rounded-full bg-amber-500 dark:bg-amber-400"
-                  aria-label="Modifications non commitées"
+                  aria-label="Uncommitted changes"
                 />
               )}
             </span>

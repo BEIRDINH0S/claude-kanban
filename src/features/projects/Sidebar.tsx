@@ -92,7 +92,7 @@ export function Sidebar() {
 
   const handleDelete = async (project: Project) => {
     const ok = window.confirm(
-      `Supprimer le projet "${project.name}" et toutes ses cartes ?`,
+      `Delete project "${project.name}" and all of its cards?`,
     );
     if (!ok) return;
     try {
@@ -120,8 +120,8 @@ export function Sidebar() {
         <button
           type="button"
           onClick={toggleSidebar}
-          aria-label={collapsed ? "Déplier la sidebar" : "Replier la sidebar"}
-          title={collapsed ? "Déplier la sidebar" : "Replier la sidebar"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           className="grid size-6 place-items-center rounded text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
         >
           {collapsed ? (
@@ -136,7 +136,7 @@ export function Sidebar() {
       {!collapsed && (
         <header className="flex items-center gap-1 px-4 pt-1 pb-2">
           <p className="flex-1 text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-            Projets
+            Projects
           </p>
           {archivedCount > 0 && (
             <button
@@ -144,13 +144,13 @@ export function Sidebar() {
               onClick={toggleHideArchived}
               title={
                 hideArchived
-                  ? `Afficher les projets archivés (${archivedCount})`
-                  : "Masquer les projets archivés"
+                  ? `Show archived projects (${archivedCount})`
+                  : "Hide archived projects"
               }
               aria-label={
                 hideArchived
-                  ? "Afficher les archivés"
-                  : "Masquer les archivés"
+                  ? "Show archived"
+                  : "Hide archived"
               }
               className="rounded p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
             >
@@ -167,8 +167,8 @@ export function Sidebar() {
               setView(view === "projects" ? "board" : "projects")
             }
             aria-pressed={view === "projects"}
-            title="Gérer les projets"
-            aria-label="Gérer les projets"
+            title="Manage projects"
+            aria-label="Manage projects"
             className={[
               "rounded p-1 transition-colors",
               view === "projects"
@@ -219,7 +219,7 @@ export function Sidebar() {
           <li>
             <NavRow
               icon={<Settings className="size-3.5" strokeWidth={1.75} />}
-              label="Paramètres"
+              label="Settings"
               active={view === "settings"}
               onClick={() =>
                 setView(view === "settings" ? "board" : "settings")
@@ -340,7 +340,7 @@ function ProjectRow({
             <Lock
               className="size-3 shrink-0 text-[var(--text-muted)]"
               strokeWidth={1.75}
-              aria-label="Lecture seule"
+              aria-label="Read only"
             />
           )}
           <span className="truncate">{project.name}</span>
@@ -368,7 +368,7 @@ function ProjectRow({
               onDelete();
             }}
             className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 dark:hover:bg-white/5"
-            aria-label="Supprimer"
+            aria-label="Delete"
           >
             <Trash2 className="size-3" strokeWidth={1.75} />
           </button>
@@ -393,7 +393,7 @@ function ThemeRow() {
           <Sun className="size-3.5" strokeWidth={1.75} />
         )
       }
-      label={isDark ? "Thème sombre" : "Thème clair"}
+      label={isDark ? "Dark theme" : "Light theme"}
       active={false}
       onClick={toggle}
     />

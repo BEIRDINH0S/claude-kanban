@@ -13,7 +13,7 @@ export interface ColumnDef {
  */
 export const COLUMNS: readonly ColumnDef[] = [
   { id: "todo", label: "Todo", dotClass: "bg-zinc-400/80" },
-  { id: "in_progress", label: "En cours", dotClass: "bg-sky-400" },
+  { id: "in_progress", label: "In progress", dotClass: "bg-sky-400" },
   { id: "review", label: "Review", dotClass: "bg-amber-400" },
   { id: "idle", label: "Idle", dotClass: "bg-violet-400" },
   { id: "done", label: "Done", dotClass: "bg-emerald-400" },

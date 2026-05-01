@@ -2,7 +2,7 @@
 //! disk. That file is the only thing `claude login` (and `claude logout`)
 //! mutates: writing it during login, deleting it on logout, rewriting on
 //! background token refresh. Watching it gives the Settings UI a perfectly
-//! reactive "Connecté en tant que..." badge with no polling.
+//! reactive "Signed in as…" badge with no polling.
 //!
 //! Why we don't watch the macOS Keychain too: there's no inotify-equivalent
 //! for the Keychain, and the CLI always rewrites the file alongside, so the
@@ -27,7 +27,7 @@ use tauri::{AppHandle, Emitter};
 /// and notify drops watches on the original inode after a rename).
 ///
 /// Failure to start the watcher is non-fatal: we log and continue, the UI
-/// still works (the user can hit "rafraîchir" or restart the app to refresh
+/// still works (the user can hit "refresh" or restart the app to refresh
 /// status). This is identical to the contract of `jsonl_watcher::spawn`.
 pub fn spawn(app: AppHandle) {
     let Some(home) = dirs::home_dir() else {

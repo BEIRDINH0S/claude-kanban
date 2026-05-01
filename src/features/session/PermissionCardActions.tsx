@@ -10,7 +10,7 @@ interface Props {
  * Inline permission row rendered on a kanban card. The full PermissionPanel
  * (zoom view) shows tool name + input preview + an explanatory header; here
  * space is tight and the user is scanning many cards at once, so we collapse
- * to: amber shield + tool summary + Refuser / Toujours / Approuver buttons.
+ * to: amber shield + tool summary + Refuse / Always / Approve buttons.
  *
  * All click handlers stop propagation so a button press does NOT also open
  * the zoom view — that's the whole point: skip the second click.
@@ -72,8 +72,8 @@ export function PermissionCardActions({ cardId }: Props) {
             void deny();
           }}
           disabled={!!busy}
-          title="Refuser"
-          aria-label="Refuser la permission"
+          title="Refuse"
+          aria-label="Refuse permission"
           className="flex shrink-0 items-center justify-center rounded-md border border-[var(--glass-stroke)] p-1 text-[var(--text-secondary)] hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/5"
         >
           <X className="size-3.5" strokeWidth={1.75} />
@@ -86,8 +86,8 @@ export function PermissionCardActions({ cardId }: Props) {
             void always();
           }}
           disabled={!!busy}
-          title={`Toujours autoriser : "${suggested}"`}
-          aria-label={`Toujours autoriser ${suggested}`}
+          title={`Always allow: "${suggested}"`}
+          aria-label={`Always allow ${suggested}`}
           className="flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border border-emerald-600/50 bg-emerald-100/70 px-2 py-1 text-[10.5px] font-medium text-emerald-800 hover:bg-emerald-200/70 disabled:cursor-not-allowed disabled:opacity-40 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-200 dark:hover:bg-emerald-400/20"
         >
           <ShieldCheck className="size-3 shrink-0" strokeWidth={1.75} />
@@ -107,8 +107,8 @@ export function PermissionCardActions({ cardId }: Props) {
             void allow();
           }}
           disabled={!!busy}
-          title="Approuver une fois"
-          aria-label="Approuver la permission"
+          title="Approve once"
+          aria-label="Approve permission"
           className="flex shrink-0 items-center justify-center rounded-md bg-[var(--color-accent)] p-1 text-white shadow-[0_0_10px_var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
         >
           {busy === "allow" ? (

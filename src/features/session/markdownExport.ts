@@ -69,10 +69,10 @@ export function transcriptToMarkdown(
   // Header — small, machine-friendly metadata block at the top.
   out.push(`# ${card.title}`);
   out.push("");
-  out.push(`- **Projet:** \`${card.projectPath}\``);
+  out.push(`- **Project:** \`${card.projectPath}\``);
   if (card.sessionId) out.push(`- **Session:** \`${card.sessionId}\``);
-  out.push(`- **Colonne:** ${card.column}`);
-  out.push(`- **Exporté le:** ${fmtDate(Date.now())}`);
+  out.push(`- **Column:** ${card.column}`);
+  out.push(`- **Exported at:** ${fmtDate(Date.now())}`);
   out.push("");
   out.push("---");
   out.push("");
@@ -83,7 +83,7 @@ export function transcriptToMarkdown(
     if (item.kind === "user-input") {
       // Locally-echoed user input (typed in the input box). The SDK doesn't
       // emit these back as events in streaming-input mode.
-      out.push(`### Tour ${turn} · vous`);
+      out.push(`### Turn ${turn} · you`);
       out.push("");
       out.push(item.text);
       out.push("");
@@ -113,13 +113,13 @@ export function transcriptToMarkdown(
           out.push("");
         }
       } else if (text.trim()) {
-        out.push(`### Tour ${turn} · vous`);
+        out.push(`### Turn ${turn} · you`);
         out.push("");
         out.push(text.trim());
         out.push("");
       } else if (typeof ev.message?.content === "string") {
         // Plain string content (the shape we push from sidecar host.mjs).
-        out.push(`### Tour ${turn} · vous`);
+        out.push(`### Turn ${turn} · you`);
         out.push("");
         out.push(ev.message.content as string);
         out.push("");
@@ -139,7 +139,7 @@ export function transcriptToMarkdown(
       );
 
       if (text || toolUses.length > 0) {
-        out.push(`### Tour ${turn} · claude`);
+        out.push(`### Turn ${turn} · claude`);
         out.push("");
       }
       if (text) {
@@ -166,7 +166,7 @@ export function transcriptToMarkdown(
           ? `${(r.duration_ms / 1000).toFixed(1)}s`
           : "";
       const meta = [cost, turns, dur].filter(Boolean).join(" · ");
-      out.push(`_Tour ${turn} terminé — ${meta}_`);
+      out.push(`_Turn ${turn} ended — ${meta}_`);
       out.push("");
       out.push("---");
       out.push("");
@@ -176,7 +176,7 @@ export function transcriptToMarkdown(
 
     if (evType === "auto_approved") {
       const tn = String((ev as { tool_name?: unknown }).tool_name ?? "?");
-      out.push(`_(auto-approuvé · ${tn})_`);
+      out.push(`_(auto-approved · ${tn})_`);
       out.push("");
       continue;
     }

@@ -47,10 +47,10 @@ export function UsagePage() {
     setRebuildMsg(null);
     try {
       const inserted = await rebuildUsageIndex();
-      setRebuildMsg(`Index reconstruit · ${inserted.toLocaleString()} messages indexés.`);
+      setRebuildMsg(`Index rebuilt · ${inserted.toLocaleString()} messages indexed.`);
       await refresh();
     } catch (e) {
-      setRebuildMsg(`Erreur · ${String(e)}`);
+      setRebuildMsg(`Error · ${String(e)}`);
     } finally {
       setRebuilding(false);
     }
@@ -65,11 +65,11 @@ export function UsagePage() {
               Usage
             </p>
             <h1 className="mt-1 text-[15px] font-semibold text-[var(--text-primary)]">
-              Abonnement Claude
+              Claude subscription
             </h1>
             <p className="mt-1 text-[11.5px] text-[var(--text-muted)]">
-              Pourcentage exact des fenêtres 5h / 7j, lu via l'endpoint
-              OAuth qu'utilise <code className="font-mono text-[11px]">/usage</code>.
+              Exact percentage on the 5h / 7d windows, read from the same
+              OAuth endpoint <code className="font-mono text-[11px]">/usage</code> uses.
             </p>
           </div>
         </header>
@@ -83,10 +83,10 @@ export function UsagePage() {
         <header className="mt-8 flex items-baseline justify-between gap-3">
           <div>
             <p className="text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-              Détail
+              Breakdown
             </p>
             <h2 className="mt-1 text-[14px] font-semibold text-[var(--text-primary)]">
-              Où va ta consommation ?
+              Where is your usage going?
               {data?.pricingVersion && (
                 <span className="ml-2 font-mono text-[10.5px] text-[var(--text-muted)]">
                   pricing v{data.pricingVersion}
@@ -94,10 +94,10 @@ export function UsagePage() {
               )}
             </h2>
             <p className="mt-1 text-[11.5px] text-[var(--text-muted)]">
-              Tokens locaux indexés depuis{" "}
+              Local tokens indexed from{" "}
               <code className="font-mono text-[11px]">~/.claude/projects/**</code>.
-              Ne change pas ton % d'abonnement — c'est juste pour comprendre
-              quels projets / modèles te coûtent le plus.
+              Doesn't change your subscription % — this is just to understand
+              which projects / models cost you the most.
             </p>
           </div>
           <UsageRangeSwitcher range={range} onChange={setRange} />
@@ -105,7 +105,7 @@ export function UsagePage() {
 
         {error && (
           <p className="mt-4 rounded-xl border border-red-500/40 bg-red-100/60 px-3 py-2 font-mono text-[11px] text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300">
-            Erreur de chargement · {error}
+            Loading error · {error}
           </p>
         )}
 
@@ -121,7 +121,7 @@ export function UsagePage() {
         {/* Breakdowns -------------------------------------------------- */}
         <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
           <UsageBreakdown
-            title="Par modèle"
+            title="By model"
             rows={
               data?.byModel.map((m) => ({
                 key: m.model,
@@ -136,7 +136,7 @@ export function UsagePage() {
           />
 
           <UsageBreakdown
-            title="Par projet"
+            title="By project"
             rows={
               data?.byProject.map((p) => ({
                 key: p.projectPath,
@@ -150,15 +150,15 @@ export function UsagePage() {
 
         <div className="mt-5">
           <UsageBreakdown
-            title="Top cartes"
+            title="Top cards"
             rows={
               data?.byCard.map((c) => ({
                 key: c.cardId,
-                label: c.cardTitle ?? "(carte supprimée)",
+                label: c.cardTitle ?? "(deleted card)",
                 summary: c.summary,
               })) ?? []
             }
-            emptyHint="Aucune carte n'a consommé sur cette plage."
+            emptyHint="No cards consumed in this range."
           />
         </div>
 
@@ -166,7 +166,7 @@ export function UsagePage() {
         {data && data.recentSessions.length > 0 && (
           <section className="mt-6">
             <h2 className="mb-2 text-[10.5px] font-semibold tracking-[0.18em] text-[var(--text-muted)] uppercase">
-              Sessions récentes
+              Recent sessions
             </h2>
             <ul className="flex flex-col gap-1">
               {data.recentSessions.slice(0, 10).map((s) => {
@@ -209,13 +209,13 @@ export function UsagePage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[12px] font-medium text-[var(--text-primary)]">
-                Reconstruire l'index
+                Rebuild the index
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-muted)]">
-                Re-parse l'intégralité des fichiers JSONL dans
+                Re-parses every JSONL file in
                 <code className="font-mono text-[11px]"> ~/.claude/projects </code>
-                et recalcule tokens + coût avec la table de prix actuelle.
-                Utile après une mise à jour qui change les tarifs Anthropic.
+                and recomputes tokens + cost with the current pricing table.
+                Useful after an update that changes Anthropic's prices.
               </p>
             </div>
             <button
@@ -228,7 +228,7 @@ export function UsagePage() {
                 className={`size-3.5 ${rebuilding ? "animate-spin" : ""}`}
                 strokeWidth={1.75}
               />
-              {rebuilding ? "Reconstruction…" : "Rescan"}
+              {rebuilding ? "Rebuilding…" : "Rescan"}
             </button>
           </div>
           {rebuildMsg && (
@@ -241,10 +241,10 @@ export function UsagePage() {
         {/* Footer status line ---------------------------------------- */}
         <p className="mt-6 font-mono text-[10.5px] text-[var(--text-muted)]">
           {isLoading
-            ? "Mise à jour…"
+            ? "Updating…"
             : lastUpdatedAt
-            ? `Dernière mise à jour ${new Date(lastUpdatedAt).toLocaleTimeString()}`
-            : "Premier chargement…"}
+            ? `Last updated ${new Date(lastUpdatedAt).toLocaleTimeString()}`
+            : "Loading…"}
         </p>
       </div>
     </div>

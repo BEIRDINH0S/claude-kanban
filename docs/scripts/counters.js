@@ -39,7 +39,7 @@
   );
 
   // Only count up elements that have a data-count attribute. Static glyphs
-  // (e.g. ∞ in the "sessions parallèles" stat) opt out by simply omitting it.
+  // (e.g. ∞ in the "parallel sessions" stat) opt out by simply omitting it.
   var els = document.querySelectorAll(".stat .num[data-count]");
   for (var i = 0; i < els.length; i++) obs.observe(els[i]);
 })();

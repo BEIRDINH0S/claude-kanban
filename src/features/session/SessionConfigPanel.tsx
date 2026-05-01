@@ -98,7 +98,7 @@ export function SessionConfigPanel({ card }: { card: Card }) {
         additionalDirectories: additionalDirectories.trim() || null,
       });
       pushToast({
-        message: "Configuration enregistrée — appliquée au prochain démarrage.",
+        message: "Config saved — applies on the next session start.",
         ttlMs: 4500,
       });
     } catch (e) {
@@ -153,16 +153,16 @@ export function SessionConfigPanel({ card }: { card: Card }) {
 
         <Section
           icon={<Cpu className="size-3.5" strokeWidth={1.75} />}
-          title="Modèle"
-          subtitle="Forwarded as the SDK's `model` option. Laisse vide pour utiliser le défaut de ton plan (typiquement Sonnet)."
+          title="Model"
+          subtitle="Forwarded as the SDK's `model` option. Leave empty to use your plan's default (typically Sonnet)."
         >
           <ModelPicker value={model} onChange={setModel} />
         </Section>
 
         <Section
           icon={<ShieldAlert className="size-3.5" strokeWidth={1.75} />}
-          title="Mode de permission"
-          subtitle="Comment Claude Code gère les permissions outils."
+          title="Permission mode"
+          subtitle="How Claude Code handles tool permissions."
         >
           <PermissionModePicker
             value={permissionMode}
@@ -173,12 +173,12 @@ export function SessionConfigPanel({ card }: { card: Card }) {
         <Section
           icon={<Sparkles className="size-3.5" strokeWidth={1.75} />}
           title="System prompt — append"
-          subtitle="Ajouté à la fin du system prompt par défaut de Claude Code (preset claude_code). Idéal pour des conventions projet, un rôle spécifique, des règles de style…"
+          subtitle="Appended to Claude Code's default system prompt (preset claude_code). Great for project conventions, a specific role, style rules…"
         >
           <textarea
             value={systemPromptAppend}
             onChange={(e) => setSystemPromptAppend(e.target.value)}
-            placeholder="Ex. : « Toujours répondre en français. Utiliser TypeScript strict. »"
+            placeholder='e.g. "Always reply in formal English. Use TypeScript strict."'
             rows={4}
             className="block w-full resize-y rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-accent-ring)] dark:bg-white/5"
           />
@@ -187,7 +187,7 @@ export function SessionConfigPanel({ card }: { card: Card }) {
         <Section
           icon={<Hash className="size-3.5" strokeWidth={1.75} />}
           title="Max turns"
-          subtitle="Plafond du nombre de tours par session. Vide = pas de limite. Pratique pour borner la dépense sur des boucles autonomes."
+          subtitle="Cap on the number of turns per session. Empty = no limit. Useful to bound spend on autonomous loops."
         >
           <input
             type="number"
@@ -201,13 +201,13 @@ export function SessionConfigPanel({ card }: { card: Card }) {
 
         <Section
           icon={<FolderPlus className="size-3.5" strokeWidth={1.75} />}
-          title="Répertoires supplémentaires"
-          subtitle="Chemins absolus accessibles à Claude en plus de cwd. Forwarded as `additionalDirectories`."
+          title="Additional directories"
+          subtitle="Absolute paths Claude can access on top of cwd. Forwarded as `additionalDirectories`."
         >
           <ul className="flex flex-col gap-1.5">
             {additionalLines.length === 0 && (
               <li className="font-mono text-[11px] text-[var(--text-muted)]">
-                Aucun — Claude n'aura accès qu'au cwd de la carte.
+                None — Claude only sees the card's cwd.
               </li>
             )}
             {additionalLines.map((dir, idx) => (
@@ -222,7 +222,7 @@ export function SessionConfigPanel({ card }: { card: Card }) {
                   type="button"
                   onClick={() => handleRemoveDirectory(idx)}
                   className="rounded-md p-1 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-black/5 hover:text-red-400 group-hover:opacity-100 dark:hover:bg-white/5"
-                  aria-label="Retirer ce répertoire"
+                  aria-label="Remove this directory"
                 >
                   <Trash2 className="size-3" strokeWidth={1.75} />
                 </button>
@@ -254,7 +254,7 @@ export function SessionConfigPanel({ card }: { card: Card }) {
             className="flex items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[11.5px] font-medium text-[var(--text-secondary)] hover:border-[var(--color-accent-ring)] hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RotateCcw className="size-3" strokeWidth={1.75} />
-            Réinitialiser
+            Reset
           </button>
           <button
             type="button"
@@ -267,8 +267,8 @@ export function SessionConfigPanel({ card }: { card: Card }) {
         </div>
 
         <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-muted)]">
-          Les changements sont appliqués au prochain démarrage de session.
-          Une session live continue avec sa configuration de boot.
+          Changes apply on the next session start. A live session keeps its
+          boot-time configuration.
         </p>
       </div>
     </div>
@@ -282,7 +282,7 @@ function Header() {
         Session config
       </p>
       <h2 className="mt-1 text-[14px] font-semibold text-[var(--text-primary)]">
-        Options du SDK Claude pour cette carte
+        Claude SDK options for this card
       </h2>
     </header>
   );
@@ -328,10 +328,10 @@ interface RadioOption<V extends string> {
 }
 
 const MODEL_OPTIONS: RadioOption<string>[] = [
-  { value: "", label: "Défaut", hint: "Le SDK choisit selon ton plan." },
-  { value: "sonnet", label: "Sonnet", hint: "Polyvalent, défaut pour la plupart des plans." },
-  { value: "opus", label: "Opus", hint: "Le plus capable. Coûte plus de tokens." },
-  { value: "haiku", label: "Haiku", hint: "Rapide & économe. Bon pour les boucles légères." },
+  { value: "", label: "Default", hint: "The SDK picks based on your plan." },
+  { value: "sonnet", label: "Sonnet", hint: "All-rounder, default on most plans." },
+  { value: "opus", label: "Opus", hint: "The most capable. More expensive per token." },
+  { value: "haiku", label: "Haiku", hint: "Fast & cheap. Good for lightweight loops." },
 ];
 
 function ModelPicker({
@@ -388,13 +388,13 @@ function ModelPicker({
 const PERMISSION_MODE_OPTIONS: RadioOption<"" | PermissionMode>[] = [
   {
     value: "",
-    label: "Défaut",
-    hint: "Demande pour chaque outil — comportement actuel.",
+    label: "Default",
+    hint: "Asks for every tool — current behavior.",
   },
   {
     value: "default",
     label: "default (explicit)",
-    hint: "Identique au défaut, mais figé sur la carte (ne suit pas un éventuel changement de pref globale).",
+    hint: "Same as default, but pinned on the card (won't follow a global pref change).",
   },
   {
     value: "acceptEdits",
@@ -404,12 +404,12 @@ const PERMISSION_MODE_OPTIONS: RadioOption<"" | PermissionMode>[] = [
   {
     value: "plan",
     label: "plan",
-    hint: "Mode planification : Claude rédige un plan et demande avant d'exécuter.",
+    hint: "Plan mode: Claude drafts a plan and asks before running anything.",
   },
   {
     value: "bypassPermissions",
     label: "bypassPermissions",
-    hint: "⚠️ Ignore canUseTool. Les règles auto-approve ne s'appliquent plus, Claude exécute tout sans confirmation.",
+    hint: "⚠️ Bypasses canUseTool. Auto-approve rules no longer apply; Claude runs everything without confirmation.",
   },
 ];
 

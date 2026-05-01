@@ -58,7 +58,7 @@ export const useSubscriptionUsageStore = create<SubscriptionUsageState>(
 // ---------------------------------------------------------------------------
 
 /**
- * Format `resetAt` (ISO string) into a humane "in 2h14" / "in 4j 3h"
+ * Format `resetAt` (ISO string) into a human-friendly "in 2h14" / "4d 3h"
  * string. Returns null when no reset timestamp is known.
  */
 export function formatResetIn(
@@ -69,12 +69,12 @@ export function formatResetIn(
   const t = Date.parse(resetIso);
   if (!Number.isFinite(t)) return null;
   const ms = t - nowMs;
-  if (ms <= 0) return "maintenant";
+  if (ms <= 0) return "now";
   const totalMin = Math.floor(ms / 60_000);
   if (totalMin >= 24 * 60) {
     const d = Math.floor(totalMin / (24 * 60));
     const h = Math.floor((totalMin - d * 24 * 60) / 60);
-    return h > 0 ? `${d}j ${h}h` : `${d}j`;
+    return h > 0 ? `${d}d ${h}h` : `${d}d`;
   }
   if (totalMin >= 60) {
     const h = Math.floor(totalMin / 60);
@@ -86,7 +86,7 @@ export function formatResetIn(
 }
 
 /**
- * Translate the sidecar's `apiError` code into a user-facing FR string.
+ * Translate the sidecar's `apiError` code into a user-facing string.
  * `null` means "no error to display".
  */
 export function describeApiError(
@@ -99,24 +99,24 @@ export function describeApiError(
       // This app refuses to talk to Anthropic's private OAuth endpoints
       // (would risk a ban). The CLI's `/usage` slash command shows the
       // same numbers — point the user there.
-      return "Disponible uniquement via /usage dans Claude Code";
+      return "Available only via /usage in Claude Code";
     case "rate-limited":
-      return "Synchro Anthropic en cours · valeurs précédentes affichées";
+      return "Anthropic sync in progress · showing last known values";
     case "no-credentials":
-      return "Aucun compte Claude détecté · connecte-toi via Paramètres";
+      return "No Claude account detected · sign in from Settings";
     case "api-user":
-      return "Compte API · pas d'abonnement à suivre";
+      return "API account · no subscription to track";
     case "network":
-      return "Pas de réseau";
+      return "No network";
     case "timeout":
-      return "Anthropic ne répond pas";
+      return "Anthropic isn't responding";
     case "parse":
-      return "Réponse Anthropic illisible";
+      return "Unparseable Anthropic response";
     default:
       if (data.apiError?.startsWith("http-")) {
-        return `Anthropic a répondu ${data.apiError}`;
+        return `Anthropic returned ${data.apiError}`;
       }
-      return "Indisponible";
+      return "Unavailable";
   }
 }
 

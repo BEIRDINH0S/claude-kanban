@@ -14,8 +14,8 @@ interface Props {
 
 /**
  * Slim header above the kanban columns. Shows the active project's name and
- * card count on the left, the "+ Nouvelle tâche" action on the right (or a
- * "lecture seule" pill if the project is archived). Replaces the global
+ * card count on the left, the "+ New task" action on the right (or a
+ * "read only" pill if the project is archived). Replaces the global
  * TopBar — settings has its own page, usage moved there too.
  */
 export function BoardHeader({ onCreate }: Props) {
@@ -42,11 +42,11 @@ export function BoardHeader({ onCreate }: Props) {
     <header className="flex items-center justify-between gap-3 border-b border-[var(--glass-stroke)] px-6 py-3">
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-[14px] font-semibold text-[var(--text-primary)]">
-          {project?.name ?? "Aucun projet"}
+          {project?.name ?? "No project"}
         </h1>
         {nonEmpty.length === 0 ? (
           <p className="mt-0.5 font-mono text-[10.5px] text-[var(--text-muted)] tabular-nums">
-            0 tâche
+            0 tasks
           </p>
         ) : (
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 font-mono text-[10.5px] text-[var(--text-muted)] tabular-nums">
@@ -75,10 +75,10 @@ export function BoardHeader({ onCreate }: Props) {
       {archived ? (
         <span
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--text-muted)]"
-          title="Projet importé · lecture seule"
+          title="Imported project · read only"
         >
           <Lock className="size-3" strokeWidth={1.75} />
-          Lecture seule
+          Read only
         </span>
       ) : (
         <button
@@ -88,7 +88,7 @@ export function BoardHeader({ onCreate }: Props) {
           className="glass flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus className="size-3.5" strokeWidth={1.75} />
-          Nouvelle tâche
+          New task
         </button>
       )}
     </header>
@@ -116,8 +116,8 @@ function SearchBox() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="Rechercher (⌘F)"
-        aria-label="Rechercher"
+        title="Search (⌘F)"
+        aria-label="Search"
         className="rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
       >
         <Search className="size-4" strokeWidth={1.75} />
@@ -142,8 +142,8 @@ function SearchBox() {
       <button
         type="button"
         onClick={() => setOpen(false)}
-        title="Fermer (Esc)"
-        aria-label="Fermer la recherche"
+        title="Close (Esc)"
+        aria-label="Close search"
         className="rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
       >
         <X className="size-3" strokeWidth={1.75} />

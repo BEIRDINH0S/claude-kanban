@@ -55,7 +55,7 @@ import { useUiStore } from "./uiStore";
 
 const COLUMN_LABEL: Record<CardColumn, string> = {
   todo: "Todo",
-  in_progress: "En cours",
+  in_progress: "In progress",
   review: "Review",
   idle: "Idle",
   done: "Done",
@@ -170,16 +170,16 @@ export const useCardsStore = create<CardsState>((set, get) => ({
   },
 
   duplicate: async (id) => {
-    // Clones the card metadata (title prefixed "Copie de", same path/project)
+    // Clones the card metadata (title prefixed "Copy of", same path/project)
     // into a fresh Todo entry. Session, transcript and cost are NOT carried
     // over — duplicates are meant for "I want to try this exploration in
     // parallel", not "save state". Rust create_card lands the new row at
     // end of Todo, which is also where the user expects to find it.
     const source = get().cards.find((c) => c.id === id);
     if (!source) return null;
-    const dupTitle = source.title.startsWith("Copie de ")
+    const dupTitle = source.title.startsWith("Copy of ")
       ? source.title
-      : `Copie de ${source.title}`;
+      : `Copy of ${source.title}`;
     try {
       const card = await createCard(dupTitle, source.projectPath, source.projectId);
       set((s) => ({ cards: [...s.cards, card] }));
@@ -236,9 +236,9 @@ export const useCardsStore = create<CardsState>((set, get) => ({
       // the user can resume the conversation by sending a new message.
       if (snapshot) {
         useToastsStore.getState().push({
-          message: `Carte « ${snapshot.title} » supprimée`,
+          message: `Card "${snapshot.title}" deleted`,
           action: {
-            label: "Annuler",
+            label: "Undo",
             handler: async () => {
               try {
                 const fresh = await restoreCard(snapshot);
@@ -289,9 +289,9 @@ export const useCardsStore = create<CardsState>((set, get) => ({
       // approximation.
       if (card && fromColumn && fromColumn !== column) {
         useToastsStore.getState().push({
-          message: `Carte déplacée vers ${COLUMN_LABEL[column]}`,
+          message: `Card moved to ${COLUMN_LABEL[column]}`,
           action: {
-            label: "Annuler",
+            label: "Undo",
             handler: () =>
               get().move(id, fromColumn, Number.MAX_SAFE_INTEGER),
           },

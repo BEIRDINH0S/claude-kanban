@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter};
 use super::storage;
 
 /// Status of the locally stored credentials. Returned to the front so
-/// Settings can render "Connecté en tant que…" without doing its own IO.
+/// Settings can render "Signed in as…" without doing its own IO.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthStatus {
