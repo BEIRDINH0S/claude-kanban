@@ -1,3 +1,35 @@
+//! Tauri commands for card CRUD + position management.
+//!
+//! Cards are the primary UI entity. Each row in `cards` belongs to a project
+//! and lives in one of five columns (todo / in_progress / review / idle /
+//! done). Positions within a column are densely numbered 0..N, renumbered
+//! on every move so the front never has to deal with sparse indices.
+//!
+//! Mutation commands (`create_card`, `update_card`, `move_card`,
+//! `delete_card`, `restore_card`, `set_card_session_config`) all guard
+//! against archived projects via `is_card_project_archived` /
+//! `is_project_archived`. The front-end has its own protection, but the
+//! Rust check is what makes archived projects truly read-only — front
+//! bypass attempts (DB exports, IPC fuzzing) would otherwise corrupt
+//! historical snapshots.
+//!
+//! Position renumbering: every move runs in a transaction that
+//!   1. shifts source-column tail down by 1 (close the hole)
+//!   2. shifts target-column tail up by 1 from `target_index` (open a hole)
+//!   3. writes the new row at `target_index` in the target column
+//! See `move_card` for the impl. Don't try to "optimise" by skipping this
+//! when src == dst — adjacent moves still need the closing+opening pass.
+//!
+//! Worktree commands (`git_card_status`, `git_card_diff`, `git_card_push`,
+//! `drop_card_worktree`) are in this file because they're scoped to a
+//! card_id, but the actual git work happens in `crate::worktree` /
+//! `crate::commands::git_*` helpers. Ahead/behind counts are cached by
+//! `gitStatusStore` on a slow heartbeat — these commands are the
+//! authoritative source the heartbeat polls.
+//!
+//! `seed_if_empty` runs at boot from `lib.rs::run` and inserts a default
+//! project + welcome card on the very first launch. Idempotent.
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::{params, Connection, Transaction};

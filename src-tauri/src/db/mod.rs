@@ -1,3 +1,27 @@
+//! SQLite layer. Single connection guarded by a Mutex (`DbState`), opened
+//! once at boot and shared across every Tauri command. WAL mode + foreign
+//! keys ON. Schema lives in [`migrations`] and is versioned via
+//! `PRAGMA user_version` — additions are append-only (cf. that module's
+//! contract: never edit a past migration).
+//!
+//! Opening (`open`):
+//!   1. Create the parent dir if needed
+//!   2. `journal_mode = WAL`, `foreign_keys = ON`
+//!   3. Run pending migrations
+//!   4. Boot-time repair of cards stuck `in_progress` after a crash —
+//!      see `repair_stuck_cards` for the cleanup contract
+//!
+//! Locking convention: every command goes through [`lock_recover`], which
+//! transparently recovers from poisoning. Connections + HashMaps in the
+//! app state hold no invariants that mid-panic state would corrupt — a
+//! plain `unwrap()` would tear down the whole Tauri runtime on a single
+//! bad query, which is worse than reusing a slightly weird state.
+//!
+//! Two read-helpers (`is_card_project_archived`, `is_project_archived`)
+//! are exposed at module level because every mutation command guards
+//! against archived projects — the front protection is best-effort, the
+//! Rust check is the source of truth.
+
 pub mod migrations;
 pub mod types;
 

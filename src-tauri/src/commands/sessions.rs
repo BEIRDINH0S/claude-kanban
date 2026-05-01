@@ -1,3 +1,45 @@
+//! Tauri commands that drive Claude Code sessions through the sidecar.
+//!
+//! Lifecycle of a session, in IPC terms:
+//!
+//! ```text
+//!   front: invoke("start_session", { cardId, prompt })
+//!   ↓
+//!   Rust: persist `column = in_progress`, register oneshot keyed by
+//!         requestId, send StartSession{requestId,...} to sidecar
+//!   ↓
+//!   sidecar: spawns Claude Agent SDK query, emits SessionStarted{
+//!            requestId, sessionId } once the SDK assigns the id
+//!   ↓
+//!   Rust: handle_outbound persists session_id on the card, resolves the
+//!         oneshot with sessionId; subsequent `session-event` Tauri events
+//!         carry the assistant's stream
+//!   ↓
+//!   front: closes the request, hydrates the live transcript via
+//!          session-event listeners
+//! ```
+//!
+//! `send_message` and `stop_session` route by `session_id`; `respond_permission`
+//! routes by `request_id` (the SDK pauses inside `canUseTool` until we reply).
+//!
+//! `resume_session` is the warm path: instead of starting from scratch, the
+//! sidecar passes `resume: <id>` to the SDK so the conversation continues
+//! from the on-disk JSONL. We pre-set `card.column = in_progress` here so
+//! the kanban flips immediately — handle_outbound takes over once the SDK
+//! emits init.
+//!
+//! `read_session_history` is the read-side helper used by `ZoomView` to
+//! hydrate the chat from `~/.claude/projects/**/*.jsonl` when the user
+//! opens a card whose session is idle. No sidecar round-trip — pure file
+//! I/O.
+//!
+//! Per-card SDK options (model, permission_mode, system_prompt_append,
+//! max_turns, additionalDirectories) live on the cards row. They're loaded
+//! once at start/resume time via `load_session_config` and forwarded as
+//! `SessionConfig` over the wire — the SDK applies them when constructing
+//! the query. Changing options on a live session does NOT affect the
+//! current SDK iteration; the user has to stop+start (or wait for next turn).
+
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use rusqlite::params;
