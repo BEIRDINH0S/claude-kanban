@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node scripts/check-feature-isolation.mjs && tsc && vite build",
+    "check:isolation": "node scripts/check-feature-isolation.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "postinstall": "cd sidecar && npm install --no-audit --no-fund --silent && cd .. && node scripts/fetch-sidecar-bin.mjs"

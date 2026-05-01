@@ -1,21 +1,30 @@
+/**
+ * One column of the board. Pure layout — drives drop-target wiring through
+ * dnd-kit, reads only the kanban-private collapse state, and delegates each
+ * card's rendering to a single `renderCard` function the parent supplies. No
+ * direct contact with cardsStore, projectsStore, etc.
+ */
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { ChevronRight } from "lucide-react";
+import type { ReactNode } from "react";
 
-import { useUiStore } from "../../stores/uiStore";
 import type { Card } from "../../types/card";
-import { CardItem } from "./CardItem";
 import type { ColumnDef } from "./columns";
+import { useKanbanStore } from "./state";
 
 interface Props {
   def: ColumnDef;
   cards: Card[];
+  /** Render hook for one card — KanbanBoard wires its props (onClick,
+   *  selection, badges, etc.) and we only handle layout. */
+  renderCard: (card: Card) => ReactNode;
 }
 
-export function Column({ def, cards }: Props) {
+export function Column({ def, cards, renderCard }: Props) {
   const { setNodeRef, isOver } = useDroppable({ id: def.id });
   // We highlight the entire column whenever any card is being dragged,
   // making the drop zones visible at a glance instead of guessing.
@@ -23,13 +32,13 @@ export function Column({ def, cards }: Props) {
   const dragging = !!active;
 
   // Done is collapsible — most kanbans use Done as an archive bin, no point
-  // burning column space on it by default. Toggled via uiStore so the state
-  // persists across reloads. We still render the column as a drop target
-  // (collapsed mode just renders a thin vertical strip).
-  const doneCollapsed = useUiStore((s) =>
+  // burning column space on it by default. Toggled via kanban state so the
+  // state persists across reloads. We still render the column as a drop
+  // target (collapsed mode just renders a thin vertical strip).
+  const doneCollapsed = useKanbanStore((s) =>
     def.id === "done" ? s.doneCollapsed : false,
   );
-  const toggleDoneCollapsed = useUiStore((s) => s.toggleDoneCollapsed);
+  const toggleDoneCollapsed = useKanbanStore((s) => s.toggleDoneCollapsed);
 
   if (def.id === "done" && doneCollapsed) {
     return (
@@ -106,9 +115,7 @@ export function Column({ def, cards }: Props) {
          * with the scroll container and gets cut off.
          */}
         <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-2 pt-0.5 pb-2">
-          {cards.map((c) => (
-            <CardItem key={c.id} card={c} />
-          ))}
+          {cards.map((c) => renderCard(c))}
           {/*
            * Trailing flexible drop zone. Always rendered so the bottom of the
            * column is a generous, easy-to-hit target (vs. the previous tiny

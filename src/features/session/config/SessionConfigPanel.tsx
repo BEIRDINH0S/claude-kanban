@@ -11,9 +11,9 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { useCardsStore } from "../../stores/cardsStore";
-import { useToastsStore } from "../../stores/toastsStore";
-import type { Card, PermissionMode } from "../../types/card";
+import { useCardsStore } from "../../../stores/cardsStore";
+import { useToastsStore } from "../../../stores/toastsStore";
+import type { Card, PermissionMode } from "../../../types/card";
 
 /**
  * Per-card SDK options panel. Mirrors the Claude Code CLI flags / settings

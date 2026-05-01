@@ -11,14 +11,17 @@ anyway.
 |---|---|
 | **auth / login** | `src-tauri/src/auth/cli_login.rs` (PTY runner for `claude login`)<br>`src-tauri/src/auth/credentials_watch.rs` (file watcher → `auth-changed`)<br>`src-tauri/src/auth/storage.rs` (reads `~/.claude/.credentials.json`)<br>⚠ **Strict policy**: never add a call to `*.anthropic.com`. See README §Security. |
 | **Claude sessions** | `src-tauri/src/session_host/mod.rs` (sidecar spawn + JSON-lines dispatch)<br>`src-tauri/src/session_host/protocol.rs` (`SidecarInbound` / `SidecarOutbound` enums)<br>`src-tauri/src/commands/sessions.rs` (Tauri commands exposed to the front)<br>`sidecar/src/host.mjs::SessionHandle` (the Node-side counterpart) |
-| **kanban / drag & drop** | `src/features/kanban/Board.tsx` (orchestrator + DnD + shortcuts)<br>`src/stores/cardsStore.ts` (state + optimistic moves)<br>`src-tauri/src/commands/cards.rs` (CRUD + position renumbering in a single transaction) |
+| **session UI (zoom view)** | `src/features/session/ZoomView.tsx` (orchestrator: modal frame + tab routing)<br>`src/features/session/chat/` (chat tab — MessageList + MessageInput + slash menu + slash commands)<br>`src/features/session/diff/` (worktree diff tab)<br>`src/features/session/config/` (per-card SDK options form)<br>`src/features/session/header/` (title/path/tags editor + toolbar: plan/stop/push/export/archive)<br>`src/features/session/permissions/` (Panel inside the chat tab + inline kanban-card actions)<br>`src/features/session/badges/` (kanban slot: live dot + working spinner)<br>`src/features/session/{format,markdownExport}.ts` (feature-internal utils, used by several sub-features) |
+| **kanban / drag & drop** | `src/features/kanban/KanbanBoard.tsx` (pure component — props in, callbacks + slots out)<br>`src/features/kanban/state.ts` (kanban-private store: search, selection, done collapse)<br>`src/app/AppShell.tsx::BoardPane` (wires the kanban to cards/session/permissions/git)<br>`src/stores/cardsStore.ts` (state + optimistic moves)<br>`src-tauri/src/commands/cards.rs` (CRUD + position renumbering in a single transaction) |
+| **app shell / routing** | `src/app/AppShell.tsx` (the only place that composes features)<br>`src/App.tsx` (~35 lines: composes shell + overlays, calls 3 hooks)<br>`src/app/{boot,shortcuts,notifications}.ts` (one-shot boot, global shortcuts, OS-notif helper)<br>`src/app/events/{cards,session,permissions,git,binary}.ts` + `events/index.ts` (Tauri listeners, one file per concern, plus a `wireGlobalEvents()` bundler)<br>`src/stores/uiStore.ts` (active project, view, palette, zoom — cross-feature only)<br>⚠ Features must NOT import each other. The shell is the bridge. |
 | **DB / SQLite** | `src-tauri/src/db/mod.rs` (open + WAL + boot repair)<br>`src-tauri/src/db/migrations.rs` (versioned schema, append-only)<br>`src-tauri/src/db/types.rs` (`Card`, `Project`, `CardColumn`)<br>⚠ **Never edit a past migration** — always append a new one. |
 | **tool-call permissions** | `src-tauri/src/permissions.rs` (parse + glob + `is_allowed`)<br>`src-tauri/src/commands/permissions.rs` (thin Tauri CRUD wrapper)<br>`src/features/settings/SettingsPage.tsx::PermissionRulesSection` (UI) |
 | **git / worktrees** | `src-tauri/src/worktree.rs` (shells out to `git worktree`)<br>`src-tauri/src/git_fetch.rs` (fetch workers + GC) |
 | **JSONL watcher** | `src-tauri/src/jsonl_watcher.rs` (`~/.claude/projects/**/*.jsonl` → `external-jsonl-update`) |
 | **slash commands** | `src-tauri/src/commands/user_commands.rs` (discovery: `~/.claude/commands/*.md` + `<project>/.claude/commands/*.md`) |
 | **prefs (key/value)** | `src-tauri/src/commands/prefs.rs` (`app_prefs` table, accessible from JS and from Rust boot) |
-| **Settings UI** | `src/features/settings/SettingsPage.tsx` (every section in one file — `AccountSection`, `ClaudeRuntimeSection`, etc.) |
+| **Settings UI** | `src/features/settings/SettingsPage.tsx` (orchestrator: layout + section order)<br>`src/features/settings/layout.tsx` (shared primitives: Category, Card, Toggle)<br>`src/features/settings/{account,notifications,permissions-rules,shortcuts,templates,cards,claude-runtime,data}/` (one folder per section, isolated)<br>Adding a section = drop a sibling folder with an `index.ts`, mount it in `SettingsPage.tsx`. |
+| **app shell sidebar** | `src/app/Sidebar.tsx` (collapse + theme toggle + settings nav)<br>`src/features/projects/ProjectList.tsx` (drag-reorderable list, plugged into the shell sidebar) |
 
 ## Conventions
 
@@ -62,15 +65,35 @@ anyway.
   skip the close-hole / open-hole pass on intra-column moves. Tempting
   but it breaks adjacent positions. See
   `commands/cards.rs::move_card`.
+- **Cross-feature import** — `features/A/**` must not import from
+  `features/B/**`. The bridge always lives in `app/AppShell.tsx` (or a
+  caller-supplied slot / callback on the public component). Enforced by
+  `scripts/check-feature-isolation.mjs`, which runs in `npm run build`.
+  Layer rule:
+  - `features/A` may import `features/A/**`, `lib/`, `types/`, `ipc/`, `stores/`
+  - `stores/` may import other `stores/` (infra-to-infra) but never `features/`
+  - `lib/`, `types/`, `ipc/` stay pure (no `features/`, no `stores/`)
+  - `app/` may import everything (it's the orchestrator)
+- **Cross-sub-feature import inside a feature** — when a feature has
+  sub-folders with their own `index.ts` (e.g. `features/session/{chat,
+  permissions, diff, config, header, badges}/`), those sub-features must
+  not import each other. The bridge lives in the feature's own
+  orchestrator (e.g. `ZoomView.tsx`) and uses slots / callbacks, mirroring
+  the top-level pattern. Sub-features CAN import root-level files of
+  their parent feature (e.g. `features/session/format.ts`) — those are
+  the feature's shared lib. Same script enforces it.
 
 ## Layout (quick memo)
 
 ```
 claude-kanban/
 ├── src/                          React + Zustand + dnd-kit
+│   ├── app/                      orchestrator — only place that composes features
 │   ├── features/{kanban,session,card-create,settings,projects,palette,toasts}/
+│   │                             each has an index.ts = public API surface
 │   ├── stores/                   Zustand slices
 │   ├── ipc/                      typed wrappers around invoke()
+│   ├── lib/                      framework-free helpers (shortcuts, sdkBlocks, prefs)
 │   └── types/                    shared types (camelCase, mirrors of the Rust shapes)
 ├── src-tauri/src/                Rust (Tauri)
 │   ├── auth/                     login + credentials watcher + storage

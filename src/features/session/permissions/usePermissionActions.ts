@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-import { respondPermission } from "../../ipc/sessions";
-import { usePermissionRulesStore } from "../../stores/permissionRulesStore";
-import { usePermissionsStore } from "../../stores/permissionsStore";
+import { respondPermission } from "../../../ipc/sessions";
+import { usePermissionRulesStore } from "../../../stores/permissionRulesStore";
+import { usePermissionsStore } from "../../../stores/permissionsStore";
 
 /**
  * Build a sensible auto-approve pattern from (toolName, input). Defaults to

@@ -1,34 +1,26 @@
 /**
- * Top-level orchestrator for the kanban view + sub-page routing.
+ * Self-contained kanban board. The component takes a list of cards and a
+ * handful of callbacks; everything else (project, session, permissions, git
+ * status, error rings) lives in caller-supplied slots. The kanban knows:
  *
- * Three responsibilities, in order of complexity:
+ *   - how to lay out columns (display order baked into `COLUMNS`)
+ *   - how to drag-and-drop a card across columns / within a column (dnd-kit)
+ *   - how to map keyboard shortcuts to navigation + per-card actions
  *
- * 1. **Routing** — switches between Board (default), Settings, Projects,
- *    and Usage based on `useUiStore.view`. Each branch is its own page
- *    component; this file is just the dispatcher + sidebar layout.
+ * It does NOT know:
  *
- * 2. **Drag & drop** (kanban only) — uses dnd-kit with a custom
- *    `collisionDetection` that combines `pointerWithin` and
- *    `rectIntersection` for the snap-to-column behaviour the kanban
- *    expects. The actual move logic lives in `cardsStore.move()` which
- *    handles optimistic updates and Rust round-trips. We only emit the
- *    `(cardId, targetColumn, targetIndex)` triple from `handleDragEnd`.
+ *   - what a project is, who owns the cards, or where they're stored
+ *   - what a session / permission / git-status / error is
+ *   - how to render a "+ New task" button (that's in `renderHeaderRight`)
  *
- * 3. **Keyboard navigation** — vim-style hjkl + arrows, plus single-key
- *    actions (n=new, /=search, d=delete, y=duplicate, a=archive, Enter=zoom).
- *    All bindings are user-customisable via `shortcutsStore`. We bail
- *    when a text input is focused (`isTextInputTarget`) so typing in
- *    modals doesn't trigger board actions. Selection state
- *    (`selectedCardId`) lives in `useUiStore` so it persists across
- *    Settings detours.
+ * Data flow:
+ *   App  ───props.cards────▶  KanbanBoard
+ *        ◀──onMove / onOpen / onDelete / onDuplicate / onCreate / onSelect───
  *
- * Search filter is loose case-insensitive substring on
- * `title + projectPath + tags`. Tags are already stored comma-separated
- * + lowercased so we just include the raw blob in the haystack.
- *
- * `CreateCardModal` is mounted here (not in `BoardHeader`) so the Esc
- * keydown handler that closes it can short-circuit the board's own
- * shortcuts effect.
+ * The board's own UI state (search query, search box visibility, keyboard
+ * cursor, Done collapse) lives in `features/kanban/state.ts`. The shell can
+ * still reach into it for the few cases where the cross-feature plumbing
+ * needs it (e.g. Esc closes the search bar from the global Esc handler).
  */
 import {
   DndContext,
@@ -42,66 +34,126 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
-import { CreateCardModal } from "../card-create/CreateCardModal";
-import { ProjectsPage } from "../projects/ProjectsPage";
-import { Sidebar } from "../projects/Sidebar";
-import { SettingsPage } from "../settings/SettingsPage";
 import { isTextInputTarget } from "../../lib/shortcuts";
-import { selectByColumn, useCardsStore } from "../../stores/cardsStore";
 import { matchShortcut } from "../../stores/shortcutsStore";
-import { useUiStore } from "../../stores/uiStore";
 import type { Card, CardColumn } from "../../types/card";
 import { BoardHeader } from "./BoardHeader";
 import { CardItem } from "./CardItem";
 import { Column } from "./Column";
-import { COLUMNS, isColumnId } from "./columns";
+import { COLUMNS, isColumnId, type ColumnDef } from "./columns";
+import { useKanbanStore } from "./state";
 
-export function Board() {
-  const cards = useCardsStore((s) => s.cards);
-  const move = useCardsStore((s) => s.move);
-  const remove = useCardsStore((s) => s.remove);
-  const duplicate = useCardsStore((s) => s.duplicate);
-  const error = useCardsStore((s) => s.error);
-  const view = useUiStore((s) => s.view);
-  const searchQuery = useUiStore((s) => s.searchQuery);
-  const selectedCardId = useUiStore((s) => s.selectedCardId);
-  const setSelectedCardId = useUiStore((s) => s.setSelectedCardId);
-  const openZoom = useUiStore((s) => s.openZoom);
+export interface KanbanBoardProps {
+  cards: Card[];
+  /** Optional column definitions override — defaults to the canonical 5-col
+   *  lifecycle. Pass a custom set to e.g. demo a 3-column variant. */
+  columns?: readonly ColumnDef[];
+  /** True when no card can be moved or mutated (e.g. archived project). */
+  readOnly?: boolean;
+
+  // ---- callbacks (data the kanban produces) -------------------------------
+  /** A card moved (cross-column or within-column). The kanban does not
+   *  mutate state itself — the parent is the source of truth. */
+  onMove: (id: string, column: CardColumn, targetIndex: number) => void;
+  /** User wants to open the card (click, Enter, …). Typically opens a zoom
+   *  view in the parent. */
+  onOpen: (card: Card) => void;
+  /** User asked to create a new card (toolbar button or `n` shortcut). */
+  onCreate: () => void;
+  /** User asked to delete a card (× button on hover or `d` shortcut). */
+  onDelete: (card: Card) => void;
+  /** User asked to duplicate a card. */
+  onDuplicate: (card: Card) => void;
+
+  // ---- slots --------------------------------------------------------------
+  /** Top-right of a card, next to the title. Live dot, working spinner, … */
+  renderCardBadges?: (card: Card) => ReactNode;
+  /** Inline with the tag pills. Git status pill, etc. */
+  renderCardRowBadges?: (card: Card) => ReactNode;
+  /** Bottom of a card, full width. Inline permission buttons, etc. */
+  renderCardActions?: (card: Card) => ReactNode;
+  /** Caller-decided ring tone per card (amber=permission, red=error, …). */
+  resolveCardRingTone?: (card: Card) => "amber" | "red" | null;
+
+  /** Header left: project label, per-column counts, anything project-shaped. */
+  renderHeaderLeft?: () => ReactNode;
+  /** Header right: "+ New task" button or "Read only" pill. */
+  renderHeaderRight?: () => ReactNode;
+
+  /** Global error banner above the columns. Kept as a slot so the kanban
+   *  doesn't decide what an "error" is. */
+  errorBanner?: ReactNode;
+
+  /** Disable the keyboard handler entirely. Useful when an overlay
+   *  (zoom view, command palette) is on top — the parent decides. */
+  shortcutsEnabled?: boolean;
+}
+
+export function KanbanBoard({
+  cards,
+  columns = COLUMNS,
+  readOnly = false,
+  onMove,
+  onOpen,
+  onCreate,
+  onDelete,
+  onDuplicate,
+  renderCardBadges,
+  renderCardRowBadges,
+  renderCardActions,
+  resolveCardRingTone,
+  renderHeaderLeft,
+  renderHeaderRight,
+  errorBanner,
+  shortcutsEnabled = true,
+}: KanbanBoardProps) {
+  const searchQuery = useKanbanStore((s) => s.searchQuery);
+  const selectedCardId = useKanbanStore((s) => s.selectedCardId);
+  const setSelectedCardId = useKanbanStore((s) => s.setSelectedCardId);
+  const setSearchOpen = useKanbanStore((s) => s.setSearchOpen);
 
   // Cheap case-insensitive substring match on title + projectPath + tags.
   // Tags are stored comma-separated already lowercased, so just include the
   // raw string in the haystack — `bug` matches both "bug" and "bugfix" which
   // is the loose match users expect from Cmd+F.
-  const filteredCards = (() => {
+  const filteredCards = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return cards;
     return cards.filter((c) => {
       const hay = `${c.title} ${c.projectPath} ${c.tags}`.toLowerCase();
       return hay.includes(q);
     });
-  })();
+  }, [cards, searchQuery]);
+
+  // Self-clear stale selection when the underlying card list changes (e.g.
+  // the parent switched its data source — typically a project switch).
+  // The kanban stays unaware of WHY the list changed; it only checks that
+  // its cursor still points at something real.
+  useEffect(() => {
+    if (selectedCardId && !cards.some((c) => c.id === selectedCardId)) {
+      setSelectedCardId(null);
+    }
+  }, [cards, selectedCardId, setSelectedCardId]);
 
   // Keyboard navigation. Default bindings are vim-style hjkl + arrow keys
   // for navigation, Enter/o to open, n=new, /=search, d=delete, y=duplicate,
-  // a=archive — all customizable via Settings (`shortcutsStore`). We only
-  // wire this up on the board view, and bail when a text input is focused
-  // (so typing in CreateCardModal/Settings doesn't trigger actions).
+  // a=archive — all customizable via Settings (`shortcutsStore`). We bail
+  // when a text input is focused (so typing in modals doesn't trigger
+  // actions) and when `shortcutsEnabled` is false (parent on top).
   useEffect(() => {
-    if (view !== "board") return;
+    if (!shortcutsEnabled) return;
     const onKey = (e: KeyboardEvent) => {
       // Bail when the user is typing in any input/textarea/contenteditable.
       // Modifier-based bindings still fire (handled inside isTextInputTarget).
       if (isTextInputTarget(e)) return;
-      // Bail when a modal/palette is on top — those have their own handlers.
-      const ui = useUiStore.getState();
-      if (ui.zoomedCardId || ui.paletteOpen) return;
 
       // Compute the per-column lists with stable order (matches what's
       // rendered). We work off `filteredCards` so search-narrowed lists
       // navigate correctly.
-      const cols = COLUMNS.map((c) => ({
+      const cols = columns.map((c) => ({
         id: c.id,
         cards: selectByColumn(filteredCards, c.id),
       }));
@@ -183,67 +235,62 @@ export function Board() {
       if (matchShortcut("board.openCard", e)) {
         if (!sel) return;
         e.preventDefault();
-        openZoom(sel.id);
+        onOpen(sel);
         return;
       }
       if (matchShortcut("board.newTask", e)) {
         e.preventDefault();
-        // Same channel as the palette uses — keeps the create modal owner
-        // (BoardHeader) as the single source of truth for it.
-        window.dispatchEvent(new CustomEvent("claude-kanban:new-task"));
+        onCreate();
         return;
       }
       if (matchShortcut("board.openSearch", e)) {
         e.preventDefault();
-        useUiStore.getState().setSearchOpen(true);
+        setSearchOpen(true);
         return;
       }
-      if (matchShortcut("board.archive", e) && sel && sel.column !== "done") {
+      if (
+        matchShortcut("board.archive", e) &&
+        sel &&
+        sel.column !== "done" &&
+        !readOnly
+      ) {
         e.preventDefault();
-        void move(sel.id, "done", 0);
+        onMove(sel.id, "done", 0);
         return;
       }
-      if (matchShortcut("board.duplicate", e) && sel) {
+      if (matchShortcut("board.duplicate", e) && sel && !readOnly) {
         e.preventDefault();
-        void duplicate(sel.id);
+        onDuplicate(sel);
         return;
       }
-      if (matchShortcut("board.delete", e) && sel) {
+      if (matchShortcut("board.delete", e) && sel && !readOnly) {
         e.preventDefault();
-        void remove(sel.id);
+        onDelete(sel);
         return;
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
-    view,
+    shortcutsEnabled,
+    columns,
     filteredCards,
     cards,
     selectedCardId,
+    readOnly,
     setSelectedCardId,
-    openZoom,
-    move,
-    remove,
-    duplicate,
+    setSearchOpen,
+    onOpen,
+    onCreate,
+    onMove,
+    onDelete,
+    onDuplicate,
   ]);
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
 
-  // Bus event from the command palette ("New task") — opens the same
-  // modal the BoardHeader button does, so all entry points converge.
-  useEffect(() => {
-    const onOpen = () => setCreateOpen(true);
-    window.addEventListener("claude-kanban:new-task", onOpen);
-    return () => window.removeEventListener("claude-kanban:new-task", onOpen);
-  }, []);
-
-  // Cards loading is driven by the active-project subscription in cardsStore,
-  // and by the boot sequence in App.tsx. No effect needed here.
-
-  // 4px activation distance so click-to-open (zoom view, step 6) keeps working
-  // without competing with drag.
+  // 4px activation distance so click-to-open keeps working without
+  // competing with drag.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
@@ -293,8 +340,27 @@ export function Board() {
       return;
     }
 
-    void move(activeId, targetColumn, targetIndex);
+    onMove(activeId, targetColumn, targetIndex);
   };
+
+  const renderCard = (card: Card) => (
+    <CardItem
+      key={card.id}
+      card={card}
+      readOnly={readOnly}
+      selected={selectedCardId === card.id}
+      ringTone={resolveCardRingTone?.(card) ?? null}
+      onClick={(c) => {
+        setSelectedCardId(c.id);
+        onOpen(c);
+      }}
+      onDelete={onDelete}
+      onDuplicate={onDuplicate}
+      renderBadges={renderCardBadges}
+      renderRowBadges={renderCardRowBadges}
+      renderActions={renderCardActions}
+    />
+  );
 
   return (
     <DndContext
@@ -303,40 +369,35 @@ export function Board() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full w-full">
-        <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          {view === "settings" ? (
-            <SettingsPage />
-          ) : view === "projects" ? (
-            <ProjectsPage />
-          ) : (
-            <>
-              <BoardHeader onCreate={() => setCreateOpen(true)} />
-              {error && (
-                <div className="mx-6 mt-3 rounded-xl border border-red-500/40 bg-red-100/60 px-4 py-2 text-xs text-red-700 dark:border-red-400/30 dark:bg-red-400/10 dark:text-red-300">
-                  {error}
-                </div>
-              )}
-              <div className="flex flex-1 gap-5 overflow-x-auto overflow-y-hidden px-6 pt-4 pb-6">
-                {COLUMNS.map((col) => (
-                  <Column
-                    key={col.id}
-                    def={col}
-                    cards={selectByColumn(filteredCards, col.id)}
-                  />
-                ))}
-              </div>
-            </>
-          )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <BoardHeader left={renderHeaderLeft?.()} right={renderHeaderRight?.()} />
+        {errorBanner}
+        <div className="flex flex-1 gap-5 overflow-x-auto overflow-y-hidden px-6 pt-4 pb-6">
+          {columns.map((col) => (
+            <Column
+              key={col.id}
+              def={col}
+              cards={selectByColumn(filteredCards, col.id)}
+              renderCard={renderCard}
+            />
+          ))}
         </div>
       </div>
 
       <DragOverlay dropAnimation={null}>
         {activeCard ? <CardItem card={activeCard} overlay /> : null}
       </DragOverlay>
-
-      {createOpen && <CreateCardModal onClose={() => setCreateOpen(false)} />}
     </DndContext>
   );
+}
+
+/**
+ * Sort cards within a column by stored position. The kanban exports it
+ * because the parent occasionally needs the same view (e.g. counters in the
+ * header slot).
+ */
+export function selectByColumn(cards: Card[], column: CardColumn): Card[] {
+  return cards
+    .filter((c) => c.column === column)
+    .sort((a, b) => a.position - b.position);
 }

@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import type { DisplayItem, SdkEvent } from "../../types/chat";
+import type { DisplayItem, SdkEvent } from "../../../types/chat";
+import { asBlocks, formatToolUse } from "../format";
 import { DiffBlock } from "./Diff";
-import { asBlocks, formatToolUse } from "./format";
 
 const DIFFABLE_TOOLS = new Set(["Edit", "MultiEdit", "Write"]);
 

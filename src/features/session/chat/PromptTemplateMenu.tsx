@@ -1,8 +1,8 @@
 import { CornerDownLeft, FileText, FolderOpen, Terminal } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
-import type { PromptTemplate } from "../../stores/templatesStore";
-import type { UserCommand } from "../../stores/userCommandsStore";
+import type { PromptTemplate } from "../../../stores/templatesStore";
+import type { UserCommand } from "../../../stores/userCommandsStore";
 import type { SlashCommand } from "./slashCommands";
 
 /**

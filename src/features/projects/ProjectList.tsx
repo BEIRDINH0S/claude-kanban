@@ -1,3 +1,25 @@
+/**
+ * Drag-reorderable list of projects, including its small section header
+ * (PROJECTS label + hide-archived toggle + "manage" affordance).
+ *
+ * The component is the projects feature's contribution to the app shell's
+ * sidebar. It owns:
+ *   - the project list itself (read from `projectsStore`)
+ *   - drag-reorder via dnd-kit (writes back through `projectsStore.reorder`)
+ *   - inline rename + delete + active-row highlight
+ *   - hide-archived local toggle (persisted in localStorage)
+ *
+ * It does NOT own:
+ *   - the wrapping `<aside>` chrome (collapse / width / borders) — that's the
+ *     app shell's `Sidebar.tsx`
+ *   - what "manage projects" means — the parent passes `onManage` (the shell
+ *     wires it to `setView("projects")`), so the projects feature stays
+ *     unaware of the app-level view enum.
+ *
+ * The "active project" link is read straight from `uiStore` (infra
+ * cross-feature state), and clicking a row calls `setActiveProjectId` which
+ * the cards store reacts to. Nothing here imports another feature.
+ */
 import {
   DndContext,
   PointerSensor,
@@ -13,22 +35,16 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  ChevronsLeft,
-  ChevronsRight,
   Eye,
   EyeOff,
   FolderCog,
   Lock,
-  Moon,
   Pencil,
-  Settings,
-  Sun,
   Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useProjectsStore } from "../../stores/projectsStore";
-import { useThemeStore } from "../../stores/themeStore";
 import { useUiStore } from "../../stores/uiStore";
 import type { Project } from "../../types/project";
 
@@ -48,20 +64,38 @@ function writeHideArchived(v: boolean) {
   }
 }
 
-export function Sidebar() {
+interface Props {
+  /** Hide labels and trim the layout to icon-only width. The shell drives
+   *  this so the projects feature doesn't need to know the global sidebar
+   *  state. */
+  collapsed: boolean;
+  /** Whether the kanban view is currently the active central pane. Drives
+   *  the active-row highlight: a row is "active" when (a) the central
+   *  pane is the board AND (b) it's pointing at this project. */
+  boardActive: boolean;
+  /** True when the central pane is on the projects-management view, used
+   *  to render the FolderCog button as pressed. */
+  manageActive: boolean;
+  /** User asked to open the projects-management page. The shell decides
+   *  what that means (typically `setView("projects")`). */
+  onManage: () => void;
+}
+
+export function ProjectList({
+  collapsed,
+  boardActive,
+  manageActive,
+  onManage,
+}: Props) {
   const projects = useProjectsStore((s) => s.projects);
   const remove = useProjectsStore((s) => s.remove);
   const rename = useProjectsStore((s) => s.rename);
   const reorder = useProjectsStore((s) => s.reorder);
   const activeId = useUiStore((s) => s.activeProjectId);
   const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
-  const view = useUiStore((s) => s.view);
-  const setView = useUiStore((s) => s.setView);
-  const collapsed = useUiStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useUiStore((s) => s.toggleSidebar);
 
-  // Local sensors for the sidebar's own DndContext — Board has its own
-  // (cards), they don't overlap because their useSortable items live in
+  // Local sensors for the project list — Board has its own DndContext for
+  // cards, they don't overlap because their useSortable items live in
   // disjoint regions of the screen.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -77,6 +111,7 @@ export function Sidebar() {
     ids.splice(toIdx, 0, ids.splice(fromIdx, 1)[0]);
     void reorder(ids);
   };
+
   const [hideArchived, setHideArchived] = useState(readHideArchived);
   const visibleProjects = hideArchived
     ? projects.filter((p) => !p.archived)
@@ -103,35 +138,12 @@ export function Sidebar() {
         setActiveProjectId(remaining[0]?.id ?? null);
       }
     } catch (e) {
-      window.alert(`Suppression impossible : ${e}`);
+      window.alert(`Deletion failed: ${e}`);
     }
   };
 
   return (
-    <aside
-      className={[
-        "glass-strong z-30 flex shrink-0 flex-col border-r border-[var(--glass-stroke)] transition-[width] duration-200",
-        collapsed ? "w-[52px]" : "w-[180px]",
-      ].join(" ")}
-    >
-      {/* App-level toolbar: collapse/expand the sidebar itself. Lives in its
-          own thin row so it doesn't pollute the projects section header. */}
-      <div className="flex justify-end px-2 pt-2 pb-1">
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="grid size-6 place-items-center rounded text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-        >
-          {collapsed ? (
-            <ChevronsRight className="size-3.5" strokeWidth={1.75} />
-          ) : (
-            <ChevronsLeft className="size-3.5" strokeWidth={1.75} />
-          )}
-        </button>
-      </div>
-
+    <>
       {/* Projects section header: label + project-only actions on the right. */}
       {!collapsed && (
         <header className="flex items-center gap-1 px-4 pt-1 pb-2">
@@ -147,11 +159,7 @@ export function Sidebar() {
                   ? `Show archived projects (${archivedCount})`
                   : "Hide archived projects"
               }
-              aria-label={
-                hideArchived
-                  ? "Show archived"
-                  : "Hide archived"
-              }
+              aria-label={hideArchived ? "Show archived" : "Hide archived"}
               className="rounded p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
             >
               {hideArchived ? (
@@ -163,15 +171,13 @@ export function Sidebar() {
           )}
           <button
             type="button"
-            onClick={() =>
-              setView(view === "projects" ? "board" : "projects")
-            }
-            aria-pressed={view === "projects"}
+            onClick={onManage}
+            aria-pressed={manageActive}
             title="Manage projects"
             aria-label="Manage projects"
             className={[
               "rounded p-1 transition-colors",
-              view === "projects"
+              manageActive
                 ? "bg-[var(--color-accent-soft)] text-[var(--text-primary)]"
                 : "text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5",
             ].join(" ")}
@@ -196,7 +202,8 @@ export function Sidebar() {
                 <li key={p.id}>
                   <SortableProjectRow
                     project={p}
-                    active={view === "board" && p.id === activeId}
+                    collapsed={collapsed}
+                    active={boardActive && p.id === activeId}
                     onSelect={() => setActiveProjectId(p.id)}
                     onRename={(next) => rename(p.id, next)}
                     onDelete={() => handleDelete(p)}
@@ -207,43 +214,25 @@ export function Sidebar() {
           </SortableContext>
         </DndContext>
       </div>
-
-      {/* Bottom nav: app-level destinations and small actions, separated by
-          a hairline so they're clearly distinct from the project list. New
-          entries (shortcuts, about, etc.) plug in here. */}
-      <nav className="border-t border-[var(--glass-stroke)] px-2 py-2">
-        <ul className="flex flex-col gap-0.5">
-          <li>
-            <ThemeRow />
-          </li>
-          <li>
-            <NavRow
-              icon={<Settings className="size-3.5" strokeWidth={1.75} />}
-              label="Settings"
-              active={view === "settings"}
-              onClick={() =>
-                setView(view === "settings" ? "board" : "settings")
-              }
-            />
-          </li>
-        </ul>
-      </nav>
-
-    </aside>
+    </>
   );
 }
 
 interface ProjectRowProps {
   project: Project;
+  collapsed: boolean;
   active: boolean;
   onSelect: () => void;
   onRename: (next: string) => Promise<void> | void;
   onDelete: () => void;
 }
 
-/** Wraps ProjectRow in dnd-kit's useSortable so the user can drag projects to
- * reorder them. The drag listener is bound to the row root; click still
- * works because PointerSensor needs 4px of movement before activating. */
+/**
+ * Wraps `ProjectRow` in dnd-kit's `useSortable` so the user can drag
+ * projects to reorder them. The drag listener is bound to the row root;
+ * click still works because `PointerSensor` needs 4px of movement before
+ * activating.
+ */
 function SortableProjectRow(props: ProjectRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: props.project.id });
@@ -261,12 +250,12 @@ function SortableProjectRow(props: ProjectRowProps) {
 
 function ProjectRow({
   project,
+  collapsed,
   active,
   onSelect,
   onRename,
   onDelete,
 }: ProjectRowProps) {
-  const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(project.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -356,7 +345,7 @@ function ProjectRow({
                 setEditing(true);
               }}
               className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-              aria-label="Renommer"
+              aria-label="Rename"
             >
               <Pencil className="size-3" strokeWidth={1.75} />
             </button>
@@ -375,62 +364,5 @@ function ProjectRow({
         </span>
       )}
     </div>
-  );
-}
-
-/** Click-to-toggle theme entry, styled like a NavRow but acting on a store
- * action rather than a route. Label reflects current state. */
-function ThemeRow() {
-  const theme = useThemeStore((s) => s.theme);
-  const toggle = useThemeStore((s) => s.toggleTheme);
-  const isDark = theme === "dark";
-  return (
-    <NavRow
-      icon={
-        isDark ? (
-          <Moon className="size-3.5" strokeWidth={1.75} />
-        ) : (
-          <Sun className="size-3.5" strokeWidth={1.75} />
-        )
-      }
-      label={isDark ? "Dark theme" : "Light theme"}
-      active={false}
-      onClick={toggle}
-    />
-  );
-}
-
-/** Generic bottom-nav entry. Same row pattern as ProjectRow so the sidebar
- * reads as one unified list of destinations. */
-function NavRow({
-  icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const collapsed = useUiStore((s) => s.sidebarCollapsed);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      title={collapsed ? label : undefined}
-      className={[
-        "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors",
-        active
-          ? "bg-[var(--color-accent-soft)] text-[var(--text-primary)]"
-          : "text-[var(--text-secondary)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5",
-      ].join(" ")}
-    >
-      <span className="flex w-3.5 shrink-0 justify-center text-[var(--text-muted)]">
-        {icon}
-      </span>
-      {!collapsed && label}
-    </button>
   );
 }
