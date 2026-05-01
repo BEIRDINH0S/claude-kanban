@@ -43,13 +43,23 @@ function log(...args) {
 }
 
 /**
- * Detect a `claude` install on PATH purely so the front can decide whether to
- * surface the "Claude Code introuvable" banner. By default we do NOT pass
- * this to the SDK: Claude Code v2.x ships as a native binary and the SDK
- * has its own bundled copy in `@anthropic-ai/claude-agent-sdk-{platform}-{arch}/claude.exe`,
- * which it auto-resolves when `pathToClaudeCodeExecutable` is omitted. Forcing
- * a user-PATH path is brittle (npm shims aren't spawnable by Node) and provides
- * no real win since the bundled binary shares the same `~/.claude` config.
+ * Detect a `claude` install on PATH for **informational display only** (the
+ * Settings page shows "binary = <path>" so power users can see whether
+ * we're running their own install or the bundled SDK copy).
+ *
+ * We never pass this path to the SDK or to the auth/cli_login PTY runner:
+ *   - Claude Code v2.x ships as a single native binary, bundled by the SDK
+ *     at `node_modules/@anthropic-ai/claude-agent-sdk-{plat}-{arch}/claude`.
+ *     The SDK auto-resolves it when `pathToClaudeCodeExecutable` is omitted,
+ *     and the Rust auth runner explicitly resolves it via
+ *     `auth::cli_login::resolve_bundled_claude` (with a PATH fallback for
+ *     courtesy, never as a hard dependency).
+ *   - Forcing a user-PATH path is brittle (npm shims aren't spawnable by
+ *     Node) and offers no benefit — both binaries share the same
+ *     `~/.claude` config and write to the same credentials file.
+ *
+ * `null` here just means "no separate global install detected" — sessions
+ * and login both still work via the bundled binary.
  */
 function detectClaudeOnPath() {
   const cmd = process.platform === "win32" ? "where claude" : "which claude";
