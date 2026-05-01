@@ -10,6 +10,7 @@ import {
   FileText,
   GitBranch,
   Keyboard,
+  Loader2,
   LogIn,
   LogOut,
   Pencil,
@@ -540,6 +541,15 @@ function CliLoginModal({
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copyHint, setCopyHint] = useState<"idle" | "copied">("idle");
+  // Latest line printed by `claude login`. Surfaced under the spinner during
+  // `starting` / `submitting` so the user sees real progress instead of a
+  // frozen "Starting…" message — the source of the "loading forever, no
+  // feedback" complaint we're fixing here.
+  const [progress, setProgress] = useState<string | null>(null);
+  // Becomes true after ~15 s in a busy phase without resolution. Triggers a
+  // "this is taking longer than usual" hint with a Cancel + Retry escape
+  // hatch so the user is never stuck staring at a spinner.
+  const [stalled, setStalled] = useState(false);
   const codeRef = useRef<HTMLTextAreaElement>(null);
 
   // Bind the lifecycle: spawn the CLI, listen for events, kill on unmount.
@@ -567,9 +577,17 @@ function CliLoginModal({
 
     const handleEvent = (e: CliLoginEvent) => {
       switch (e.kind) {
+        case "progress":
+          // Replaces the previous progress line — we only show the latest
+          // one. The Rust side already dedupes spinner re-draws.
+          setProgress(e.message);
+          break;
         case "auth-url":
           setAuthUrl(e.url);
           setPhase("awaiting-paste");
+          // Clear the now-irrelevant boot progress; the URL step has its own
+          // dedicated UI block.
+          setProgress(null);
           // Best-effort browser open. The CLI itself may already have opened
           // a tab — that's two tabs at worst, much better than zero.
           void openUrl(e.url).catch(() => {});
@@ -611,6 +629,20 @@ function CliLoginModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [phase, onClose]);
+
+  // Stall detector: if we sit in a busy phase for 15+ seconds without the
+  // CLI producing the next event, surface a "this is taking longer than
+  // usual" hint. The timer resets every time `progress` updates so a slow
+  // but visibly progressing CLI doesn't trigger a false alarm.
+  useEffect(() => {
+    if (phase !== "starting" && phase !== "submitting") {
+      setStalled(false);
+      return;
+    }
+    setStalled(false);
+    const t = setTimeout(() => setStalled(true), 15_000);
+    return () => clearTimeout(t);
+  }, [phase, progress]);
 
   const handleSubmit = async () => {
     const trimmed = code.trim();
@@ -672,9 +704,18 @@ function CliLoginModal({
         </header>
 
         {phase === "starting" && (
-          <p className="mt-5 font-mono text-[12px] text-[var(--text-muted)]">
-            Starting <span className="text-[var(--text-secondary)]">claude login</span>…
-          </p>
+          <BusyPhase
+            title={
+              <>
+                Starting{" "}
+                <span className="text-[var(--text-secondary)]">claude login</span>…
+              </>
+            }
+            progress={progress}
+            stalled={stalled}
+            stalledHint="The first sign-in can take 10–30 seconds while the CLI checks for updates."
+            onCancel={onClose}
+          />
         )}
 
         {phase === "awaiting-paste" && authUrl && (
@@ -759,9 +800,15 @@ function CliLoginModal({
         )}
 
         {phase === "submitting" && (
-          <p className="mt-5 font-mono text-[12px] text-[var(--text-muted)]">
-            Exchanging code…
-          </p>
+          <BusyPhase
+            title="Exchanging code…"
+            progress={progress}
+            stalled={stalled}
+            stalledHint="The CLI is still talking to Anthropic. If this hangs, cancel and retry — your code is single-use, so you'll need a new one."
+            // Don't expose Cancel during submit: killing the CLI mid-exchange
+            // can leave the auth flow in a half-applied state on the server.
+            onCancel={null}
+          />
         )}
 
         {phase === "completed" && (
@@ -799,6 +846,72 @@ function CliLoginModal({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Busy state for the login modal — replaces the previous static "Starting…"
+ * / "Exchanging code…" lines that left users staring at a frozen screen.
+ *
+ * Renders three layers:
+ *   1. An animated spinner + the static phase title (always visible).
+ *   2. The latest line emitted by `claude login` over the `progress` event,
+ *      shown in a dim mono font so it reads as live log output.
+ *   3. After ~15 s without forward motion, a "this is taking longer than
+ *      usual" hint plus an optional Cancel button — the escape hatch when
+ *      something genuinely went wrong (CLI hung, network down, etc.).
+ *
+ * Pass `onCancel={null}` to hide the cancel button — used during the
+ * code-exchange phase where killing the CLI mid-flight is risky.
+ */
+function BusyPhase({
+  title,
+  progress,
+  stalled,
+  stalledHint,
+  onCancel,
+}: {
+  title: React.ReactNode;
+  progress: string | null;
+  stalled: boolean;
+  stalledHint: string;
+  onCancel: (() => void) | null;
+}) {
+  return (
+    <div className="mt-5 flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <Loader2
+          className="size-4 shrink-0 animate-spin text-[var(--text-muted)]"
+          strokeWidth={1.75}
+        />
+        <p className="font-mono text-[12px] text-[var(--text-muted)]">
+          {title}
+        </p>
+      </div>
+      {progress && (
+        <p className="ml-7 font-mono text-[10.5px] break-words text-[var(--text-secondary)]">
+          {progress}
+        </p>
+      )}
+      {stalled && (
+        <div className="ml-7 flex flex-col gap-2 rounded-lg border border-amber-400/40 bg-amber-400/5 px-3 py-2">
+          <p className="text-[11.5px] text-amber-700 dark:text-amber-300/90">
+            {stalledHint}
+          </p>
+          {onCancel && (
+            <div>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-lg border border-[var(--glass-stroke)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)] hover:border-[var(--color-accent-ring)] hover:text-[var(--text-primary)]"
+              >
+                Cancel and retry
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

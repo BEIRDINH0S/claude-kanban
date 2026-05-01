@@ -76,6 +76,13 @@ fn current_session() -> Option<Arc<ActiveSession>> {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum CliLoginEvent {
+    /// One human-readable line printed by the CLI. Forwarded so the modal
+    /// can show actual progress ("Checking for updates", "Opening browser",
+    /// "Logged in as foo@bar") instead of an indeterminate spinner. The
+    /// front displays only the most recent message — older ones scroll off.
+    /// We dedupe consecutive identical lines on the Rust side so Inquirer
+    /// spinners don't flood the channel.
+    Progress { message: String },
     /// First moment the front has something actionable: open this URL in the
     /// browser (the CLI may have already done it on its own — we still emit
     /// so the UI can fall back to "click to open" if not).
@@ -351,6 +358,18 @@ fn run_reader_thread(
     let mut accumulated = String::new();
     let mut url_emitted = false;
 
+    // Per-line state for Progress events. `line_buf` accumulates characters
+    // until a `\n` (line complete) or `\r` (Inquirer redraws the same line
+    // for spinners) flushes it; `last_progress` dedupes consecutive identical
+    // lines so a spinning "Loading…" doesn't flood the channel.
+    let mut line_buf = String::new();
+    let mut last_progress: Option<String> = None;
+
+    // Tracks which interactive prompts we've already auto-confirmed and
+    // whether we've signalled success ourselves. See `PromptState` for the
+    // full picture of why we drive `claude login` rather than wait for it.
+    let mut prompts = PromptState::default();
+
     let url_re = make_url_matcher();
 
     loop {
@@ -367,10 +386,54 @@ fn run_reader_thread(
                     accumulated.drain(..cut);
                 }
 
+                // Emit Progress events line-by-line as the CLI prints. We
+                // split on both `\n` and `\r` because Inquirer rewrites the
+                // current line for spinners — flushing on `\r` lets us pick
+                // up the latest spinner label without waiting for the final
+                // newline.
+                for ch in stripped.chars() {
+                    if ch == '\n' || ch == '\r' {
+                        emit_progress_line(&app, &mut line_buf, &mut last_progress);
+                    } else {
+                        line_buf.push(ch);
+                        // Defensive cap: if a line has no newline for ages
+                        // (shouldn't happen with `claude login`), still emit
+                        // so the UI moves forward.
+                        if line_buf.len() > 512 {
+                            emit_progress_line(&app, &mut line_buf, &mut last_progress);
+                        }
+                    }
+                }
+
                 if !url_emitted {
                     if let Some(url) = url_re(&accumulated) {
                         url_emitted = true;
                         emit(&app, CliLoginEvent::AuthUrl { url });
+                    }
+                }
+
+                // Drive the CLI through its interactive prompts. The CLI
+                // gates the OAuth URL behind a theme picker and a login-
+                // method picker, and after a successful login it queues a
+                // chain of "Press Enter to continue" + workspace-trust
+                // prompts before launching an interactive session that
+                // would never exit. We pick the right defaults silently so
+                // the user never sees those questions.
+                advance_prompts(&accumulated, &session, &mut prompts);
+
+                if !prompts.success_signaled
+                    && (accumulated.contains("Logged in as")
+                        || accumulated.contains("Login successful"))
+                {
+                    // Credentials are written by now; the credentials watcher
+                    // will independently fire `auth-changed`. We emit
+                    // Completed ourselves and kill the CLI before it can
+                    // launch the post-login interactive session (which would
+                    // never terminate, leaving us hanging on `wait()`).
+                    prompts.success_signaled = true;
+                    emit(&app, CliLoginEvent::Completed);
+                    if let Some(mut k) = session.killer.lock().unwrap().take() {
+                        let _ = k.kill();
                     }
                 }
             }
@@ -392,6 +455,10 @@ fn run_reader_thread(
         }
     }
 
+    // Flush whatever last line is still pending (no trailing newline at EOF
+    // is common when the CLI exits right after writing its final message).
+    emit_progress_line(&app, &mut line_buf, &mut last_progress);
+
     // Wait for the child's exit code — gives us the success/failure signal.
     // A short timeout protects against the rare case where the pty closed
     // but the child hasn't yet reaped (shouldn't happen on Unix, defensive
@@ -402,6 +469,14 @@ fn run_reader_thread(
     drop(master);
     clear_session();
     drop(session);
+
+    // If we already signalled success in-band (the "Logged in as" path), we
+    // killed the CLI ourselves and the exit code is meaningless. Skip the
+    // status-based dispatch entirely so we don't overwrite Completed with
+    // a spurious Failed.
+    if prompts.success_signaled {
+        return;
+    }
 
     match exit_status {
         Some(status) if status.success() => {
@@ -430,6 +505,90 @@ fn run_reader_thread(
             );
         }
     }
+}
+
+/// Tracks which interactive prompts we've already auto-confirmed during a
+/// `claude login` run. Each prompt is one-shot: once we've sent its Enter we
+/// flip the flag so a redraw of the same screen doesn't make us spam input.
+///
+/// `success_signaled` is the kill switch: once we've seen "Logged in as" we
+/// emit `Completed` and kill the CLI ourselves, and downstream logic must
+/// stop reasoning about exit status (because the kill makes it nonzero).
+#[derive(Default)]
+struct PromptState {
+    /// "Choose the text style that looks best with your terminal" — first
+    /// wall the CLI puts up on the very first run. We confirm the default
+    /// (Dark mode) so the OAuth step can come up.
+    theme_confirmed: bool,
+    /// "Select login method" — the user is meant to be on a Claude
+    /// subscription (Pro/Max/Team/Enterprise), which is option 1 and the
+    /// default. The Console-account path is for API-billing customers and
+    /// is not what claude-kanban targets.
+    method_confirmed: bool,
+    /// We've seen the success marker, fired Completed, and killed the child.
+    /// Everything from here is teardown — don't emit Failed on the kill.
+    success_signaled: bool,
+}
+
+/// If `accumulated` contains a known prompt marker we haven't answered yet,
+/// write `\r` into the PTY to confirm the default and flip the flag. We do
+/// this from the reader thread because that's where we observe the prompt
+/// arrive — same thread, same `accumulated` buffer, no races.
+fn advance_prompts(accumulated: &str, session: &Arc<ActiveSession>, state: &mut PromptState) {
+    // Markers picked from the captured raw output of `claude login` (v2.1.x).
+    // If Anthropic renames a prompt, the marker won't match and we fall back
+    // to the previous "user stares at a frozen modal" failure mode — which
+    // the front-end stall detector now surfaces as a hint after 15 s. Cheaper
+    // than parsing Inquirer state.
+    if !state.theme_confirmed && accumulated.contains("Choose the text style") {
+        if send_enter(session) {
+            state.theme_confirmed = true;
+        }
+    }
+    if !state.method_confirmed && accumulated.contains("Select login method") {
+        if send_enter(session) {
+            state.method_confirmed = true;
+        }
+    }
+}
+
+/// Write a single `\r` (Enter) into the PTY's stdin. Returns true on success;
+/// false if the writer slot is already empty (taken by `submit_code`, or the
+/// session has been torn down). Failure here isn't fatal — the prompt will
+/// just sit unanswered, which is exactly the bug the stall detector covers.
+fn send_enter(session: &Arc<ActiveSession>) -> bool {
+    let mut slot = session.writer.lock().unwrap();
+    let Some(writer) = slot.as_mut() else {
+        return false;
+    };
+    writer.write_all(b"\r").and_then(|_| writer.flush()).is_ok()
+}
+
+/// Flush `line_buf` as a Progress event if it has content and isn't the same
+/// as the previous line we emitted. The line is trimmed of surrounding
+/// whitespace; empty lines are dropped (they're noise — Inquirer prints them
+/// generously). The buffer is always cleared, regardless of whether we
+/// emitted: every newline / carriage return resets the line.
+fn emit_progress_line(
+    app: &AppHandle,
+    line_buf: &mut String,
+    last_progress: &mut Option<String>,
+) {
+    let line = line_buf.trim().to_string();
+    line_buf.clear();
+    if line.is_empty() {
+        return;
+    }
+    // Skip the OAuth URL line — it's already conveyed via AuthUrl, no point
+    // duplicating it as progress text.
+    if line.contains("/oauth/authorize") {
+        return;
+    }
+    if last_progress.as_deref() == Some(line.as_str()) {
+        return;
+    }
+    emit(app, CliLoginEvent::Progress { message: line.clone() });
+    *last_progress = Some(line);
 }
 
 fn wait_with_timeout(

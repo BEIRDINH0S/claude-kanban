@@ -110,8 +110,15 @@ export function cancelCliLogin(): Promise<void> {
  * All progress events from the `claude login` runner. `kind` is the
  * discriminant — keep this in sync with the Rust enum
  * `auth::cli_login::CliLoginEvent`.
+ *
+ * `progress` carries one human-readable line printed by the CLI (e.g.
+ * "Checking for updates", "Opening browser…", "Logged in as foo@bar"). The
+ * Rust side already dedupes consecutive identical lines and skips the
+ * authorize URL itself, so the modal can just show the latest message
+ * verbatim.
  */
 export type CliLoginEvent =
+  | { kind: "progress"; message: string }
   | { kind: "auth-url"; url: string }
   | { kind: "completed" }
   | { kind: "failed"; message: string };
