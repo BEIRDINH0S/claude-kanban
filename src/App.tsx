@@ -322,6 +322,22 @@ function App() {
       },
     );
 
+    // Background git automation pinged: either the periodic `git fetch`
+    // updated `origin/<base>` (so ahead/behind for every card may have
+    // moved) or the GC just dropped one or more worktrees. Both cases
+    // need a full refresh — the cheapest correct response is to re-poll
+    // every card's git status. The store's per-card in-flight guard
+    // dedupes against the 12s heartbeat already running.
+    const unlistenGitStatus = listen("git-status-changed", () => {
+      void useGitStatusStore.getState().refreshAll();
+      // GC may have NULLed worktree_path on some cards — reload the
+      // active project's cards so the UI catches up without waiting
+      // for the next cards-changed trigger (which won't fire from a
+      // background sweep).
+      const pid = useUiStore.getState().activeProjectId;
+      if (pid) void useCardsStore.getState().load(pid);
+    });
+
     // Kick off the initial fetches so the BoardHeader has values to show
     // on first paint, even before any event lands.
     void useUsageIndexStore.getState().refresh();
@@ -364,6 +380,7 @@ function App() {
       void unlistenJsonl.then((fn) => fn());
       void unlistenUsage.then((fn) => fn());
       void unlistenSubscription.then((fn) => fn());
+      void unlistenGitStatus.then((fn) => fn());
     };
   }, []);
 

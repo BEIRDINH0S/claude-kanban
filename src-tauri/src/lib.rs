@@ -3,6 +3,7 @@
 // is needed when iterating on host.mjs.
 mod commands;
 mod db;
+mod git_fetch;
 mod jsonl_watcher;
 mod permissions;
 mod session_host;
@@ -79,6 +80,15 @@ pub fn run() {
             // HTTPS + Keychain access; we just trigger periodically and
             // emit `subscription-usage-changed` for the front.
             commands::usage::spawn_subscription_poller(app.handle().clone());
+
+            // Background git automation: periodic `git fetch --all --prune`
+            // on every distinct project_path so ahead/behind badges stay
+            // accurate without any user action, plus a worktree GC that
+            // wipes Done cards' branches once they're fully merged into
+            // origin/<base>. See git_fetch.rs for the cadence and safety
+            // contract.
+            git_fetch::spawn_periodic_fetcher(app.handle().clone());
+            git_fetch::spawn_gc_worker(app.handle().clone());
 
             Ok(())
         })

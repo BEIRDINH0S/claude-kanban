@@ -257,17 +257,31 @@ pub fn delete_card(
     host: tauri::State<crate::session_host::SessionHost>,
     id: String,
 ) -> Result<(), String> {
-    // Look up the live session before nuking the row, so we can ask the
-    // sidecar to free it instead of leaving an orphaned conversation alive.
-    let session_id: Option<String> = {
+    // Look up the live session AND any per-card worktree before nuking the
+    // row: we need both for the post-DELETE cleanup (kill the SDK session,
+    // wipe the worktree dir). If we read after DELETE we'd be too late —
+    // the row is gone. project_path is needed to resolve the repo top-level
+    // for `git worktree remove`.
+    struct Snapshot {
+        session_id: Option<String>,
+        worktree_path: Option<String>,
+        project_path: String,
+    }
+    let snap: Snapshot = {
         let conn = state.conn.lock().map_err(|e| e.to_string())?;
         if is_card_project_archived(&conn, &id).unwrap_or(false) {
             return Err(ARCHIVED_ERR.into());
         }
         conn.query_row(
-            "SELECT session_id FROM cards WHERE id = ?1",
+            "SELECT session_id, worktree_path, project_path FROM cards WHERE id = ?1",
             [&id],
-            |r| r.get(0),
+            |r| {
+                Ok(Snapshot {
+                    session_id: r.get(0)?,
+                    worktree_path: r.get(1)?,
+                    project_path: r.get(2)?,
+                })
+            },
         )
         .map_err(|e| format!("card not found: {e}"))?
     };
@@ -282,7 +296,7 @@ pub fn delete_card(
         }
     }
 
-    if let Some(sid) = session_id {
+    if let Some(sid) = snap.session_id {
         // Best-effort: if the sidecar dropped the session already, fine.
         let _ = host.send(
             crate::session_host::protocol::SidecarInbound::StopSession {
@@ -290,7 +304,63 @@ pub fn delete_card(
             },
         );
     }
+
+    // Auto-cleanup of the per-card worktree. Best-effort, all steps non-
+    // blocking on the user-visible delete: even if git fails (locked dir,
+    // path already gone, …) the card row is already gone and the UI is
+    // happy. Two-tier safety on the branch itself:
+    //   * Worktree DIRECTORY is always wiped (frees disk, removes the
+    //     stale checkout — no risk of losing commits since they're
+    //     captured in the branch ref).
+    //   * Local BRANCH is only deleted when it's already merged into
+    //     origin/<base>. Unmerged branches survive as orphans the user
+    //     can still recover via `git branch | grep claude-kanban` —
+    //     deletion of a card should never silently lose committed work.
+    if let Some(wt) = snap.worktree_path.as_deref() {
+        let project = std::path::Path::new(&snap.project_path);
+        let _ = crate::worktree::remove(&snap.project_path, wt);
+        let branch = crate::worktree::branch_for_card(&id);
+        // Try to find the remote base; if we can't (no remote, fresh repo)
+        // we play it safe and leave the branch alone.
+        if let Some(base) = remote_base_for(project) {
+            if crate::worktree::is_branch_merged(project, &branch, &base) {
+                let _ = crate::worktree::delete_branch(project, &branch);
+            }
+        }
+        let _ = crate::worktree::prune_worktrees(project);
+    }
+
     Ok(())
+}
+
+/// Local helper mirroring the GC's base-resolution. Used by `delete_card`
+/// to decide whether the per-card branch is safe to delete.
+fn remote_base_for(project: &std::path::Path) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project)
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .output()
+        .ok()?;
+    if out.status.success() {
+        let t = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !t.is_empty() {
+            return Some(t);
+        }
+    }
+    for c in ["origin/main", "origin/master"] {
+        let ok = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project)
+            .args(["rev-parse", "--verify", "--quiet", c])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if ok {
+            return Some(c.into());
+        }
+    }
+    None
 }
 
 /// Re-INSERT a previously deleted card with its original id, title, column,
