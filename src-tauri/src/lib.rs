@@ -76,19 +76,14 @@ pub fn run() {
                 let _ = bootstrap_handle.emit("usage-changed", ());
             });
 
-            // Subscription usage poller — keeps the OAuth /usage snapshot
-            // fresh on a 5-minute cadence. The sidecar handles the actual
-            // HTTPS + Keychain access; we just trigger periodically and
-            // emit `subscription-usage-changed` for the front.
-            commands::usage::spawn_subscription_poller(app.handle().clone());
-
-            // OAuth refresher — keeps the access token fresh in the
-            // background so the sidecar always reads a valid one when
-            // it queries OAuth-gated endpoints (subscription usage,
-            // future inference calls). Runs every 60 s; the actual HTTPS
-            // refresh fires only when expiry is < 5 min away. Cheap if
-            // there's no token yet (returns immediately).
-            auth::spawn_periodic_refresher(app.handle().clone());
+            // Auth credentials watcher — re-emits `auth-changed` whenever
+            // ~/.claude/.credentials.json is created/modified/deleted. The
+            // CLI (`claude login`/`logout` and its built-in token refresh)
+            // is the only thing that mutates this file; we just react. No
+            // poller, no token refresh of our own — refresh is entirely
+            // the CLI's responsibility, which keeps us off Anthropic's
+            // detection radar (we never speak to their endpoints directly).
+            auth::credentials_watch::spawn(app.handle().clone());
 
             // Background git automation: periodic `git fetch --all --prune`
             // on every distinct project_path so ahead/behind badges stay
@@ -138,9 +133,11 @@ pub fn run() {
             commands::usage::get_subscription_usage,
             commands::user_commands::list_user_commands,
             auth::commands::auth_status,
-            auth::commands::auth_login,
             auth::commands::auth_logout,
-            auth::commands::auth_refresh,
+            auth::cli_login::auth_cli_check,
+            auth::cli_login::auth_cli_login_start,
+            auth::cli_login::auth_cli_login_submit_code,
+            auth::cli_login::auth_cli_login_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

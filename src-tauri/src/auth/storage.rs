@@ -1,12 +1,18 @@
-//! Persistence of OAuth credentials in the exact same format/locations as
-//! `claude login` so the existing sidecar (`host.mjs::readCredentials()`)
-//! can pick them up without modification.
+//! Read-only access to the credentials `claude login` writes.
 //!
-//! Two stores, written together so the sidecar's read order doesn't matter:
-//!   1. `~/.claude/.credentials.json`  — universal file fallback
-//!   2. macOS Keychain, service `Claude Code-credentials`, account=username
+//! We do NOT write to these files (the CLI does, and is the only thing
+//! allowed to). Logout is the one exception — `auth_logout` deletes both
+//! locations as a courtesy so the user doesn't have to drop to a terminal
+//! and run `claude logout`.
 //!
-//! The on-disk shape:
+//! Two stores, in order of preference:
+//!   1. macOS Keychain, service `Claude Code-credentials`, account=username.
+//!      `claude login` writes here on darwin and the SDK reads from here
+//!      first.
+//!   2. `~/.claude/.credentials.json` — universal file fallback, always
+//!      written by the CLI on every platform.
+//!
+//! On-disk shape (read verbatim from what the CLI emits):
 //! ```json
 //! {
 //!   "claudeAiOauth": {
@@ -14,20 +20,21 @@
 //!     "refreshToken": "...",
 //!     "expiresAt": 1730000000000,
 //!     "scopes": ["user:inference", "user:profile", ...],
-//!     "subscriptionType": "max"
+//!     "subscriptionType": "max",
+//!     "account": { "uuid": "...", "email_address": "you@…" },
+//!     "organization": { "uuid": "...", "name": "...", "organization_type": "max" }
 //!   }
 //! }
 //! ```
 //!
-//! `expiresAt` is **milliseconds** since epoch (not seconds — common gotcha).
+//! `expiresAt` is **milliseconds** since epoch. We don't act on it (refresh
+//! is the CLI's job) but expose it on `AuthStatus` so the UI can show
+//! "expire le …".
 
 use std::fs;
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-
-use super::oauth::{AccountInfo, OrganizationInfo, TokenResponse};
 
 const KEYCHAIN_SERVICE: &str = "Claude Code-credentials";
 
@@ -51,13 +58,31 @@ pub struct ClaudeAiOauth {
     pub scopes: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscription_type: Option<String>,
-    /// Not part of the CLI's schema but harmless to include — gives the UI
-    /// something to display ("Connecté en tant que <email>") without an
-    /// extra round-trip. The sidecar ignores fields it doesn't know.
+    /// Recent CLI versions embed the account info inline; older ones don't.
+    /// We only read these — never write — so a missing field is just "no
+    /// email to show in the UI".
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account: Option<AccountInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub organization: Option<OrganizationInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountInfo {
+    #[serde(default)]
+    pub uuid: Option<String>,
+    #[serde(default)]
+    pub email_address: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrganizationInfo {
+    #[serde(default)]
+    pub uuid: Option<String>,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub organization_type: Option<String>,
 }
 
 // =============================================================================
@@ -72,108 +97,22 @@ pub fn credentials_path() -> Result<PathBuf, String> {
 }
 
 // =============================================================================
-// File I/O
+// Read
 // =============================================================================
 
+/// Read the credentials file. Returns `None` if it doesn't exist or can't
+/// be parsed — typically "no `claude login` has ever run". `claude login`
+/// always writes the file alongside the macOS Keychain entry, so the file
+/// is sufficient as the source of truth for status display.
 pub fn read_file() -> Option<CredentialFile> {
     let path = credentials_path().ok()?;
     let raw = fs::read_to_string(&path).ok()?;
     serde_json::from_str::<CredentialFile>(&raw).ok()
 }
 
-pub fn write_file(creds: &CredentialFile) -> Result<(), String> {
-    let path = credentials_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("mkdir {}: {e}", parent.display()))?;
-    }
-    let json = serde_json::to_string_pretty(creds)
-        .map_err(|e| format!("serialise creds: {e}"))?;
-    // Write to a temp file then rename so we never see a half-written file
-    // if the process is killed mid-write. The sidecar polls this file for
-    // every usage check, so a torn write would break it.
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, json).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-    fs::rename(&tmp, &path)
-        .map_err(|e| format!("rename {} → {}: {e}", tmp.display(), path.display()))?;
-    // Tighten perms on Unix — the file holds bearer tokens. Best-effort
-    // (no fatal error if chmod fails, the file is still in $HOME).
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
-}
-
-pub fn delete_file() -> Result<(), String> {
-    let path = credentials_path()?;
-    if path.exists() {
-        fs::remove_file(&path).map_err(|e| format!("remove {}: {e}", path.display()))?;
-    }
-    Ok(())
-}
-
 // =============================================================================
-// macOS Keychain
+// Delete (logout)
 // =============================================================================
-
-#[cfg(target_os = "macos")]
-fn keychain_account() -> String {
-    // The sidecar tries `userInfo().username` first, then falls back to a
-    // service-only lookup. We always write WITH an account to match what
-    // recent claude versions do.
-    whoami::username()
-}
-
-#[cfg(target_os = "macos")]
-pub fn write_keychain(creds: &CredentialFile) -> Result<(), String> {
-    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, &keychain_account())
-        .map_err(|e| format!("keychain entry: {e}"))?;
-    let json =
-        serde_json::to_string(creds).map_err(|e| format!("serialise creds: {e}"))?;
-    entry
-        .set_password(&json)
-        .map_err(|e| format!("keychain write: {e}"))?;
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-pub fn delete_keychain() -> Result<(), String> {
-    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, &keychain_account())
-        .map_err(|e| format!("keychain entry: {e}"))?;
-    match entry.delete_credential() {
-        Ok(_) => Ok(()),
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(format!("keychain delete: {e}")),
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn write_keychain(_creds: &CredentialFile) -> Result<(), String> {
-    Ok(())
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn delete_keychain() -> Result<(), String> {
-    Ok(())
-}
-
-// =============================================================================
-// Combined writes
-// =============================================================================
-
-/// Write to both stores. Keychain failure is non-fatal — the file is the
-/// universal source of truth and the sidecar reads from it everywhere.
-/// We log the keychain error but still report Ok if the file write
-/// succeeded.
-pub fn save(creds: &CredentialFile) -> Result<(), String> {
-    write_file(creds)?;
-    if let Err(e) = write_keychain(creds) {
-        eprintln!("[auth] keychain write failed (non-fatal): {e}");
-    }
-    Ok(())
-}
 
 pub fn clear() -> Result<(), String> {
     let mut errors = Vec::new();
@@ -190,71 +129,27 @@ pub fn clear() -> Result<(), String> {
     }
 }
 
-// =============================================================================
-// Token → on-disk shape
-// =============================================================================
+fn delete_file() -> Result<(), String> {
+    let path = credentials_path()?;
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| format!("remove {}: {e}", path.display()))?;
+    }
+    Ok(())
+}
 
-/// Build a CredentialFile from a fresh token response. Splits the
-/// space-separated `scope` string into the array shape the CLI uses.
-pub fn build_from_token(
-    token: &TokenResponse,
-    subscription_type: Option<String>,
-) -> CredentialFile {
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
-    let expires_at = token
-        .expires_in
-        .map(|secs| now_ms + (secs as i64) * 1000);
-    let scopes = token
-        .scope
-        .as_ref()
-        .map(|s| s.split_whitespace().map(String::from).collect::<Vec<_>>());
-    CredentialFile {
-        claude_ai_oauth: ClaudeAiOauth {
-            access_token: token.access_token.clone(),
-            refresh_token: token.refresh_token.clone(),
-            expires_at,
-            scopes,
-            subscription_type,
-            account: token.account.clone(),
-            organization: token.organization.clone(),
-        },
+#[cfg(target_os = "macos")]
+fn delete_keychain() -> Result<(), String> {
+    let user = whoami::username();
+    let entry = keyring::Entry::new(KEYCHAIN_SERVICE, &user)
+        .map_err(|e| format!("keychain entry: {e}"))?;
+    match entry.delete_credential() {
+        Ok(_) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("keychain delete: {e}")),
     }
 }
 
-/// Update only the volatile fields (access_token / refresh_token / expiresAt)
-/// in an existing CredentialFile. Used by the periodic refresher so we don't
-/// lose `account`/`organization` info that the refresh response doesn't echo.
-pub fn merge_refresh(existing: &CredentialFile, token: &TokenResponse) -> CredentialFile {
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
-    let expires_at = token
-        .expires_in
-        .map(|secs| now_ms + (secs as i64) * 1000)
-        .or(existing.claude_ai_oauth.expires_at);
-    let mut out = existing.clone();
-    out.claude_ai_oauth.access_token = token.access_token.clone();
-    if let Some(rt) = &token.refresh_token {
-        out.claude_ai_oauth.refresh_token = Some(rt.clone());
-    }
-    out.claude_ai_oauth.expires_at = expires_at;
-    if let Some(scope) = &token.scope {
-        out.claude_ai_oauth.scopes = Some(
-            scope
-                .split_whitespace()
-                .map(String::from)
-                .collect::<Vec<_>>(),
-        );
-    }
-    if token.account.is_some() {
-        out.claude_ai_oauth.account = token.account.clone();
-    }
-    if token.organization.is_some() {
-        out.claude_ai_oauth.organization = token.organization.clone();
-    }
-    out
+#[cfg(not(target_os = "macos"))]
+fn delete_keychain() -> Result<(), String> {
+    Ok(())
 }

@@ -113,13 +113,18 @@ export const EMPTY_USAGE_SUMMARY: UsageSummary = {
 };
 
 // ---------------------------------------------------------------------------
-// Subscription usage (Anthropic OAuth `/api/oauth/usage`). The Node sidecar
-// reads the OAuth token (Keychain/file) and hits the endpoint, then proxies
-// the result here. Same shape as what the sidecar emits.
+// Subscription usage. Historically we hit `api.anthropic.com/api/oauth/usage`
+// from the sidecar; that endpoint is reserved for the official `claude` CLI
+// and impersonating it from a third-party app risks the user's account, so
+// the sidecar now returns a stub `claude-only-policy` and the front renders
+// a friendly disabled message. The shape stays the same so re-enabling
+// later (if Anthropic exposes a documented public endpoint) is a one-line
+// change.
 // ---------------------------------------------------------------------------
 
 /** Stable machine-readable error codes the sidecar may return. */
 export type SubscriptionApiError =
+  | "claude-only-policy"
   | "rate-limited"
   | "network"
   | "timeout"

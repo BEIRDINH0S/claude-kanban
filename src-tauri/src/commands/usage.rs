@@ -97,16 +97,22 @@ pub fn usage_rebuild_index(app: AppHandle) -> Result<u64, String> {
     ingest::rebuild_index(&app).map_err(|e| e.to_string())
 }
 
-/// Fetch the current Anthropic OAuth `/api/oauth/usage` snapshot, going
-/// through the Node sidecar (it owns Keychain + HTTPS access). Sidecar
-/// caches for 5 minutes by default, so most calls return immediately;
-/// `force=true` skips the cache (used by the manual refresh button).
+/// Fetch the subscription usage snapshot. The sidecar's implementation is
+/// now a hard-coded stub (see `host.mjs::getSubscriptionUsage`) that
+/// always returns `apiUnavailable: true, apiError: "claude-only-policy"`
+/// — we removed the direct `api.anthropic.com/api/oauth/usage` call
+/// because that endpoint is reserved for the official `claude` CLI and
+/// hitting it from a third-party app risked the user's account.
+///
+/// We keep the IPC plumbing so the front renders a clean disabled state
+/// instead of a hung promise; if Anthropic ever exposes a documented way
+/// to query subscription usage, this is the spot to re-enable.
 #[tauri::command]
 pub async fn get_subscription_usage(
     app: AppHandle,
     force: Option<bool>,
 ) -> Result<SubscriptionUsageData, String> {
-    let force = force.unwrap_or(false);
+    let _ = force; // accepted for backwards compat with the front, ignored
     let request_id = uuid::Uuid::new_v4().to_string();
     let (tx, rx) = oneshot::channel();
     {
@@ -114,13 +120,11 @@ pub async fn get_subscription_usage(
         host.register_pending_subscription(request_id.clone(), tx);
         host.send(SidecarInbound::GetSubscriptionUsage {
             request_id: request_id.clone(),
-            force,
+            force: false,
         })
         .map_err(|e| format!("send to sidecar: {e}"))?;
     }
-    // 20 s — covers the sidecar's 15 s HTTP timeout plus a generous slack
-    // for Keychain prompts on first launch (macOS).
-    match tokio::time::timeout(Duration::from_secs(20), rx).await {
+    match tokio::time::timeout(Duration::from_secs(5), rx).await {
         Ok(Ok(data)) => Ok(data),
         Ok(Err(_)) => Err("sidecar dropped the subscription usage request".into()),
         Err(_) => {
@@ -128,25 +132,4 @@ pub async fn get_subscription_usage(
             Err("timed out waiting for subscription usage".into())
         }
     }
-}
-
-/// Background poller — kicks a `GetSubscriptionUsage` every `interval`,
-/// emitting `subscription-usage-changed` so the front updates without
-/// having to ask. Runs forever; cancellation isn't needed because the
-/// task lives for the app's lifetime.
-pub fn spawn_subscription_poller(app: AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        // Initial fetch right away so the BoardHeader / Usage page have
-        // a value on first paint instead of waiting up to 5 minutes.
-        let _ = get_subscription_usage(app.clone(), Some(false)).await;
-        let mut ticker = tokio::time::interval(Duration::from_secs(5 * 60));
-        // skip the immediate tick — we just fetched.
-        ticker.tick().await;
-        loop {
-            ticker.tick().await;
-            // Errors (timeouts / network) are non-fatal — the next tick
-            // will retry. The sidecar has its own backoff for 429s.
-            let _ = get_subscription_usage(app.clone(), Some(false)).await;
-        }
-    });
 }
