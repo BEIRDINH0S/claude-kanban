@@ -1,12 +1,40 @@
+//! Auto-approval rules for tool calls.
+//!
+//! Whenever the SDK's `canUseTool` callback fires, the session_host checks
+//! these rules first; if any matches, we resolve `allow` without ever
+//! moving the card to Review. The list is small (a few rules max), so we
+//! linear-scan on every tool call — no indexing cleverness needed.
+//!
+//! Pattern syntax mirrors the Claude Code CLI's `/permissions add` syntax:
+//!   - Tool name only        : `Read` → matches any Read call regardless of args
+//!   - Tool with arg glob    : `Bash(npm test:*)` → matches Bash where the
+//!                             tool's primary arg matches the glob
+//!
+//! Glob support is **deliberately minimal**: only `*` (zero-or-more chars).
+//! No `?`, no character classes, no `**`. Iterative matcher in `glob_match`
+//! to keep allocation count at zero per check.
+//!
+//! "Primary arg" mapping (see `extract_arg`) keeps in lock-step with the
+//! front's `formatToolUse`:
+//!   - `Read|Write|Edit|MultiEdit|NotebookEdit` → `file_path`
+//!   - `Bash`                                   → `command`
+//!   - `Glob|Grep`                              → `pattern`
+//!   - `WebFetch`                               → `url`
+//!   - `WebSearch`                              → `query`
+//!   - anything else                            → unscope-able, falls through
+//!
+//! Storage: rows in the `permission_rules` table (id, pattern, created_at).
+//! The `INSERT OR IGNORE` in `add` collapses duplicates by pattern — we
+//! re-read after to return the original row, so the front always gets a
+//! stable id whether the rule was new or already present.
+
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::db::DbError;
 
 /// A user-defined rule that auto-approves a tool call without prompting.
-/// Stored in `permission_rules`. Pattern syntax mirrors Claude Code CLI:
-///   - Tool name only ("Read", "Grep")             → matches any input
-///   - Tool(arg-glob)  ("Bash(npm test:*)")        → matches arg field with `*` glob
+/// Stored in `permission_rules`. Pattern syntax: see module docs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rule {

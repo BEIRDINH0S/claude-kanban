@@ -1,3 +1,35 @@
+/**
+ * Top-level orchestrator for the kanban view + sub-page routing.
+ *
+ * Three responsibilities, in order of complexity:
+ *
+ * 1. **Routing** — switches between Board (default), Settings, Projects,
+ *    and Usage based on `useUiStore.view`. Each branch is its own page
+ *    component; this file is just the dispatcher + sidebar layout.
+ *
+ * 2. **Drag & drop** (kanban only) — uses dnd-kit with a custom
+ *    `collisionDetection` that combines `pointerWithin` and
+ *    `rectIntersection` for the snap-to-column behaviour the kanban
+ *    expects. The actual move logic lives in `cardsStore.move()` which
+ *    handles optimistic updates and Rust round-trips. We only emit the
+ *    `(cardId, targetColumn, targetIndex)` triple from `handleDragEnd`.
+ *
+ * 3. **Keyboard navigation** — vim-style hjkl + arrows, plus single-key
+ *    actions (n=new, /=search, d=delete, y=duplicate, a=archive, Enter=zoom).
+ *    All bindings are user-customisable via `shortcutsStore`. We bail
+ *    when a text input is focused (`isTextInputTarget`) so typing in
+ *    modals doesn't trigger board actions. Selection state
+ *    (`selectedCardId`) lives in `useUiStore` so it persists across
+ *    Settings detours.
+ *
+ * Search filter is loose case-insensitive substring on
+ * `title + projectPath + tags`. Tags are already stored comma-separated
+ * + lowercased so we just include the raw blob in the haystack.
+ *
+ * `CreateCardModal` is mounted here (not in `BoardHeader`) so the Esc
+ * keydown handler that closes it can short-circuit the board's own
+ * shortcuts effect.
+ */
 import {
   DndContext,
   DragOverlay,

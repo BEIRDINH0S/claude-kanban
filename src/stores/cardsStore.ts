@@ -1,3 +1,35 @@
+/**
+ * The `cards` Zustand slice — the **single** source of truth on the front
+ * for what's on the board. Every Tauri command that mutates a card row
+ * round-trips through here so optimistic updates and rollbacks have one
+ * place to live.
+ *
+ * Concurrency model:
+ *   - `move()` is **optimistic**: we apply the move locally via
+ *     `applyOptimisticMove` (mirrors the Rust renumberer), then call IPC
+ *     and replace with the canonical state on success, or roll back on
+ *     failure. Rolling back is safe because IPC errors are deterministic
+ *     (archived project, missing card) — no half-state to reconcile.
+ *   - `startSession()` / `resumeSession()` track in-flight requests in
+ *     `startingCardIds` so the UI can show a spinner without having to
+ *     listen on the global error/event channels.
+ *   - All other mutations (`create`, `update`, `remove`, `setSessionConfig`,
+ *     `stopSession`) are **pessimistic**: we await IPC then ingest the
+ *     returned row, since the optimistic gain is negligible compared to
+ *     the rollback complexity.
+ *
+ * Cross-store side effects:
+ *   - `remove()` clears the card's transcript from `messagesStore`.
+ *   - `resumeSession()` reads the JSONL history via IPC and seeds
+ *     `messagesStore` before the SDK emits its first event, so the chat
+ *     is never empty during the resume gap.
+ *   - Toast notifications go through `toastsStore`; UI navigation (e.g.
+ *     opening the new card in zoom) goes through `useUiStore`.
+ *
+ * The `selectByColumn(column)` helper is the canonical way the kanban
+ * view reads — sorted by position, filtered by column. Don't iterate
+ * `state.cards` directly in components.
+ */
 import { create } from "zustand";
 
 import {
