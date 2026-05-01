@@ -14,6 +14,14 @@ pub enum SidecarInbound {
         /// pushing the title as the first prompt.
         #[serde(skip_serializing_if = "Option::is_none")]
         resume_session_id: Option<String>,
+        /// Per-card session config — passed straight through to the
+        /// Claude Agent SDK options at `query()` time. All fields are
+        /// optional; `None` means "don't override the SDK default".
+        ///
+        /// Wrapped in `SessionConfig` so the Inbound enum stays compact
+        /// and the field set is easy to extend (next: hooks, MCP servers).
+        #[serde(default, skip_serializing_if = "SessionConfig::is_default")]
+        config: SessionConfig,
     },
     SendMessage {
         session_id: String,
@@ -43,6 +51,41 @@ pub enum SidecarInbound {
 pub enum PermissionDecision {
     Allow,
     Deny,
+}
+
+/// Per-card SDK options forwarded to the sidecar. Each field maps 1:1 to a
+/// Claude Agent SDK `query()` option; `None` = leave the SDK default in
+/// place. Serialised as camelCase so the Node side reads the keys verbatim
+/// without an extra translation layer.
+#[derive(Debug, Default, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionConfig {
+    /// Model alias ("sonnet"/"opus"/"haiku") or full model id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// "default" | "acceptEdits" | "plan" | "bypassPermissions".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permission_mode: Option<String>,
+    /// Free-form prose appended to Claude Code's preset system prompt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_prompt_append: Option<String>,
+    /// Hard cap on agent turns per `query` call.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_turns: Option<i64>,
+    /// Absolute paths granted in addition to cwd. The Rust side splits the
+    /// `\n`-separated DB blob and passes a clean list across the wire.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub additional_directories: Vec<String>,
+}
+
+impl SessionConfig {
+    pub fn is_default(&self) -> bool {
+        self.model.is_none()
+            && self.permission_mode.is_none()
+            && self.system_prompt_append.is_none()
+            && self.max_turns.is_none()
+            && self.additional_directories.is_empty()
+    }
 }
 
 /// Messages we receive FROM the sidecar (Node → Rust).

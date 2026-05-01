@@ -3,6 +3,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import {
   Archive,
   CircleStop,
+  ClipboardList,
   CloudUpload,
   Download,
   FolderOpen,
@@ -38,6 +39,7 @@ import {
 import { MessageInput } from "./MessageInput";
 import { MessageList } from "./MessageList";
 import { PermissionPanel } from "./PermissionPanel";
+import { SessionConfigPanel } from "./SessionConfigPanel";
 
 export function ZoomView() {
   const zoomedCardId = useUiStore((s) => s.zoomedCardId);
@@ -77,6 +79,7 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   const update = useCardsStore((s) => s.update);
   const move = useCardsStore((s) => s.move);
   const stopSession = useCardsStore((s) => s.stopSession);
+  const setSessionConfig = useCardsStore((s) => s.setSessionConfig);
   const closeZoom = useUiStore((s) => s.closeZoom);
   const liveSessionIds = useUiStore((s) => s.liveSessionIds);
   const isLive = !!card.sessionId && liveSessionIds.has(card.sessionId);
@@ -92,6 +95,35 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
     );
   });
   const pushToastHeader = useToastsStore((s) => s.push);
+
+  // Quick toggle for Claude Code's plan mode. Same one-click semantics as
+  // pressing Shift+Tab in the CLI: flip between "default" (= per-tool
+  // prompts) and "plan" (= Claude writes a plan and asks before executing).
+  // Persisted on the card so subsequent resumes pick it up too. Applies on
+  // the NEXT session start — the live SDK query keeps its boot-time mode.
+  const planActive = card.permissionMode === "plan";
+  const togglePlan = async () => {
+    try {
+      await setSessionConfig(card.id, {
+        model: card.model,
+        permissionMode: planActive ? null : "plan",
+        systemPromptAppend: card.systemPromptAppend,
+        maxTurns: card.maxTurns,
+        additionalDirectories: card.additionalDirectories,
+      });
+      pushToastHeader({
+        message: planActive
+          ? "Plan mode désactivé — la prochaine session demandera pour chaque outil."
+          : "Plan mode activé — Claude rédigera un plan avant d'exécuter.",
+        ttlMs: 4500,
+      });
+    } catch (e) {
+      pushToastHeader({
+        message: `Plan mode — échec : ${String(e).slice(0, 220)}`,
+        ttlMs: 6000,
+      });
+    }
+  };
 
   // Worktrees are now managed automatically by the Rust GC (per-card
   // worktree dir is wiped + branch deleted once the branch is fully
@@ -187,6 +219,25 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
               </span>
             </>
           )}
+          {/* Surface custom model / permission mode so the user sees at a
+              glance what's pinned on this card without having to open the
+              Config tab. Hidden when defaults — keeps the row clean. */}
+          {card.model && (
+            <>
+              {" · "}
+              <span className="font-mono normal-case tracking-normal text-[var(--text-secondary)]">
+                {card.model}
+              </span>
+            </>
+          )}
+          {card.permissionMode && card.permissionMode !== "default" && (
+            <>
+              {" · "}
+              <span className="font-mono normal-case tracking-normal text-[var(--color-accent)]">
+                {card.permissionMode}
+              </span>
+            </>
+          )}
         </p>
         <EditableTitle
           value={card.title}
@@ -213,6 +264,27 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
         />
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {!archived && (
+          <button
+            type="button"
+            onClick={() => void togglePlan()}
+            title={
+              planActive
+                ? "Plan mode actif — clique pour repasser en demande par outil"
+                : "Activer Plan mode — Claude rédigera un plan avant d'exécuter"
+            }
+            aria-label={planActive ? "Désactiver Plan mode" : "Activer Plan mode"}
+            aria-pressed={planActive}
+            className={[
+              "rounded-lg p-1.5 transition-colors",
+              planActive
+                ? "bg-[var(--color-accent)]/15 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25"
+                : "text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5",
+            ].join(" ")}
+          >
+            <ClipboardList className="size-4" strokeWidth={1.75} />
+          </button>
+        )}
         {isLive && !archived && (
           <button
             type="button"
@@ -716,11 +788,21 @@ function Body({ card }: { card: Card }) {
       ? "Reprends la conversation avec un message…"
       : "Réponds à Claude…";
 
-  // Tab switcher between the chat transcript and the worktree diff.
-  // Diff tab is hidden entirely for cards without a worktree — there's
-  // nothing to show. Default = chat (the everyday view).
-  const [tab, setTab] = useState<"chat" | "diff">("chat");
+  // Tab switcher between the chat transcript, the worktree diff, and the
+  // per-card session config. Diff is hidden entirely for cards without a
+  // worktree (nothing to show). Config is always visible. Default = chat.
+  const [tab, setTab] = useState<ZoomTab>("chat");
   const showDiffTab = !!card.worktreePath;
+
+  // Surface a small badge next to the tab when the card has any non-default
+  // session option set — lets the user spot at a glance that this card has
+  // been customised (e.g. plan mode, custom system prompt, …).
+  const hasCustomConfig =
+    !!card.model ||
+    !!card.permissionMode ||
+    !!card.systemPromptAppend ||
+    card.maxTurns != null ||
+    !!card.additionalDirectories;
 
   return (
     <>
@@ -731,9 +813,16 @@ function Body({ card }: { card: Card }) {
           onRetry={canRetry ? handleRetry : undefined}
         />
       )}
-      {showDiffTab && <TabBar value={tab} onChange={setTab} />}
+      <TabBar
+        value={tab}
+        onChange={setTab}
+        showDiff={showDiffTab}
+        configBadge={hasCustomConfig}
+      />
       {tab === "diff" && showDiffTab ? (
         <DiffView cardId={card.id} />
+      ) : tab === "config" ? (
+        <SessionConfigPanel card={card} />
       ) : (
         <>
           <MessageList items={items} />
@@ -751,21 +840,30 @@ function Body({ card }: { card: Card }) {
   );
 }
 
+type ZoomTab = "chat" | "diff" | "config";
+
 /**
- * Slim tab bar above the chat / diff body. Only mounted when there's a
- * second tab to show (= card has a worktree). Keeps the everyday no-
- * worktree case visually identical to before.
+ * Slim tab bar above the body. Always shows Chat + Config; the Diff tab
+ * is mounted only when the card has a worktree (otherwise there's nothing
+ * to render). `configBadge` adds a small accent dot next to the Config
+ * label whenever the card has any non-default session option, so the
+ * user can spot a customised card at a glance.
  */
 function TabBar({
   value,
   onChange,
+  showDiff,
+  configBadge,
 }: {
-  value: "chat" | "diff";
-  onChange: (v: "chat" | "diff") => void;
+  value: ZoomTab;
+  onChange: (v: ZoomTab) => void;
+  showDiff: boolean;
+  configBadge: boolean;
 }) {
-  const tabs: { id: "chat" | "diff"; label: string }[] = [
+  const tabs: { id: ZoomTab; label: string; badge?: boolean }[] = [
     { id: "chat", label: "Chat" },
-    { id: "diff", label: "Diff" },
+    ...(showDiff ? [{ id: "diff" as const, label: "Diff" }] : []),
+    { id: "config", label: "Config", badge: configBadge },
   ];
   return (
     <div className="flex shrink-0 items-center gap-1 border-b border-[var(--glass-stroke)] px-6 py-1.5">
@@ -777,13 +875,19 @@ function TabBar({
             type="button"
             onClick={() => onChange(t.id)}
             className={[
-              "rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+              "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
               active
                 ? "bg-[var(--color-accent-soft)] text-[var(--text-primary)]"
                 : "text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5",
             ].join(" ")}
           >
             {t.label}
+            {t.badge && (
+              <span
+                aria-hidden
+                className="inline-block size-1.5 rounded-full bg-[var(--color-accent)]"
+              />
+            )}
           </button>
         );
       })}

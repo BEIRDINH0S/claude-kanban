@@ -6,3 +6,4 @@ pub mod projects;
 pub mod sessions;
 pub mod system;
 pub mod usage;
+pub mod user_commands;

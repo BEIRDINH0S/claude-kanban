@@ -6,8 +6,10 @@ import {
   listCards,
   moveCard,
   restoreCard,
+  setCardSessionConfig,
   updateCard,
   type CardPatch,
+  type SessionConfigInput,
 } from "../ipc/cards";
 import {
   resumeSession as invokeResumeSession,
@@ -46,6 +48,13 @@ interface CardsState {
   ) => Promise<Card>;
   duplicate: (id: string) => Promise<Card | null>;
   update: (id: string, patch: CardPatch) => Promise<Card>;
+  /**
+   * Overwrite per-card SDK options (model, permission mode, …). The caller
+   * passes the full intended state — partial updates merge in the UI layer
+   * before reaching here. New options take effect on the NEXT session
+   * start/resume; the active SDK query keeps its boot-time options.
+   */
+  setSessionConfig: (id: string, cfg: SessionConfigInput) => Promise<Card>;
   remove: (id: string) => Promise<void>;
   stopSession: (cardId: string) => Promise<void>;
   /**
@@ -151,6 +160,14 @@ export const useCardsStore = create<CardsState>((set, get) => ({
 
   update: async (id, patch) => {
     const fresh = await updateCard(id, patch);
+    set((s) => ({
+      cards: s.cards.map((c) => (c.id === id ? fresh : c)),
+    }));
+    return fresh;
+  },
+
+  setSessionConfig: async (id, cfg) => {
+    const fresh = await setCardSessionConfig(id, cfg);
     set((s) => ({
       cards: s.cards.map((c) => (c.id === id ? fresh : c)),
     }));

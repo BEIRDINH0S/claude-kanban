@@ -38,18 +38,31 @@ fn map_card(row: &rusqlite::Row) -> rusqlite::Result<Card> {
         last_state: row.get("last_state")?,
         tags: row.get("tags").unwrap_or_default(),
         worktree_path: row.get("worktree_path").ok(),
+        // v10 columns. `.ok()` so reads don't blow up on older rows or in
+        // tests against an in-memory DB pre-migration.
+        model: row.get("model").ok(),
+        permission_mode: row.get("permission_mode").ok(),
+        system_prompt_append: row.get("system_prompt_append").ok(),
+        max_turns: row.get("max_turns").ok(),
+        additional_directories: row.get("additional_directories").ok(),
     })
 }
 
+/// Single SELECT list reused everywhere we map a card row. Centralised so
+/// we don't drift each time a column is added.
+const CARD_COLUMNS: &str = r#"id, title, "column", position, session_id, project_path,
+                              project_id, created_at, updated_at, last_state, tags,
+                              worktree_path, model, permission_mode,
+                              system_prompt_append, max_turns, additional_directories"#;
+
 fn fetch_all(conn: &Connection, project_id: &str) -> rusqlite::Result<Vec<Card>> {
-    let mut stmt = conn.prepare(
-        r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state, tags,
-                  worktree_path
+    let sql = format!(
+        r#"SELECT {CARD_COLUMNS}
              FROM cards
             WHERE project_id = ?1
-            ORDER BY "column", position, id"#,
-    )?;
+            ORDER BY "column", position, id"#
+    );
+    let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map([project_id], map_card)?;
     rows.collect()
 }
@@ -134,10 +147,7 @@ pub fn create_card(
     .map_err(|e| e.to_string())?;
 
     conn.query_row(
-        r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state, tags,
-                  worktree_path
-             FROM cards WHERE id = ?1"#,
+        &format!("SELECT {CARD_COLUMNS} FROM cards WHERE id = ?1"),
         [&id],
         map_card,
     )
@@ -145,7 +155,10 @@ pub fn create_card(
 }
 
 /// Patch the user-editable fields of a card. Each field is independently
-/// optional so the caller can touch only what it needs.
+/// optional so the caller can touch only what it needs. Session-config
+/// fields (model, permission mode, …) live in a dedicated command —
+/// `set_card_session_config` — to avoid tri-state ambiguity with
+/// `Option<Option<…>>` over the serde wire.
 #[tauri::command]
 pub fn update_card(
     state: State<DbState>,
@@ -205,10 +218,126 @@ pub fn update_card(
     }
 
     conn.query_row(
-        r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state, tags,
-                  worktree_path
-             FROM cards WHERE id = ?1"#,
+        &format!("SELECT {CARD_COLUMNS} FROM cards WHERE id = ?1"),
+        [&id],
+        map_card,
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// Overwrite the per-card SDK options in one shot. The front passes the
+/// FULL intended state (every field), so we always overwrite — no
+/// tri-state ambiguity, no Option<Option<T>> dance over the IPC. Empty
+/// strings / whitespace / `0`-or-negative-turns coerce to SQL NULL,
+/// which the sidecar reads as "use SDK default" via
+/// `buildSdkOptionsFromConfig`.
+///
+/// Validation is strict so a typo doesn't get persisted and silently
+/// ignored at SDK time:
+///   - `model`              accepts aliases or full ids starting with
+///                          `claude-` (SDK resolves the rest server-side)
+///   - `permission_mode`    must be one of the four SDK values
+///   - `max_turns`          must be > 0 when set
+///   - `additional_directories`   normalised via split/trim/dedupe
+#[tauri::command]
+pub fn set_card_session_config(
+    state: State<DbState>,
+    id: String,
+    model: Option<String>,
+    permission_mode: Option<String>,
+    system_prompt_append: Option<String>,
+    max_turns: Option<i64>,
+    additional_directories: Option<String>,
+) -> Result<Card, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    if is_card_project_archived(&conn, &id).unwrap_or(false) {
+        return Err(ARCHIVED_ERR.into());
+    }
+    let now = now_ms();
+
+    let model = model
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    if let Some(s) = model.as_deref() {
+        let is_alias = matches!(s, "sonnet" | "opus" | "haiku");
+        let is_full = s.starts_with("claude-");
+        if !is_alias && !is_full {
+            return Err(format!(
+                "model invalide : « {s} » — attendu sonnet/opus/haiku ou claude-…"
+            ));
+        }
+    }
+
+    let permission_mode = permission_mode
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    if let Some(s) = permission_mode.as_deref() {
+        if !matches!(s, "default" | "acceptEdits" | "plan" | "bypassPermissions") {
+            return Err(format!(
+                "permission_mode invalide : « {s} »"
+            ));
+        }
+    }
+
+    // System prompt: trim outer whitespace (preserve interior newlines),
+    // empty after trim coerces to NULL.
+    let system_prompt_append = system_prompt_append
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
+    if let Some(n) = max_turns {
+        if n <= 0 {
+            return Err("max_turns doit être > 0".into());
+        }
+    }
+
+    let additional_directories = additional_directories.as_deref().and_then(|raw| {
+        let mut seen: Vec<String> = Vec::new();
+        for line in raw.split('\n') {
+            let l = line.trim().to_string();
+            if l.is_empty() {
+                continue;
+            }
+            if !seen.iter().any(|x| x == &l) {
+                seen.push(l);
+            }
+        }
+        if seen.is_empty() {
+            None
+        } else {
+            Some(seen.join("\n"))
+        }
+    });
+
+    conn.execute(
+        r#"UPDATE cards
+              SET model = ?1,
+                  permission_mode = ?2,
+                  system_prompt_append = ?3,
+                  max_turns = ?4,
+                  additional_directories = ?5,
+                  updated_at = ?6
+            WHERE id = ?7"#,
+        params![
+            model.as_ref(),
+            permission_mode.as_ref(),
+            system_prompt_append.as_ref(),
+            max_turns,
+            additional_directories.as_ref(),
+            now,
+            &id,
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+
+    conn.query_row(
+        &format!("SELECT {CARD_COLUMNS} FROM cards WHERE id = ?1"),
         [&id],
         map_card,
     )
@@ -381,8 +510,10 @@ pub fn restore_card(state: State<DbState>, card: Card) -> Result<Card, String> {
     conn.execute(
         r#"INSERT INTO cards (id, title, "column", position, session_id,
                               project_path, project_id, created_at, updated_at,
-                              last_state, tags, worktree_path)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"#,
+                              last_state, tags, worktree_path, model,
+                              permission_mode, system_prompt_append, max_turns,
+                              additional_directories)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)"#,
         params![
             &card.id,
             &card.title,
@@ -396,15 +527,17 @@ pub fn restore_card(state: State<DbState>, card: Card) -> Result<Card, String> {
             card.last_state.as_ref(),
             &card.tags,
             card.worktree_path.as_ref(),
+            card.model.as_ref(),
+            card.permission_mode.as_ref(),
+            card.system_prompt_append.as_ref(),
+            card.max_turns,
+            card.additional_directories.as_ref(),
         ],
     )
     .map_err(|e| e.to_string())?;
 
     conn.query_row(
-        r#"SELECT id, title, "column", position, session_id, project_path,
-                  project_id, created_at, updated_at, last_state, tags,
-                  worktree_path
-             FROM cards WHERE id = ?1"#,
+        &format!("SELECT {CARD_COLUMNS} FROM cards WHERE id = ?1"),
         [&card.id],
         map_card,
     )

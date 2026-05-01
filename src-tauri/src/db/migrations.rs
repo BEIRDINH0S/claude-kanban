@@ -152,6 +152,37 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (encoded_dir, session_id)
     ) WITHOUT ROWID;
     "#,
+
+    // v10 — per-card Claude Code session configuration. These are passed
+    // through to the Claude Agent SDK at start/resume time, mirroring the
+    // CLI-level options the user would otherwise set via flags or
+    // ~/.claude/settings.json:
+    //
+    //   - `model`: alias ("sonnet" / "opus" / "haiku") or full model id.
+    //     NULL = let the SDK pick the default for the user's plan.
+    //   - `permission_mode`: one of "default" | "acceptEdits" | "plan" |
+    //     "bypassPermissions". NULL = "default" (= per-tool prompts).
+    //   - `system_prompt_append`: free-form prose appended to Claude
+    //     Code's built-in system prompt (via `systemPrompt: { type:
+    //     "preset", preset: "claude_code", append: ... }`). Per-card
+    //     instructions, role-playing, project conventions, etc.
+    //   - `max_turns`: hard cap on the number of agent turns per `query`
+    //     call. NULL = no cap. Useful to limit token spend on autonomous
+    //     loops.
+    //   - `additional_directories`: newline-separated absolute paths the
+    //     SDK should treat as readable / writable on top of cwd. Maps to
+    //     `additionalDirectories: string[]` on the SDK options.
+    //
+    // All NULL on existing rows = current behaviour preserved (no flag
+    // changes, no surprise behaviour shifts on first launch after the
+    // migration).
+    r#"
+    ALTER TABLE cards ADD COLUMN model TEXT;
+    ALTER TABLE cards ADD COLUMN permission_mode TEXT;
+    ALTER TABLE cards ADD COLUMN system_prompt_append TEXT;
+    ALTER TABLE cards ADD COLUMN max_turns INTEGER;
+    ALTER TABLE cards ADD COLUMN additional_directories TEXT;
+    "#,
 ];
 
 pub fn run(conn: &mut Connection) -> Result<(), DbError> {
