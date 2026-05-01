@@ -16,7 +16,6 @@ import { CreateCardModal } from "../card-create/CreateCardModal";
 import { ProjectsPage } from "../projects/ProjectsPage";
 import { Sidebar } from "../projects/Sidebar";
 import { SettingsPage } from "../settings/SettingsPage";
-import { BinaryBanner } from "../usage/BinaryBanner";
 import { UsagePage } from "../usage/UsagePage";
 import { isTextInputTarget } from "../../lib/shortcuts";
 import { selectByColumn, useCardsStore } from "../../stores/cardsStore";
@@ -276,8 +275,6 @@ export function Board() {
       <div className="flex h-full w-full">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <BinaryBanner />
-
           {view === "settings" ? (
             <SettingsPage />
           ) : view === "projects" ? (
