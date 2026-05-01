@@ -27,7 +27,6 @@ pub fn run() {
             let app_data = app.path().app_data_dir()?;
             let db_path = app_data.join("claude-kanban.db");
             let conn = db::open(&db_path)?;
-            commands::cards::seed_if_empty(&conn)?;
 
             // Read user prefs the sidecar needs at spawn time. Default
             // "auto" matches the historical behaviour. Bad values fall back
@@ -108,7 +107,6 @@ pub fn run() {
             commands::cards::git_card_status,
             commands::cards::git_card_diff,
             commands::cards::git_card_push,
-            commands::cards::drop_card_worktree,
             commands::projects::list_projects,
             commands::projects::create_project,
             commands::projects::rename_project,

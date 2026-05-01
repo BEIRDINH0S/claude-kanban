@@ -20,15 +20,13 @@
 //! See `move_card` for the impl. Don't try to "optimise" by skipping this
 //! when src == dst — adjacent moves still need the closing+opening pass.
 //!
-//! Worktree commands (`git_card_status`, `git_card_diff`, `git_card_push`,
-//! `drop_card_worktree`) are in this file because they're scoped to a
-//! card_id, but the actual git work happens in `crate::worktree` /
-//! `crate::commands::git_*` helpers. Ahead/behind counts are cached by
-//! `gitStatusStore` on a slow heartbeat — these commands are the
-//! authoritative source the heartbeat polls.
-//!
-//! `seed_if_empty` runs at boot from `lib.rs::run` and inserts a default
-//! project + welcome card on the very first launch. Idempotent.
+//! Worktree commands (`git_card_status`, `git_card_diff`, `git_card_push`)
+//! are in this file because they're scoped to a card_id, but the actual
+//! git work happens in `crate::worktree` / `crate::commands::git_*`
+//! helpers. Ahead/behind counts are cached by `gitStatusStore` on a slow
+//! heartbeat — these commands are the authoritative source the heartbeat
+//! polls. Cleanup of dropped worktrees is delegated to the GC worker in
+//! `git_fetch.rs` (no manual drop affordance is exposed in the UI).
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -663,46 +661,11 @@ pub fn git_card_push(state: State<DbState>, card_id: String) -> Result<String, S
     crate::worktree::push_card(&wt)
 }
 
-/// Drop a card's worktree on disk AND clear `worktree_path` on the row,
-/// so subsequent sessions run in the bare `project_path`. The git branch
-/// itself is NOT deleted — it may have unmerged commits the user wants to
-/// rebase or push later. Idempotent: clearing a card that has no worktree
-/// is a no-op success.
-#[tauri::command]
-pub fn drop_card_worktree(state: State<DbState>, card_id: String) -> Result<(), String> {
-    let conn = state.conn.lock().map_err(|e| e.to_string())?;
-    let row: (Option<String>, String) = conn
-        .query_row(
-            "SELECT worktree_path, project_path FROM cards WHERE id = ?1",
-            [&card_id],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .map_err(|e| format!("card not found: {e}"))?;
-    let (worktree_path, project_path) = row;
-    let Some(wt) = worktree_path else {
-        return Ok(());
-    };
-    // Best-effort: even if `git worktree remove` fails (path already gone,
-    // permission issue), we still NULL out the column so the UI catches up.
-    // Surface the git error in the message but don't make it block.
-    let git_err = crate::worktree::remove(&project_path, &wt).err();
-    conn.execute(
-        "UPDATE cards SET worktree_path = NULL, updated_at = ?1 WHERE id = ?2",
-        rusqlite::params![now_ms(), &card_id],
-    )
-    .map_err(|e| e.to_string())?;
-    if let Some(e) = git_err {
-        return Err(format!(
-            "worktree path cleared on card, but git worktree remove failed: {e}"
-        ));
-    }
-    Ok(())
-}
-
 /// Diff the card's worktree against its base ref. Returns an empty diff
 /// (not an error) when the card has no worktree or when the worktree is
 /// gone — same convention as git_card_status. `base_override` lets the
-/// front pin a non-default base from the UI (future feature).
+/// UI pin a custom ref (e.g. `origin/develop`, `HEAD~3`) from the diff
+/// panel; falls back to auto-detection when None or empty.
 #[tauri::command]
 pub fn git_card_diff(
     state: State<DbState>,
@@ -726,12 +689,4 @@ pub fn git_card_diff(
         });
     };
     crate::worktree::card_diff(&wt, base_override.as_deref())
-}
-
-/// First-boot demo data so the empty board has something to drag around.
-/// Now a no-op once the user has any cards or a non-default project.
-pub fn seed_if_empty(_conn: &Connection) -> rusqlite::Result<u32> {
-    // Seed disabled: the multi-project rollout makes the empty-board flow
-    // (`+ Nouvelle tâche` inside the active project) self-explanatory.
-    Ok(0)
 }
