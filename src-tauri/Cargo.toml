@@ -29,25 +29,24 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 thiserror = "1"
 uuid = { version = "1", features = ["v4"] }
 tokio = { version = "1", features = ["process", "io-util", "sync", "rt-multi-thread", "macros", "time", "net"] }
-# Filesystem watcher for ~/.claude/projects/**/*.jsonl. Lets the kanban catch
-# up to sessions running in the CLI (`claude` outside the app) without polling.
+# Filesystem watcher for ~/.claude/projects/**/*.jsonl AND for
+# ~/.claude/.credentials.json (so the auth UI reacts to `claude login`
+# completing without polling).
 notify = "8"
-# OAuth login flow (Anthropic / Claude Code) implemented natively in the app
-# so users don't need the `claude` CLI installed. `reqwest` for the token
-# exchange, `keyring` for the OS credential store (macOS Keychain, Windows
-# Credential Manager, Linux Secret Service), `sha2` + `base64` for PKCE
-# S256, `rand` for the verifier/state, `dirs` for ~/.claude lookup.
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-sha2 = "0.10"
-base64 = "0.22"
-rand = "0.8"
+# Locate the user's home directory for ~/.claude paths.
 dirs = "5"
-urlencoding = "2"
+# Username lookup for the macOS Keychain account name read by the auth status
+# code. Cheap fallback when keyring lookups have to be tried with/without
+# an explicit account.
 whoami = "1"
+# PTY-based runner for `claude login`. The CLI prompts interactively
+# (Inquirer-style) and only behaves correctly when stdin is a real TTY,
+# so we go through portable-pty (ConPTY on Windows, openpty elsewhere).
+portable-pty = "0.8"
 
-# Keychain access — macOS only, since the sidecar's `readCredentials()`
-# only consults Keychain on darwin (cf. host.mjs:530). Windows/Linux fall
-# back to ~/.claude/.credentials.json which we always write too.
+# Keychain access — macOS only, used solely by `auth::storage::clear()` to
+# delete the `Claude Code-credentials` Keychain entry on logout. Read paths
+# go through the file fallback (~/.claude/.credentials.json), which `claude
+# login` always writes alongside the Keychain entry on every platform.
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }
-

@@ -1,20 +1,15 @@
-//! Tauri commands for the OAuth lifecycle: status, login, logout, refresh.
+//! Read-only auth status + logout.
 //!
-//! Login is the only async-heavy one — it spins up a loopback server,
-//! opens the browser, and awaits the callback. To avoid blocking the
-//! invoke handler past tauri's default timeout, we structure it so the
-//! full flow runs in a single awaited future and resolves once the
-//! credentials are persisted.
-//!
-//! Logout/status are cheap synchronous reads of the credential file.
+//! Login goes through `cli_login` (PTY-driven `claude login`) — there is no
+//! `auth_login` command anymore. Refresh is handled by `claude` itself
+//! when a session spawns; we never touch tokens.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use tauri_plugin_opener::OpenerExt;
 
-use super::{oauth, server::CallbackServer, storage};
+use super::storage;
 
 /// Status of the locally stored credentials. Returned to the front so
 /// Settings can render "Connecté en tant que…" without doing its own IO.
@@ -103,65 +98,12 @@ pub fn auth_status() -> AuthStatus {
     }
 }
 
-/// Kick off the OAuth flow:
-///   1. Bind a loopback listener on a random port
-///   2. Generate PKCE
-///   3. Open the browser on the authorize URL
-///   4. Await the callback
-///   5. Exchange code → tokens
-///   6. Persist (file + keychain on macOS)
-///   7. Emit `auth-changed` so UI updates
-#[tauri::command]
-pub async fn auth_login(app: AppHandle) -> Result<AuthStatus, String> {
-    let server = CallbackServer::bind().await?;
-    let redirect_uri = server.redirect_uri();
-    let pkce = oauth::Pkce::generate();
-    let url = oauth::build_authorize_url(&pkce, &redirect_uri);
-
-    // Open the user's default browser. `tauri-plugin-opener` is already
-    // a dependency. If it fails (rare), surface to the front so they can
-    // fall back to copy/paste of the URL.
-    app.opener()
-        .open_url(url.clone(), None::<&str>)
-        .map_err(|e| format!("open browser: {e}"))?;
-
-    // Wait on the callback. The server has its own 5-min timeout.
-    let cb = server.wait().await?;
-    if cb.state != pkce.state {
-        return Err(format!(
-            "state mismatch (expected {} got {})",
-            pkce.state, cb.state
-        ));
-    }
-
-    let token = oauth::exchange_code(&cb.code, &cb.state, &pkce.verifier, &redirect_uri).await?;
-    let subscription_type = oauth::derive_subscription_type(&token);
-    let creds = storage::build_from_token(&token, subscription_type);
-    storage::save(&creds)?;
-
-    let status = auth_status();
-    let _ = app.emit("auth-changed", &status);
-    Ok(status)
-}
-
+/// Wipe the credentials file (and the macOS Keychain entry if present).
+/// Equivalent to `claude logout` — we don't shell out for it because the
+/// only side effect is deleting two locations we already know.
 #[tauri::command]
 pub fn auth_logout(app: AppHandle) -> Result<(), String> {
     storage::clear()?;
     let _ = app.emit("auth-changed", auth_status());
     Ok(())
-}
-
-/// Force a refresh now (used by the UI's "Refresh token" debug action and
-/// by the periodic background task). Returns updated status. No-op (Ok)
-/// if there's nothing to refresh.
-#[tauri::command]
-pub async fn auth_refresh(app: AppHandle) -> Result<AuthStatus, String> {
-    let result = super::refresh_if_needed(true).await;
-    if result.is_ok() {
-        let status = auth_status();
-        let _ = app.emit("auth-changed", &status);
-        Ok(status)
-    } else {
-        Err(result.unwrap_err())
-    }
 }

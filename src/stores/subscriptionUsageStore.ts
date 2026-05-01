@@ -95,10 +95,15 @@ export function describeApiError(
   if (!data) return null;
   if (!data.apiUnavailable && data.apiError !== "rate-limited") return null;
   switch (data.apiError) {
+    case "claude-only-policy":
+      // This app refuses to talk to Anthropic's private OAuth endpoints
+      // (would risk a ban). The CLI's `/usage` slash command shows the
+      // same numbers — point the user there.
+      return "Disponible uniquement via /usage dans Claude Code";
     case "rate-limited":
       return "Synchro Anthropic en cours · valeurs précédentes affichées";
     case "no-credentials":
-      return "Aucun compte Claude détecté · connecte-toi via le CLI claude";
+      return "Aucun compte Claude détecté · connecte-toi via Paramètres";
     case "api-user":
       return "Compte API · pas d'abonnement à suivre";
     case "network":

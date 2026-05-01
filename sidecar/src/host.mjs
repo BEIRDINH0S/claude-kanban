@@ -20,17 +20,11 @@
  */
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { execFileSync, execSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
-import { request as httpsRequest } from "node:https";
-import { homedir, tmpdir, userInfo } from "node:os";
-import { dirname, join } from "node:path";
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import readline from "node:readline";
 
 // Hard cap on how long we wait for the user to answer a tool-permission
@@ -446,356 +440,38 @@ class SessionHandle {
 }
 
 // ---------------------------------------------------------------------------
-// Subscription usage (OAuth /api/oauth/usage)
+// Subscription usage — DISABLED (Claude-Code-only policy)
 // ---------------------------------------------------------------------------
 //
-// Anthropic exposes a *private* OAuth endpoint that returns the precise
-// percentage consumption of the authenticated subscription's 5h and 7d
-// windows — exactly what Claude Code's `/usage` slash shows. We hit it from
-// here (the Node sidecar) because:
-//   - `https` + `child_process` are already available; no new Rust deps.
-//   - The reference implementation in `claude-hud` (the plugin the user is
-//     using as their statusline) is in JS, so we can match its behaviour
-//     port-by-port and trust the same cache/backoff semantics.
+// We previously hit `api.anthropic.com/api/oauth/usage` with the bearer
+// token `claude login` writes, in order to render the % of the user's
+// subscription windows in the BoardHeader / Usage page. That endpoint is
+// reserved for the official `claude` CLI (it requires the `anthropic-beta:
+// oauth-2025-04-20` header and is gated by the OAuth scope set by the CLI),
+// so impersonating it from a third-party app risked the user's subscription
+// being flagged or banned.
 //
-// Flow on `get_subscription_usage` from Rust:
-//   1. Try a fresh-enough cache (5-min TTL by default).
-//   2. If stale, read the OAuth bearer token (Keychain on macOS, file
-//      fallback `~/.claude/.credentials.json` everywhere).
-//   3. GET `api.anthropic.com/api/oauth/usage` with
-//      `Authorization: Bearer …` and `anthropic-beta: oauth-2025-04-20`.
-//   4. Cache the response and return it. On 429, fall back to the last
-//      known good value with a `apiError: "rate-limited"` flag so the UI
-//      can show "syncing" without going blank.
+// Policy now: this app NEVER speaks to Anthropic's APIs directly. The only
+// way to use the subscription is through the bundled `claude` binary the
+// SDK spawns. The subscription % feature is therefore disabled — we keep
+// the IPC plumbing so the UI can render a friendly "indisponible — sécurité"
+// message rather than crash, but the function is a pure stub that performs
+// no network call, no credential read, no cache I/O.
 //
-// All errors are non-throwing — we always resolve the request with an
-// outcome the front can render (even if it's `apiUnavailable: true`).
+// If a future Anthropic API gives third-party apps a documented way to
+// query subscription usage, this is the one place to re-enable.
 
-const SUBSCRIPTION_CACHE_PATH = join(
-  homedir(),
-  ".claude",
-  "cache",
-  "claude-kanban-subscription-usage.json",
-);
-const SUBSCRIPTION_CACHE_TTL_MS = 5 * 60_000;
-const SUBSCRIPTION_FAILURE_TTL_MS = 15_000;
-const SUBSCRIPTION_RATE_LIMIT_BASE_MS = 60_000;
-const SUBSCRIPTION_RATE_LIMIT_MAX_MS = 5 * 60_000;
-const KEYCHAIN_SERVICE_NAME = "Claude Code-credentials";
-const USAGE_API_TIMEOUT_MS = 15_000;
-
-function readCache() {
-  try {
-    if (!existsSync(SUBSCRIPTION_CACHE_PATH)) return null;
-    return JSON.parse(readFileSync(SUBSCRIPTION_CACHE_PATH, "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(entry) {
-  try {
-    const dir = dirname(SUBSCRIPTION_CACHE_PATH);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(SUBSCRIPTION_CACHE_PATH, JSON.stringify(entry), "utf8");
-  } catch (err) {
-    log(`subscription cache write failed: ${err?.message ?? err}`);
-  }
-}
-
-/** TTL window the cache should respect for the current state. */
-function effectiveTtlMs(cache) {
-  if (!cache) return 0;
-  if (cache.data?.apiError === "rate-limited" && cache.retryAfterUntil) {
-    return Math.max(0, cache.retryAfterUntil - cache.timestamp);
-  }
-  if (cache.data?.apiUnavailable) return SUBSCRIPTION_FAILURE_TTL_MS;
-  return SUBSCRIPTION_CACHE_TTL_MS;
-}
-
-function rateLimitedBackoffMs(count) {
-  return Math.min(
-    SUBSCRIPTION_RATE_LIMIT_BASE_MS * Math.pow(2, Math.max(0, count - 1)),
-    SUBSCRIPTION_RATE_LIMIT_MAX_MS,
-  );
-}
-
-/**
- * Read OAuth credentials from macOS Keychain.
- * Service: "Claude Code-credentials". Account: user's login name.
- * Falls back to a service-only lookup (no account) for older Claude Code
- * versions that wrote the entry without one. Returns null if anything
- * fails — we then try the file fallback below.
- */
-function readKeychainCredentials() {
-  if (process.platform !== "darwin") return null;
-  const account = (() => {
-    try {
-      return userInfo().username?.trim() || null;
-    } catch {
-      return null;
-    }
-  })();
-  const tryRead = (args) => {
-    try {
-      const raw = execFileSync("/usr/bin/security", args, {
-        encoding: "utf8",
-        stdio: ["pipe", "pipe", "pipe"],
-        timeout: 3000,
-      }).trim();
-      if (!raw) return null;
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  };
-  const baseArgs = ["find-generic-password", "-s", KEYCHAIN_SERVICE_NAME, "-w"];
-  const data = account
-    ? tryRead([
-        "find-generic-password",
-        "-s",
-        KEYCHAIN_SERVICE_NAME,
-        "-a",
-        account,
-        "-w",
-      ]) ?? tryRead(baseArgs)
-    : tryRead(baseArgs);
-  if (!data) return null;
-  const oauth = data.claudeAiOauth;
-  if (!oauth?.accessToken) return null;
-  if (typeof oauth.expiresAt === "number" && oauth.expiresAt <= Date.now()) {
-    return null;
-  }
+async function getSubscriptionUsage() {
   return {
-    accessToken: oauth.accessToken,
-    subscriptionType: oauth.subscriptionType ?? "",
+    planName: null,
+    fiveHour: null,
+    sevenDay: null,
+    fiveHourResetAt: null,
+    sevenDayResetAt: null,
+    apiUnavailable: true,
+    // Stable code the UI matches against to render the disabled message.
+    apiError: "claude-only-policy",
   };
-}
-
-function readFileCredentials() {
-  const path = join(homedir(), ".claude", ".credentials.json");
-  try {
-    if (!existsSync(path)) return null;
-    const data = JSON.parse(readFileSync(path, "utf8"));
-    const oauth = data.claudeAiOauth;
-    if (!oauth?.accessToken) return null;
-    if (typeof oauth.expiresAt === "number" && oauth.expiresAt <= Date.now()) {
-      return null;
-    }
-    return {
-      accessToken: oauth.accessToken,
-      subscriptionType: oauth.subscriptionType ?? "",
-    };
-  } catch {
-    return null;
-  }
-}
-
-function readCredentials() {
-  const keychain = readKeychainCredentials();
-  if (keychain) {
-    if (keychain.subscriptionType) return keychain;
-    // Token from keychain, subscriptionType from file (older releases stored
-    // the latter only in the file).
-    const file = readFileCredentials();
-    if (file?.subscriptionType) {
-      return { accessToken: keychain.accessToken, subscriptionType: file.subscriptionType };
-    }
-    return keychain;
-  }
-  return readFileCredentials();
-}
-
-function planNameFor(subscriptionType) {
-  const lower = (subscriptionType ?? "").toLowerCase();
-  if (lower.includes("max")) return "Max";
-  if (lower.includes("pro")) return "Pro";
-  if (lower.includes("team")) return "Team";
-  if (!subscriptionType || lower.includes("api")) return null;
-  return subscriptionType.charAt(0).toUpperCase() + subscriptionType.slice(1);
-}
-
-function clampUtilization(v) {
-  if (v == null) return null;
-  if (!Number.isFinite(v)) return null;
-  return Math.round(Math.max(0, Math.min(100, v)));
-}
-
-/** Issue a single GET against the OAuth usage endpoint. */
-function fetchOauthUsage(accessToken) {
-  return new Promise((resolve) => {
-    const req = httpsRequest(
-      {
-        hostname: "api.anthropic.com",
-        path: "/api/oauth/usage",
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "anthropic-beta": "oauth-2025-04-20",
-          "User-Agent": "claude-kanban/0.1 (+oauth-usage)",
-        },
-        timeout: USAGE_API_TIMEOUT_MS,
-      },
-      (res) => {
-        let body = "";
-        res.on("data", (c) => {
-          body += c.toString();
-        });
-        res.on("end", () => {
-          const status = res.statusCode ?? 0;
-          if (status !== 200) {
-            const error =
-              status === 429
-                ? "rate-limited"
-                : status >= 400
-                ? `http-${status}`
-                : "http-error";
-            const retryAfter = (() => {
-              const raw = res.headers["retry-after"];
-              const v = Array.isArray(raw) ? raw[0] : raw;
-              if (!v) return undefined;
-              const n = Number.parseInt(v, 10);
-              if (Number.isFinite(n) && n > 0) return n;
-              const t = Date.parse(v);
-              if (!Number.isFinite(t)) return undefined;
-              const sec = Math.ceil((t - Date.now()) / 1000);
-              return sec > 0 ? sec : undefined;
-            })();
-            resolve({ ok: false, error, retryAfterSec: retryAfter });
-            return;
-          }
-          try {
-            resolve({ ok: true, data: JSON.parse(body) });
-          } catch (err) {
-            resolve({ ok: false, error: "parse" });
-          }
-        });
-      },
-    );
-    req.on("error", () => resolve({ ok: false, error: "network" }));
-    req.on("timeout", () => {
-      req.destroy();
-      resolve({ ok: false, error: "timeout" });
-    });
-    req.end();
-  });
-}
-
-/**
- * Resolve the current subscription usage. Always returns an object the
- * front can render — never throws.
- *
- * `force=true` bypasses the cache (used by the explicit "refresh" button).
- */
-async function getSubscriptionUsage({ force = false } = {}) {
-  const now = Date.now();
-  const cache = readCache();
-
-  if (!force && cache) {
-    const ttl = effectiveTtlMs(cache);
-    if (now - cache.timestamp < ttl) {
-      // Serve last-good when we're in a rate-limit backoff window — the data
-      // was correct as of `cache.lastGoodTimestamp`, the front can warn.
-      const display =
-        cache.data?.apiError === "rate-limited" && cache.lastGoodData
-          ? { ...cache.lastGoodData, apiError: "rate-limited" }
-          : cache.data;
-      return display;
-    }
-  }
-
-  const credentials = readCredentials();
-  if (!credentials) {
-    const result = {
-      planName: null,
-      fiveHour: null,
-      sevenDay: null,
-      fiveHourResetAt: null,
-      sevenDayResetAt: null,
-      apiUnavailable: true,
-      apiError: "no-credentials",
-    };
-    writeCache({ data: result, timestamp: now });
-    return result;
-  }
-
-  const planName =
-    planNameFor(credentials.subscriptionType) ??
-    cache?.data?.planName ??
-    cache?.lastGoodData?.planName ??
-    null;
-  if (!planName) {
-    // API user — no subscription window to report.
-    return {
-      planName: null,
-      fiveHour: null,
-      sevenDay: null,
-      fiveHourResetAt: null,
-      sevenDayResetAt: null,
-      apiUnavailable: false,
-      apiError: "api-user",
-    };
-  }
-
-  const apiResult = await fetchOauthUsage(credentials.accessToken);
-  if (!apiResult.ok) {
-    const isRateLimited = apiResult.error === "rate-limited";
-    const prevCount = cache?.rateLimitedCount ?? 0;
-    const rateLimitedCount = isRateLimited ? prevCount + 1 : 0;
-    const retryAfterUntil =
-      isRateLimited && apiResult.retryAfterSec
-        ? now + apiResult.retryAfterSec * 1000
-        : isRateLimited
-        ? now + rateLimitedBackoffMs(rateLimitedCount)
-        : undefined;
-
-    const failure = {
-      planName,
-      fiveHour: null,
-      sevenDay: null,
-      fiveHourResetAt: null,
-      sevenDayResetAt: null,
-      apiUnavailable: true,
-      apiError: apiResult.error,
-    };
-
-    if (isRateLimited) {
-      const lastGood = cache?.lastGoodData ?? cache?.data;
-      const lastGoodTimestamp = cache?.lastGoodTimestamp ?? cache?.timestamp;
-      const goodResult = lastGood && !lastGood.apiUnavailable ? lastGood : null;
-      writeCache({
-        data: failure,
-        timestamp: now,
-        rateLimitedCount,
-        retryAfterUntil,
-        lastGoodData: goodResult ?? cache?.lastGoodData,
-        lastGoodTimestamp: goodResult ? lastGoodTimestamp : cache?.lastGoodTimestamp,
-      });
-      if (goodResult) {
-        return { ...goodResult, apiError: "rate-limited" };
-      }
-      return failure;
-    }
-    writeCache({ data: failure, timestamp: now });
-    return failure;
-  }
-
-  const data = apiResult.data ?? {};
-  const result = {
-    planName,
-    fiveHour: clampUtilization(data.five_hour?.utilization),
-    sevenDay: clampUtilization(data.seven_day?.utilization),
-    fiveHourResetAt: data.five_hour?.resets_at ?? null,
-    sevenDayResetAt: data.seven_day?.resets_at ?? null,
-    apiUnavailable: false,
-  };
-  writeCache({
-    data: result,
-    timestamp: now,
-    lastGoodData: result,
-    lastGoodTimestamp: now,
-  });
-  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -848,11 +524,11 @@ rl.on("line", (line) => {
       return;
     }
     case "get_subscription_usage": {
-      // Async — don't block the readline loop. Errors are swallowed inside
-      // getSubscriptionUsage and surfaced as `apiUnavailable: true`.
+      // Stub — see getSubscriptionUsage above for the why. The IPC stays
+      // wired so the front gets a deterministic "indisponible" response
+      // instead of a hung promise.
       const requestId = msg.requestId;
-      const force = !!msg.force;
-      void getSubscriptionUsage({ force }).then((data) => {
+      void getSubscriptionUsage().then((data) => {
         send({ type: "subscription_usage_result", requestId, data });
       });
       return;
