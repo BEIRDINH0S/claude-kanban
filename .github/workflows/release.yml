@@ -15,8 +15,6 @@ jobs:
         include:
           - platform: macos-latest # Apple Silicon (aarch64)
             label: macOS Apple Silicon
-          - platform: macos-13 # Intel (x86_64)
-            label: macOS Intel
           - platform: windows-latest # x86_64
             label: Windows x64
 
@@ -85,7 +83,6 @@ jobs:
             ## Downloads
 
             - **macOS Apple Silicon (M1+)**: `.dmg` aarch64
-            - **macOS Intel**: `.dmg` x64
             - **Windows**: `.msi` x64
 
             First launch (unsigned binary):
