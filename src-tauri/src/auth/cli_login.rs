@@ -22,6 +22,7 @@
 //! returns an error).
 
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::process::Command as StdCommand;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -29,7 +30,7 @@ use std::time::Duration;
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 // =============================================================================
 // State
@@ -96,41 +97,156 @@ fn emit(app: &AppHandle, event: CliLoginEvent) {
 }
 
 // =============================================================================
-// Pre-flight: is `claude` installed?
+// Locating the `claude` binary
+// =============================================================================
+//
+// The Claude Agent SDK npm package ships a per-platform sub-package that
+// bundles the full Claude Code binary. Layout:
+//
+//   sidecar/node_modules/@anthropic-ai/claude-agent-sdk-{plat}-{arch}/claude
+//
+// In a Tauri production bundle the sidecar tree lives under the resource
+// dir at `_up_/sidecar/...` (the `_up_` prefix encodes the `..` ascent in
+// the `resources` glob — see `session_host::resolve_paths`). In dev it's
+// `<repo>/sidecar/...`.
+//
+// Since the SDK already pulled this binary in (and we ship it in every
+// release artefact), the user has a working `claude` even when nothing
+// has ever been `npm install -g`'d. Falling back to PATH is purely a
+// courtesy for users who already had a system install we can pick up.
+
+/// Mapping that mirrors what npm/Node would resolve at runtime via
+/// `process.platform` + `process.arch`. Returns `None` for combos the SDK
+/// doesn't ship (those just degrade to PATH lookup).
+fn sdk_subpkg() -> Option<&'static str> {
+    if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            Some("claude-agent-sdk-darwin-arm64")
+        } else if cfg!(target_arch = "x86_64") {
+            Some("claude-agent-sdk-darwin-x64")
+        } else {
+            None
+        }
+    } else if cfg!(target_os = "linux") {
+        if cfg!(target_arch = "x86_64") {
+            Some("claude-agent-sdk-linux-x64")
+        } else if cfg!(target_arch = "aarch64") {
+            Some("claude-agent-sdk-linux-arm64")
+        } else {
+            None
+        }
+    } else if cfg!(target_os = "windows") {
+        if cfg!(target_arch = "x86_64") {
+            Some("claude-agent-sdk-win32-x64")
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+fn bin_name() -> &'static str {
+    if cfg!(windows) {
+        "claude.exe"
+    } else {
+        "claude"
+    }
+}
+
+/// Try to find the SDK-bundled `claude` binary. Checks the production
+/// resource path first, then dev fallback. Returns `None` if neither
+/// exists — in which case the caller falls back to PATH lookup.
+fn resolve_bundled_claude(app: &AppHandle) -> Option<PathBuf> {
+    let subpkg = sdk_subpkg()?;
+    let bin = bin_name();
+
+    // Production: resource_dir + _up_/sidecar/node_modules/@anthropic-ai/<subpkg>/<bin>
+    if let Ok(res_dir) = app.path().resource_dir() {
+        let candidate = res_dir
+            .join("_up_")
+            .join("sidecar")
+            .join("node_modules")
+            .join("@anthropic-ai")
+            .join(subpkg)
+            .join(bin);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    // Dev: <repo>/sidecar/node_modules/@anthropic-ai/<subpkg>/<bin>
+    let dev = PathBuf::from(format!(
+        "{}/../sidecar/node_modules/@anthropic-ai/{subpkg}/{bin}",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    if dev.exists() {
+        return Some(dev);
+    }
+
+    None
+}
+
+/// Look up `claude` on PATH using `which`/`where`. Final fallback.
+fn resolve_path_claude() -> Option<PathBuf> {
+    let cmd = if cfg!(windows) { "where" } else { "which" };
+    let output = StdCommand::new(cmd).arg("claude").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Resolve the binary we'll actually spawn. Bundled wins: that's the
+/// canonical Claude Code we ship with the app. PATH is only used when
+/// something stripped the bundled binary from the install (rare — would
+/// indicate a corrupted bundle).
+fn resolve_claude(app: &AppHandle) -> Option<PathBuf> {
+    resolve_bundled_claude(app).or_else(resolve_path_claude)
+}
+
+// =============================================================================
+// Pre-flight: is `claude` available?
 // =============================================================================
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CliInstallStatus {
     pub installed: bool,
-    /// Resolved absolute path if found, otherwise null. Lets the UI show
-    /// "trouvée à <path>" so the user knows which install we'll drive.
+    /// Resolved absolute path of the binary we'd spawn. Useful for the
+    /// "trouvée à <path>" hint in the UI when debugging.
     pub path: Option<String>,
+    /// `"bundled"` when the binary comes from the SDK npm sub-package
+    /// shipped with the app, `"path"` when it's the user's own install,
+    /// `null` when not found.
+    pub source: Option<&'static str>,
 }
 
-/// Cheap which-style probe. We avoid pulling the `which` crate just for this:
-/// `which`/`where` are universally available and the call is one-shot at
-/// modal-open time.
 #[tauri::command]
-pub fn auth_cli_check() -> CliInstallStatus {
-    let cmd = if cfg!(windows) { "where" } else { "which" };
-    let output = StdCommand::new(cmd).arg("claude").output();
-    match output {
-        Ok(out) if out.status.success() => {
-            let path = String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .next()
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty());
-            CliInstallStatus {
-                installed: path.is_some(),
-                path,
-            }
-        }
-        _ => CliInstallStatus {
-            installed: false,
-            path: None,
-        },
+pub fn auth_cli_check(app: AppHandle) -> CliInstallStatus {
+    if let Some(p) = resolve_bundled_claude(&app) {
+        return CliInstallStatus {
+            installed: true,
+            path: Some(p.to_string_lossy().into_owned()),
+            source: Some("bundled"),
+        };
+    }
+    if let Some(p) = resolve_path_claude() {
+        return CliInstallStatus {
+            installed: true,
+            path: Some(p.to_string_lossy().into_owned()),
+            source: Some("path"),
+        };
+    }
+    CliInstallStatus {
+        installed: false,
+        path: None,
+        source: None,
     }
 }
 
@@ -152,6 +268,14 @@ pub fn auth_cli_login_start(app: AppHandle) -> Result<(), String> {
         }
     }
 
+    // Resolve the binary we'll spawn. Prefers the SDK-bundled one (always
+    // present in a sane install), falls back to PATH for users with their
+    // own global `claude`. The "Claude Code introuvable" case is therefore
+    // genuinely "the bundle is broken" — not "you forgot to npm install".
+    let claude_path = resolve_claude(&app).ok_or_else(|| {
+        "`claude` introuvable. Le binaire bundlé avec l'app est manquant — réinstalle l'app, ou installe Claude Code globalement (https://docs.anthropic.com/claude/docs/install).".to_string()
+    })?;
+
     // Spawn the PTY + child. We do this synchronously since it only forks
     // once and is fast on every platform.
     let pty_system = native_pty_system();
@@ -164,23 +288,15 @@ pub fn auth_cli_login_start(app: AppHandle) -> Result<(), String> {
         })
         .map_err(|e| format!("openpty: {e}"))?;
 
-    let mut cmd = CommandBuilder::new("claude");
+    let mut cmd = CommandBuilder::new(claude_path.clone());
     cmd.arg("login");
-    // The CLI inherits a clean env from us — we don't unset things like HOME
-    // because that's where it writes credentials (~/.claude). Forwarding the
-    // parent process's full env is portable-pty's default.
+    // Inherit the parent env: HOME (for ~/.claude write), PATH (so `claude`
+    // can shell out to git/etc. if needed), TERM (so Inquirer renders
+    // correctly inside our PTY). portable-pty's default behaviour propagates
+    // the full env, which is what we want.
 
     let child = pair.slave.spawn_command(cmd).map_err(|e| {
-        // Most common cause: `claude` not on PATH. Surface that exact case
-        // before any generic spawn error so the UI can suggest installing.
-        if e.to_string().to_lowercase().contains("no such file")
-            || e.to_string().to_lowercase().contains("not found")
-            || e.to_string().to_lowercase().contains("notfound")
-        {
-            "`claude` introuvable sur le PATH. Installe Claude Code (https://docs.anthropic.com/claude/docs/install) puis réessaie.".to_string()
-        } else {
-            format!("spawn `claude login`: {e}")
-        }
+        format!("spawn `{} login`: {e}", claude_path.display())
     })?;
 
     // Slave drops here; the master is what we read/write. Holding the slave

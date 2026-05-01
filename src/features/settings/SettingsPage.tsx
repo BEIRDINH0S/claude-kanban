@@ -363,8 +363,11 @@ function AccountSection() {
   }
 
   if (!status.loggedIn) {
-    // Pre-flight: if `claude` isn't on PATH, we can't drive `claude login`.
-    // Surface a CTA to install rather than a button that would just fail.
+    // Pre-flight. Claude Code is bundled with the app via the Agent SDK's
+    // per-platform sub-package, so this state should only fire when the
+    // bundle is corrupted (release artefact missing the binary, antivirus
+    // quarantined it, etc.). We point users at a global `npm install -g`
+    // as the easy escape hatch.
     if (install && !install.installed) {
       return (
         <Card
@@ -374,8 +377,8 @@ function AccountSection() {
               strokeWidth={1.75}
             />
           }
-          title="Claude Code introuvable"
-          subtitle="Cette app pilote `claude login` pour toi pour rester 100 % conforme à Anthropic — pas de OAuth fait main, donc pas de risque de bannissement. Installe Claude Code, redémarre l'app, puis reviens."
+          title="Binaire Claude introuvable"
+          subtitle="Le binaire `claude` bundlé avec l'app est manquant ou inaccessible (antivirus, install corrompu...). Réinstalle l'app, ou installe Claude Code en global puis relance."
           trailing={
             <button
               type="button"
