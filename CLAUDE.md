@@ -68,7 +68,7 @@ anyway.
 ```
 claude-kanban/
 ├── src/                          React + Zustand + dnd-kit
-│   ├── features/{kanban,session,card-create,usage,settings,projects,palette,toasts}/
+│   ├── features/{kanban,session,card-create,settings,projects,palette,toasts}/
 │   ├── stores/                   Zustand slices
 │   ├── ipc/                      typed wrappers around invoke()
 │   └── types/                    shared types (camelCase, mirrors of the Rust shapes)
@@ -76,7 +76,6 @@ claude-kanban/
 │   ├── auth/                     login + credentials watcher + storage
 │   ├── commands/                 every Tauri command (one file per concern)
 │   ├── db/                       open + migrations + Card / Project types
-│   ├── usage/                    JSONL → SQLite pipeline + queries
 │   ├── session_host/             sidecar spawn + JSON-lines protocol
 │   ├── git_fetch.rs              fetch workers + GC
 │   ├── worktree.rs               wrappers around `git worktree`

@@ -8,7 +8,7 @@
  *
  *  Layout
  *  ──────
- *  .mock              window frame (titlebar + dots + usage meter)
+ *  .mock              window frame (titlebar + dots)
  *    .mock-board      CSS grid, 5 columns
  *      .mock-col      flex column with header + static cards (.mc)
  *      .mc.traveler   absolutely-positioned card animating across cols
@@ -59,30 +59,6 @@
   font-size: 11.5px;
   color: var(--ink-3);
   flex: 1; text-align: center;
-}
-
-/* Usage meter in the titlebar — animates between 22% and 78% to evoke the
-   real session/weekly bars in the app. */
-.mock-usage {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3);
-}
-.mock-usage .meter {
-  width: 60px; height: 4px; border-radius: 999px;
-  background: rgba(255,255,255,0.08);
-  overflow: hidden;
-}
-.mock-usage .meter::after {
-  content: "";
-  display: block;
-  height: 100%;
-  width: 64%;
-  background: linear-gradient(90deg, var(--green), var(--amber) 60%, var(--red));
-  animation: usage-fill 8s ease-in-out infinite alternate;
-}
-@keyframes usage-fill {
-  from { width: 22%; }
-  to   { width: 78%; }
 }
 
 /* ─── Board grid ─────────────────────────────────────────────────────────── */

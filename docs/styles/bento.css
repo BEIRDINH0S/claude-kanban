@@ -1,12 +1,12 @@
 /* ──────────────────────────────────────────────────────────────────────────
  *  Bento — features grid + per-tile mini mockups
  *  ──────────────────────────────────────────────
- *  6-column grid. Tiles have three sizes (.t-wide spans 4, .t-half spans 3,
- *  .t-third spans 2). The 10 tiles tile the grid in 5 perfect rows:
+ *  6-column grid. Tile sizes (.t-wide=4, .t-half=3, .t-third=2, .t-full=6).
+ *  9 tiles tile the grid:
  *    row 1: wide(4) + third(2) = 6   (01 Parallel + 02 Auto-flow)
  *    row 2: half(3) + half(3)  = 6   (03 Worktrees + 04 Permissions)
- *    row 3: half(3) + half(3)  = 6   (05 Zoom+diff + 06 Usage)
- *    row 4: wide(4) + third(2) = 6   (07 Palette   + 08 Reprise)
+ *    row 3: full(6)            = 6   (05 Zoom+diff)
+ *    row 4: wide(4) + third(2) = 6   (07 Palette   + 08 Resume)
  *    row 5: half(3) + half(3)  = 6   (09 Repair    + 10 WSL)
  *
  *  Each tile has an art block (.tile-art) at the bottom — those mini-mockup
@@ -73,16 +73,18 @@
 .tile.t-wide  { grid-column: span 4; }
 .tile.t-half  { grid-column: span 3; }
 .tile.t-third { grid-column: span 2; }
+.tile.t-full  { grid-column: 1 / -1; }
 
 @media (max-width: 1100px) {
   .bento { grid-template-columns: repeat(4, 1fr); }
   .tile.t-wide  { grid-column: span 4; }
   .tile.t-half  { grid-column: span 2; }
   .tile.t-third { grid-column: span 2; }
+  .tile.t-full  { grid-column: 1 / -1; }
 }
 @media (max-width: 680px) {
   .bento { grid-template-columns: 1fr; }
-  .tile.t-wide, .tile.t-half, .tile.t-third { grid-column: span 1; }
+  .tile.t-wide, .tile.t-half, .tile.t-third, .tile.t-full { grid-column: span 1; }
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -154,29 +156,7 @@
 .diff-mini .d-rem::before { content: "−"; position: absolute; left: 4px; }
 .diff-mini .d-ctx::before { content: " "; position: absolute; left: 4px; }
 
-/* ── Tile 06: usage bars ──────────────────────────────────────────────── */
-.usage-art { display: flex; flex-direction: column; gap: 10px; }
-.usage-bar {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--font-mono); font-size: 10.5px;
-  color: var(--ink-3);
-}
-.usage-bar .label { width: 60px; }
-.usage-bar .track {
-  flex: 1; height: 6px; border-radius: 999px;
-  background: rgba(255,255,255,0.06);
-  overflow: hidden;
-}
-.usage-bar .fill {
-  height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--green), var(--amber) 60%, var(--red));
-}
-.usage-bar.b1 .fill { width: 0; animation: ufill 4s ease-out forwards; animation-delay: 0.2s; }
-.usage-bar.b2 .fill { width: 0; animation: ufill 4s ease-out forwards; animation-delay: 0.5s; --to: 84%; }
-@keyframes ufill { to { width: var(--to, 64%); } }
-.usage-bar .pct { width: 36px; text-align: right; color: var(--ink-2); }
-
-/* ── Tile 07: JSONL resume with fade-out gradient mask ─────────────────── */
+/* ── Tile 08: JSONL resume with fade-out gradient mask ─────────────────── */
 .resume-art {
   font-family: var(--font-mono);
   font-size: 10.5px;

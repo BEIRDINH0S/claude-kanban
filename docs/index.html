@@ -196,10 +196,6 @@
               <div class="mock-titlebar">
                 <div class="mock-dots"><span></span><span></span><span></span></div>
                 <div class="mock-title">claude-kanban — projects/api-refactor</div>
-                <div class="mock-usage">
-                  <span>session 5h</span>
-                  <span class="meter" aria-hidden="true"></span>
-                </div>
               </div>
 
               <div class="mock-board" id="mockBoard">
@@ -477,7 +473,7 @@
           </article>
 
           <!-- 05 · Diff viewer -->
-          <article class="tile t-half">
+          <article class="tile t-full">
             <span class="uppercase-tag" style="color: var(--accent);">05 — Zoom + diff</span>
             <h3>Full-screen mode with inline diff.</h3>
             <p>Double-click a card: chat in big, tool-uses chipped, diff of edited files right next to it.</p>
@@ -489,26 +485,6 @@
                 <div class="d-line d-add">  const token = parseToken(req);</div>
                 <div class="d-line d-add">  if (!token) throw new Unauthorized();</div>
                 <div class="d-line d-ctx">  return next();</div>
-              </div>
-            </div>
-          </article>
-
-          <!-- 06 · Usage tracking -->
-          <article class="tile t-half">
-            <span class="uppercase-tag" style="color: var(--accent);">06 — Usage</span>
-            <h3>How much you have left before the rate-limit.</h3>
-            <p>Rolling 5h <span class="mono">session</span> bar + a <span class="mono">weekly</span> bar indexed on the
-              max of the three weekly caps. Green → amber → red gradient, visible countdown to reset.</p>
-            <div class="tile-art usage-art">
-              <div class="usage-bar b1">
-                <span class="label">session</span>
-                <span class="track"><span class="fill"></span></span>
-                <span class="pct">64%</span>
-              </div>
-              <div class="usage-bar b2">
-                <span class="label">weekly</span>
-                <span class="track"><span class="fill"></span></span>
-                <span class="pct">84%</span>
               </div>
             </div>
           </article>
