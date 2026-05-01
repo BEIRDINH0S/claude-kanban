@@ -35,7 +35,7 @@ export function UsageBreakdown({ title, rows, emptyHint }: Props) {
 
       {rows.length === 0 ? (
         <p className="font-mono text-[11px] text-[var(--text-muted)]">
-          {emptyHint ?? "Aucune donnée pour cette plage."}
+          {emptyHint ?? "No data for this range."}
         </p>
       ) : (
         <ul className="flex flex-col gap-1">

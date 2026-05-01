@@ -80,21 +80,23 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: claude-kanban ${{ github.ref_name }}
           releaseBody: |
-            Build automatique non signé.
+            Unsigned automatic build.
 
-            ## Téléchargement
+            ## Downloads
 
-            - **macOS Apple Silicon (M1+)** : `.dmg` aarch64
-            - **macOS Intel** : `.dmg` x64
-            - **Windows** : `.msi` x64
+            - **macOS Apple Silicon (M1+)**: `.dmg` aarch64
+            - **macOS Intel**: `.dmg` x64
+            - **Windows**: `.msi` x64
 
-            Premier lancement (binaire non signé) :
-            - macOS : clic-droit sur l'app → **Ouvrir** la première fois pour bypasser Gatekeeper
-            - Windows : SmartScreen → **More info** → **Run anyway**
+            First launch (unsigned binary):
+            - macOS: right-click the app → **Open** the first time to bypass Gatekeeper.
+            - Windows: SmartScreen → **More info** → **Run anyway**.
 
-            ## Pré-requis runtime
+            ## Runtime requirements
 
-            - **Claude Code** : `claude` doit être installé et accessible sur le PATH (`which claude` doit renvoyer un chemin)
-            - **Node** : pas besoin, il est bundlé dans l'app
+            **None.** The `claude` binary is shipped inside the app via the
+            official `@anthropic-ai/claude-agent-sdk`, and Node is bundled by
+            Tauri. On first launch, open **Settings → Claude account → Sign in**
+            and follow the OAuth flow.
           releaseDraft: true
           prerelease: false

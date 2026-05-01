@@ -2,12 +2,12 @@
  *  Bento — features grid + per-tile mini mockups
  *  ──────────────────────────────────────────────
  *  6-column grid. Tiles have three sizes (.t-wide spans 4, .t-half spans 3,
- *  .t-third spans 2). The 11 tiles tile the grid in 5 perfect rows:
- *    row 1: wide(4) + third(2) = 6
- *    row 2: half(3) + half(3)  = 6
- *    row 3: half(3) + half(3)  = 6
- *    row 4: third(2)×3         = 6
- *    row 5: half(3) + half(3)  = 6
+ *  .t-third spans 2). The 10 tiles tile the grid in 5 perfect rows:
+ *    row 1: wide(4) + third(2) = 6   (01 Parallel + 02 Auto-flow)
+ *    row 2: half(3) + half(3)  = 6   (03 Worktrees + 04 Permissions)
+ *    row 3: half(3) + half(3)  = 6   (05 Zoom+diff + 06 Usage)
+ *    row 4: wide(4) + third(2) = 6   (07 Palette   + 08 Reprise)
+ *    row 5: half(3) + half(3)  = 6   (09 Repair    + 10 WSL)
  *
  *  Each tile has an art block (.tile-art) at the bottom — those mini-mockup
  *  styles are grouped at the end of this file by feature.
@@ -134,34 +134,6 @@
 .perm-art .row .actions span { padding: 3px 8px; border-radius: 4px; font-size: 10px; }
 .perm-art .row .yes { background: oklch(0.78 0.16 145 / 0.18); color: oklch(0.85 0.16 145); }
 .perm-art .row .no  { background: oklch(0.68 0.20 25  / 0.16); color: oklch(0.78 0.16 25);  }
-
-/* ── Tile 04: live preview card with blinking caret ────────────────────── */
-.preview-card {
-  border-radius: 10px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--glass-stroke);
-  padding: 12px;
-  max-width: 320px;
-}
-.preview-card .pc-title { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
-.preview-card .pc-msg {
-  font-family: var(--font-mono); font-size: 11.5px;
-  color: var(--ink-3); line-height: 1.5;
-  padding: 6px 8px;
-  border-left: 2px solid var(--glass-stroke);
-  margin-top: 6px;
-}
-.preview-card .pc-msg.live {
-  border-left-color: oklch(0.84 0.12 240);
-  animation: pc-typing 4s ease-in-out infinite;
-}
-.preview-card .pc-msg.live::after {
-  content: "▌";
-  color: oklch(0.84 0.12 240);
-  animation: blink 1s steps(2) infinite;
-}
-@keyframes pc-typing { 0%,40%{opacity:0.4} 50%,100%{opacity:1} }
-@keyframes blink     { 50% { opacity: 0; } }
 
 /* ── Tile 05: minified diff block ──────────────────────────────────────── */
 .diff-mini {

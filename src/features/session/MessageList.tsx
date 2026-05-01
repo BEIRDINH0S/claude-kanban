@@ -57,7 +57,7 @@ export function MessageList({ items }: Props) {
         ))}
         {renderable.length === 0 && (
           <p className="text-center font-mono text-xs text-[var(--text-muted)]">
-            En attente du premier événement…
+            Waiting for the first event…
           </p>
         )}
         <div ref={bottomRef} />
@@ -198,7 +198,7 @@ function RenderedRow({ row }: { row: Row }) {
     return (
       <div
         className="flex items-center gap-2 self-start rounded-lg border border-emerald-600/40 bg-emerald-100/70 px-2.5 py-1.5 dark:border-emerald-400/25 dark:bg-emerald-400/8"
-        title="Auto-approuvé par une règle"
+        title="Auto-approved by a rule"
       >
         <ShieldCheck
           className="size-3 shrink-0 text-emerald-700 dark:text-emerald-300/90"
@@ -279,7 +279,7 @@ function renderEditDiff(name: string, i: Record<string, unknown>) {
   if (edits.length === 0) {
     return (
       <p className="px-3 py-2 font-mono text-[11px] text-[var(--text-muted)]">
-        (aucun edit)
+        (no edits)
       </p>
     );
   }

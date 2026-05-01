@@ -249,7 +249,7 @@ pub fn card_diff(worktree_path: &str, base_override: Option<&str>) -> Result<Dif
             cut.pop();
         }
         let mut s = String::from_utf8(cut).unwrap_or_default();
-        s.push_str("\n\n… (diff tronqué — taille au-delà de 256 KB) …\n");
+        s.push_str("\n\n… (diff truncated — size over 256 KB) …\n");
         s
     } else {
         raw

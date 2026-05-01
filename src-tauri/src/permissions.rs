@@ -60,10 +60,10 @@ pub fn list(conn: &Connection) -> Result<Vec<Rule>, DbError> {
 pub fn add(conn: &Connection, pattern: String, now: i64) -> Result<Rule, String> {
     let pattern = pattern.trim().to_string();
     if pattern.is_empty() {
-        return Err("règle vide".into());
+        return Err("empty rule".into());
     }
     if parse_pattern(&pattern).is_none() {
-        return Err(format!("règle invalide : {pattern}"));
+        return Err(format!("invalid rule: {pattern}"));
     }
     let id = uuid::Uuid::new_v4().to_string();
     conn.execute(

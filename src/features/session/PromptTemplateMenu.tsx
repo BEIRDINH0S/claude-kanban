@@ -97,20 +97,20 @@ export function PromptTemplateMenu({
           <div className="px-4 py-3 text-[12px] text-[var(--text-muted)]">
             {templates.length === 0 && commandCount === 0 && userCommandCount === 0 ? (
               <>
-                Aucune commande ni template.{" "}
+                No commands or templates.{" "}
                 {onOpenSettings && (
                   <button
                     type="button"
                     onClick={onOpenSettings}
                     className="text-[var(--text-secondary)] underline hover:text-[var(--text-primary)]"
                   >
-                    En créer dans les paramètres
+                    Create some in Settings
                   </button>
                 )}
                 .
               </>
             ) : (
-              <>Aucun résultat pour « {query} ».</>
+              <>No results for "{query}".</>
             )}
           </div>
         ) : (
@@ -118,7 +118,7 @@ export function PromptTemplateMenu({
             {commandCount > 0 && (
               <SectionHeader
                 icon={<Terminal className="size-3" strokeWidth={1.75} />}
-                label="Commandes"
+                label="Commands"
               />
             )}
             {commands.map((cmd, idx) => {
@@ -209,15 +209,15 @@ export function PromptTemplateMenu({
                           ].join(" ")}
                           title={
                             cmd.scope === "project"
-                              ? "Défini dans <projet>/.claude/commands"
-                              : "Défini dans ~/.claude/commands"
+                              ? "Defined in <project>/.claude/commands"
+                              : "Defined in ~/.claude/commands"
                           }
                         >
-                          {cmd.scope === "project" ? "projet" : "global"}
+                          {cmd.scope === "project" ? "project" : "global"}
                         </span>
                       </p>
                       <p className="mt-0.5 truncate text-[10.5px] text-[var(--text-muted)]">
-                        {cmd.description ?? "(pas de description)"}
+                        {cmd.description ?? "(no description)"}
                       </p>
                     </div>
                     {active && (

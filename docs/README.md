@@ -1,97 +1,119 @@
 # Landing page
 
-Landing page statique de claude-kanban, déployée sur GitHub Pages depuis ce
-dossier. **Pas de build step.** Tu édites les fichiers, tu push, GitHub
-Actions (`.github/workflows/pages.yml`) déploie en ~1 min.
+Static landing page for claude-kanban, deployed to GitHub Pages from this
+folder. **No build step.** Edit the files, push, GitHub Actions
+(`.github/workflows/pages.yml`) deploys in ~1 min.
 
 ## Structure
 
 ```
 docs/
-├── index.html              ← markup uniquement
-├── styles/                 ← un fichier CSS par concern
-│   ├── tokens.css          ← variables (couleurs, typo, spacing) — single source of truth
+├── index.html              ← markup only
+├── styles/                 ← one CSS file per concern
+│   ├── tokens.css          ← variables (colors, typography, spacing) — single source of truth
 │   ├── base.css            ← resets, layout primitives, buttons, theme toggle
 │   ├── atmosphere.css      ← gradient mesh + grid pattern + grain + aurora blobs
-│   ├── nav.css             ← top nav sticky
-│   ├── hero.css            ← bloc texte du hero + stage-frame du mockup
-│   ├── mock.css            ← le kanban animé (titlebar, columns, traveler, perm-pop)
+│   ├── nav.css             ← sticky top nav
+│   ├── hero.css            ← hero text block + mock stage-frame
+│   ├── mock.css            ← animated kanban (titlebar, columns, traveler, perm-pop)
 │   ├── sections.css        ← section-head, reveals, marquee, stats
-│   ├── bento.css           ← grille features + tous les mini-mockups par tuile
-│   ├── flow.css            ← cycle de vie 5 étapes
-│   ├── download.css        ← CTA + plateformes + warning premier lancement
+│   ├── bento.css           ← features grid + per-tile mini mockups
+│   ├── flow.css            ← 5-step lifecycle
+│   ├── download.css        ← CTA + platforms + first-launch warning
 │   └── footer.css
-├── scripts/                ← ES modules (auto-defer), un feature par fichier
-│   ├── theme.js            ← toggle dark/light + persistence localStorage
-│   ├── nav.js              ← border de la nav au scroll
-│   ├── reveal.js           ← IntersectionObserver pour les reveals au scroll
-│   ├── counters.js         ← animation des chiffres dans les stats
-│   ├── tilt.js             ← parallax 3D du mockup au mousemove
-│   └── tiles.js            ← spotlight qui suit le curseur sur les tuiles bento
-└── assets/                 ← images, vidéo de démo (optionnelle)
-    └── README.md           ← instructions pour ajouter demo.mp4
+├── scripts/                ← plain `defer` scripts, one feature per file
+│   ├── theme.js            ← dark/light toggle + localStorage persistence
+│   ├── nav.js              ← nav border on scroll
+│   ├── reveal.js           ← IntersectionObserver-driven reveals
+│   ├── counters.js         ← number animation in the stats
+│   ├── tilt.js             ← 3D parallax on the mock at mousemove
+│   ├── tiles.js            ← spotlight that follows the cursor over bento tiles
+│   └── downloads.js        ← rewrites the platform buttons to the latest release assets
+└── assets/                 ← images, optional demo video
+    └── README.md           ← instructions to drop a demo.mp4
 ```
 
-## Tâches courantes
+## Common tasks
 
-### Ajouter / éditer une feature dans la grille
+### Add or edit a feature in the grid
 
-1. Ouvre `index.html`, va dans `<!-- FEATURES (Bento) -->`
-2. Copie une `<article class="tile t-half">` existante
-3. Ajuste taille via `t-wide` (4 col), `t-half` (3 col) ou `t-third` (2 col).
-   La grille fait 6 colonnes — assure-toi que le total par rangée fait 6.
-4. Si la tuile a un mockup custom, ajoute les styles dans `styles/bento.css`
-   sous le commentaire « Per-tile mini mockups ».
+1. Open `index.html`, jump to `<!-- FEATURES (Bento) -->`.
+2. Copy an existing `<article class="tile t-half">`.
+3. Adjust the size with `t-wide` (4 cols), `t-half` (3 cols) or `t-third`
+   (2 cols). The grid is 6 columns wide — make sure each row sums to 6.
+4. If the tile has a custom mockup, add the styles in `styles/bento.css`
+   under the "Per-tile mini mockups" comment.
 
-### Changer une couleur, une typo, un spacing
+### Change a color, a font, a spacing
 
-Tout est dans `styles/tokens.css` via des CSS custom properties. Tu changes
-la valeur, ça se propage partout. Le thème light s'auto-flip via les mêmes
-noms de tokens — surchargés sous `:root[data-theme="light"]`.
+Everything lives in `styles/tokens.css` as CSS custom properties. Change
+the value, it propagates everywhere. The light theme auto-flips through
+the same token names — overridden under `:root[data-theme="light"]`.
 
-### Tweaker l'animation du kanban dans le hero
+### Tweak the kanban animation in the hero
 
-Toute l'animation vit dans `styles/mock.css`. La timeline est dans
-`@keyframes travel` (16s) — chaque phase (Todo / En cours / Review /
-Idle / Done) occupe ~16% du loop, avec ~4% de transition entre phases.
-Les autres animations (popup permission, badges d'état, border color)
-sont synchronisées sur la même durée 16s.
+The whole animation lives in `styles/mock.css`. The timeline is in
+`@keyframes travel` (16s) — each phase (Todo / In progress / Review /
+Idle / Done) takes ~16% of the loop, with ~4% transitions between phases.
+The other animations (permission popup, status badges, border color) are
+synchronized on the same 16s window.
 
-### Ajouter une section
+### Add a section
 
-1. `<section id="ma-section">` dans `index.html` avec un `.section-head`
-   qui suit le pattern existant (uppercase-tag + h2 + p)
-2. Si la section a son propre layout, crée `styles/ma-section.css` et
-   ajoute le `<link>` dans `index.html` après `sections.css`
-3. Pense au `.reveal` ou `.reveal-stagger` sur les blocs pour le scroll-in
+1. Add a `<section id="my-section">` in `index.html` with a `.section-head`
+   that follows the existing pattern (uppercase-tag + h2 + p).
+2. If the section needs its own layout, create `styles/my-section.css`
+   and add the `<link>` in `index.html` after `sections.css`.
+3. Don't forget `.reveal` or `.reveal-stagger` on blocks for scroll-in.
 
-### Ajouter une vraie vidéo de démo
+### Drop a real demo video
 
-Voir `assets/README.md` — instructions ffmpeg + comment dé-commenter le
-bloc `<video>` dans `index.html`.
+See `assets/README.md` — ffmpeg instructions plus how to uncomment the
+`<video>` block in `index.html`.
 
 ## Conventions
 
-- **CSS** : pas de framework, classes descriptives (kebab-case). Variables
-  systématiques pour tout ce qui se répète. Pas de `!important` sauf cas
-  rarissime (ex : reduced-motion override).
-- **JS** : `<script defer>` + IIFE — pas de globals, pas d'imports cross-fichiers.
-  Chaque fichier fait UNE chose, commentée en haut. On évite `type="module"`
-  exprès pour que la page s'ouvre direct en `file://` sans serveur (les modules
-  sont bloqués par CORS sur `file://` dans Chrome/Firefox).
-- **Progressive enhancement** : tout contenu reste visible si le JS échoue.
-  Les reveals au scroll ne sont activés QUE si `reveal.js` a tourné et a
-  ajouté `.reveals-armed` au `<body>`. Sans JS = animation off, contenu
-  visible immédiatement.
-- **HTML** : sémantique d'abord (`<header>`, `<main>`, `<section>`, `<article>`,
-  `<footer>`). Aria-labels sur les éléments décoratifs. SVG inline pour les
-  icônes (pas de dépendance externe).
+- **CSS**: no framework, descriptive class names (kebab-case). Systematic
+  variables for anything that repeats. No `!important` except for very
+  rare cases (e.g. reduced-motion overrides).
+- **JS**: `<script defer>` + IIFE — no globals, no cross-file imports.
+  Each file does ONE thing, commented at the top. We avoid `type="module"`
+  on purpose so the page opens straight from `file://` without a server
+  (modules get blocked by CORS on `file://` in Chrome/Firefox).
+- **Progressive enhancement**: every piece of content stays visible if JS
+  fails. Scroll reveals only fire if `reveal.js` ran and added
+  `.reveals-armed` to `<body>`. No JS = animation off, content visible
+  immediately.
+- **HTML**: semantic first (`<header>`, `<main>`, `<section>`, `<article>`,
+  `<footer>`). Aria-labels on decorative elements. Inline SVG for icons
+  (no external dep).
 
-## Déploiement
+## OG image
 
-Première fois :
+`og-image.svg` is the source for social-card previews (Twitter, Slack,
+Discord, LinkedIn). Most crawlers prefer PNG, so rasterize with:
+
+```bash
+brew install librsvg
+rsvg-convert -w 1200 -h 630 docs/og-image.svg -o docs/og-image.png
+```
+
+Then re-export whenever you tweak the SVG.
+
+## Analytics
+
+We ship a Plausible script tag (`<script defer data-domain="…">`). To
+enable it, register the deployment domain on Plausible (or another
+script-compatible analytics provider) and update `data-domain` in
+`index.html`. If the script 404s — for instance because the domain
+isn't registered yet — Plausible fails silently and the page works
+exactly as before.
+
+## Deployment
+
+First time:
 
 1. **Settings → Pages → Source = "GitHub Actions"**
 
-Ensuite chaque push sur `main` qui touche `docs/**` déclenche un déploiement
-auto. URL : <https://beirdinh0s.github.io/claude-kanban/>
+After that, every push to `main` that touches `docs/**` triggers an
+automatic deploy. URL: <https://beirdinh0s.github.io/claude-kanban/>

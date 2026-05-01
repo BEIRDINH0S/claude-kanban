@@ -26,7 +26,7 @@
  *  ──────────
  *  ≤880px : drop Idle and Done columns; hide traveler/perm-pop (animation
  *           assumes 5 columns).
- *  ≤560px : drop Review too — only Todo + En cours remain.
+ *  ≤560px : drop Review too — only Todo + In progress remain.
  * ────────────────────────────────────────────────────────────────────────── */
 
 .mock {
@@ -170,8 +170,9 @@
   line-height: 1.35;
   letter-spacing: -0.005em;
 }
-/* Preview line in a card — the "live message preview" feature in action.
-   Color is bumped from ink-3 to ink-2 for legibility at small font size. */
+/* Worktree path / branch shown under the title on a few mock cards. The
+   real app does not stream message text on cards — only metadata — so this
+   line is purely a worktree path or branch reference. */
 .mc-preview {
   margin-top: 6px;
   font-family: var(--font-mono);
@@ -181,21 +182,6 @@
   max-height: 28px;
   overflow: hidden;
 }
-
-/* On the "live" card (Claude is currently working), the preview gets a
-   subtle pulse + a blinking caret to evoke streaming text. */
-.mc.live .mc-preview {
-  color: oklch(0.92 0.06 240);
-  animation: mc-preview-pulse 2.4s ease-in-out infinite;
-}
-.mc.live .mc-preview::after {
-  content: "▌";
-  display: inline-block;
-  margin-left: 2px;
-  color: oklch(0.84 0.12 240);
-  animation: blink 1s steps(2) infinite;
-}
-@keyframes mc-preview-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
 .mc-meta {
   margin-top: 8px;
   display: flex; align-items: center; gap: 6px;
@@ -205,6 +191,11 @@
 .mc-meta .tag {
   padding: 1px 5px; border-radius: 4px;
   background: rgba(255,255,255,0.06);
+}
+/* Git-status badge variant: "+N" commits ahead of base, accent-tinted. */
+.mc-meta .tag.ahead {
+  color: oklch(0.84 0.12 240);
+  background: oklch(0.84 0.12 240 / 0.14);
 }
 
 /* ─── Spinner (used in live cards + traveler "working" state) ─────────────── */

@@ -47,7 +47,7 @@ export function CommandPalette() {
     const out: CommandItem[] = [];
     out.push({
       id: "new-task",
-      label: "Nouvelle tâche",
+      label: "New task",
       icon: <Plus className="size-3.5" strokeWidth={1.75} />,
       hint: "Action",
       run: () => {
@@ -60,30 +60,30 @@ export function CommandPalette() {
     });
     out.push({
       id: "projects",
-      label: "Projets · gérer / créer",
+      label: "Projects · manage / create",
       icon: <FolderKanban className="size-3.5" strokeWidth={1.75} />,
-      hint: "Aller à",
-      keywords: ["nouveau", "projet", "create"],
+      hint: "Go to",
+      keywords: ["new", "project", "create"],
       run: () => setView("projects"),
     });
     out.push({
       id: "usage",
-      label: "Usage · tokens & coût",
+      label: "Usage · tokens & cost",
       icon: <TrendingUp className="size-3.5" strokeWidth={1.75} />,
-      hint: "Aller à",
-      keywords: ["consommation", "token", "cost", "spend", "claude", "anthropic"],
+      hint: "Go to",
+      keywords: ["consumption", "token", "cost", "spend", "claude", "anthropic"],
       run: () => setView("usage"),
     });
     out.push({
       id: "settings",
-      label: "Paramètres",
+      label: "Settings",
       icon: <Settings className="size-3.5" strokeWidth={1.75} />,
-      hint: "Aller à",
+      hint: "Go to",
       run: () => setView("settings"),
     });
     out.push({
       id: "theme",
-      label: theme === "dark" ? "Passer en clair" : "Passer en sombre",
+      label: theme === "dark" ? "Switch to light" : "Switch to dark",
       icon:
         theme === "dark" ? (
           <Sun className="size-3.5" strokeWidth={1.75} />
@@ -91,7 +91,7 @@ export function CommandPalette() {
           <Moon className="size-3.5" strokeWidth={1.75} />
         ),
       hint: "Action",
-      keywords: ["theme", "thème", "dark", "light", "sombre", "clair"],
+      keywords: ["theme", "dark", "light"],
       run: () => toggleTheme(),
     });
     for (const p of projects) {
@@ -99,8 +99,8 @@ export function CommandPalette() {
         id: `project-${p.id}`,
         label: p.name,
         icon: <FolderKanban className="size-3.5" strokeWidth={1.75} />,
-        hint: p.archived ? "Projet · archivé" : "Projet",
-        keywords: [p.archived ? "archivé archive" : ""],
+        hint: p.archived ? "Project · archived" : "Project",
+        keywords: [p.archived ? "archived archive" : ""],
         run: () => setActiveProjectId(p.id),
       });
     }
@@ -109,7 +109,7 @@ export function CommandPalette() {
         id: `card-${c.id}`,
         label: c.title,
         icon: <IdCard className="size-3.5" strokeWidth={1.75} />,
-        hint: "Carte",
+        hint: "Card",
         keywords: [c.column, c.projectPath],
         run: () => openZoom(c.id),
       });
@@ -193,7 +193,7 @@ export function CommandPalette() {
                 run(cursor);
               }
             }}
-            placeholder="Cherche un projet, une carte, une action…"
+            placeholder="Search a project, card, action…"
             className="w-full bg-transparent text-[14px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
           />
         </div>
@@ -201,7 +201,7 @@ export function CommandPalette() {
         <ul className="max-h-[50vh] overflow-y-auto py-1">
           {filtered.length === 0 && (
             <li className="px-4 py-3 text-[12px] text-[var(--text-muted)]">
-              Rien ne correspond.
+              No matches.
             </li>
           )}
           {filtered.map((it, idx) => {

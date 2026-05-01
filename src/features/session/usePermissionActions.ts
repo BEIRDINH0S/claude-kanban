@@ -52,7 +52,7 @@ export function usePermissionActions(cardId: string) {
     } catch (e) {
       // Don't clear — the request is still pending in the sidecar, the
       // user should be able to try again.
-      setErr(`Réponse ignorée — ${String(e)}`);
+      setErr(`Response ignored — ${String(e)}`);
     } finally {
       setBusy(null);
     }
@@ -71,12 +71,12 @@ export function usePermissionActions(cardId: string) {
         await addRule(suggested);
       } catch (e) {
         // Non-fatal: surface as a warning but still try to approve.
-        setErr(`Règle non sauvée (${String(e)}) — j'approuve quand même.`);
+        setErr(`Rule not saved (${String(e)}) — approving anyway.`);
       }
       await respondPermission(cardId, pending.requestId, "allow");
       clearForCard(cardId);
     } catch (e) {
-      setErr(`Approbation ignorée — ${String(e)}`);
+      setErr(`Approval ignored — ${String(e)}`);
     } finally {
       setBusy(null);
     }

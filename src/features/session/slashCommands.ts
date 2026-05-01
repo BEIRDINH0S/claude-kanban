@@ -98,18 +98,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: "help",
     aliases: ["?"],
-    summary: "Liste les commandes disponibles",
+    summary: "List the available commands",
     usage: "/help",
     run: (_args, card) => {
       const lines = SLASH_COMMANDS.map(
         (c) => `${c.usage} — ${c.summary}`,
       ).join("\n");
-      pushFeedback(card.id, `Commandes disponibles :\n${lines}`);
+      pushFeedback(card.id, `Available commands:\n${lines}`);
     },
   },
   {
     name: "clear",
-    summary: "Efface le transcript local (la session SDK n'est pas affectée)",
+    summary: "Clear the local transcript (the SDK session is not affected)",
     usage: "/clear",
     run: (_args, card) => {
       // Clear the in-memory chat. The on-disk JSONL stays intact — the SDK
@@ -119,14 +119,14 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       useMessagesStore.getState().clear(card.id);
       useToastsStore.getState().push({
         message:
-          "Transcript local effacé. La session SDK garde son contexte ; ferme et rouvre la carte pour rehydrater depuis disque.",
+          "Local transcript cleared. The SDK session keeps its context; close and reopen the card to rehydrate from disk.",
         ttlMs: 5000,
       });
     },
   },
   {
     name: "cost",
-    summary: "Affiche le coût cumulé pour cette carte",
+    summary: "Show the running cost for this card",
     usage: "/cost",
     run: (_args, card) => {
       const data = useUsageIndexStore.getState().data;
@@ -138,64 +138,64 @@ export const SLASH_COMMANDS: SlashCommand[] = [
         : "";
       pushFeedback(
         card.id,
-        `Coût pour cette carte : ${formatCost(cost)}${breakdown}`,
+        `Cost for this card: ${formatCost(cost)}${breakdown}`,
       );
     },
   },
   {
     name: "plan",
-    summary: "Active Plan mode pour la prochaine session",
+    summary: "Enable Plan mode for the next session",
     usage: "/plan",
     run: async (_args, card) => {
       await patchConfig(card, { permissionMode: "plan" });
       pushFeedback(
         card.id,
-        "Plan mode activé. Au prochain démarrage, Claude rédigera un plan avant d'exécuter.",
+        "Plan mode enabled. On the next session start, Claude will draft a plan before running anything.",
       );
     },
   },
   {
     name: "accept-edits",
     aliases: ["acceptEdits"],
-    summary: "Mode acceptEdits (auto-approve Edit/Write/MultiEdit)",
+    summary: "acceptEdits mode (auto-approve Edit/Write/MultiEdit)",
     usage: "/accept-edits",
     run: async (_args, card) => {
       await patchConfig(card, { permissionMode: "acceptEdits" });
       pushFeedback(
         card.id,
-        "Mode acceptEdits activé pour la prochaine session. Bash & co restent en demande.",
+        "acceptEdits mode enabled for the next session. Bash & co still ask.",
       );
     },
   },
   {
     name: "default-mode",
     aliases: ["default"],
-    summary: "Repasse en mode default (demande pour chaque outil)",
+    summary: "Switch back to default (asks for every tool)",
     usage: "/default-mode",
     run: async (_args, card) => {
       await patchConfig(card, { permissionMode: null });
       pushFeedback(
         card.id,
-        "Mode permission réinitialisé au défaut. Chaque outil sera redemandé.",
+        "Permission mode reset to default. Every tool will ask again.",
       );
     },
   },
   {
     name: "bypass",
     aliases: ["bypassPermissions"],
-    summary: "⚠️ bypassPermissions — Claude exécute tout sans confirmation",
+    summary: "⚠️ bypassPermissions — Claude runs everything without asking",
     usage: "/bypass",
     run: async (_args, card) => {
       await patchConfig(card, { permissionMode: "bypassPermissions" });
       pushFeedback(
         card.id,
-        "⚠️ bypassPermissions activé. Aucune demande de permission au prochain démarrage.",
+        "⚠️ bypassPermissions enabled. No permission prompt on the next session start.",
       );
     },
   },
   {
     name: "model",
-    summary: "Change le modèle (sonnet/opus/haiku ou claude-…). Vide = défaut.",
+    summary: "Change the model (sonnet/opus/haiku or claude-…). Empty = default.",
     usage: "/model <sonnet|opus|haiku|claude-…>",
     run: async (args, card) => {
       const next = args.trim();
@@ -206,7 +206,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
         const isFull = next.startsWith("claude-");
         if (!isAlias && !isFull) {
           throw new Error(
-            `Modèle invalide « ${next} » — attendu sonnet/opus/haiku ou claude-…`,
+            `Invalid model "${next}" — expected sonnet/opus/haiku or claude-…`,
           );
         }
       }
@@ -214,60 +214,60 @@ export const SLASH_COMMANDS: SlashCommand[] = [
       pushFeedback(
         card.id,
         next
-          ? `Modèle réglé sur « ${next} » pour la prochaine session.`
-          : "Modèle remis au défaut du SDK.",
+          ? `Model set to "${next}" for the next session.`
+          : "Model reset to the SDK default.",
       );
     },
   },
   {
     name: "max-turns",
     aliases: ["maxTurns"],
-    summary: "Plafonne le nombre de tours (vide ou 0 = pas de limite)",
+    summary: "Cap the number of turns (empty or 0 = no limit)",
     usage: "/max-turns <n>",
     run: async (args, card) => {
       const trimmed = args.trim();
       if (!trimmed) {
         await patchConfig(card, { maxTurns: null });
-        pushFeedback(card.id, "max-turns : limite retirée.");
+        pushFeedback(card.id, "max-turns: limit removed.");
         return;
       }
       const n = Number.parseInt(trimmed, 10);
       if (!Number.isFinite(n) || n <= 0) {
-        throw new Error(`max-turns invalide « ${trimmed} » — entier > 0 attendu`);
+        throw new Error(`Invalid max-turns "${trimmed}" — expected an integer > 0`);
       }
       await patchConfig(card, { maxTurns: n });
-      pushFeedback(card.id, `max-turns : ${n} pour la prochaine session.`);
+      pushFeedback(card.id, `max-turns: ${n} for the next session.`);
     },
   },
   {
     name: "stop",
-    summary: "Stoppe la session live (équivalent du bouton Stop)",
+    summary: "Stop the live session (same as the Stop button)",
     usage: "/stop",
     run: async (_args, card) => {
       const liveSessionIds = useUiStore.getState().liveSessionIds;
       if (!card.sessionId || !liveSessionIds.has(card.sessionId)) {
-        throw new Error("Aucune session live à stopper.");
+        throw new Error("No live session to stop.");
       }
       await ipcStopSession(card.id);
-      pushFeedback(card.id, "Session stoppée.");
+      pushFeedback(card.id, "Session stopped.");
     },
   },
   {
     name: "config",
-    summary: "Affiche la configuration courante de la carte",
+    summary: "Show the current card configuration",
     usage: "/config",
     run: (_args, card) => {
       const lines: string[] = [];
-      lines.push(`model               = ${card.model ?? "(défaut SDK)"}`);
-      lines.push(`permissionMode      = ${card.permissionMode ?? "(défaut)"}`);
+      lines.push(`model               = ${card.model ?? "(SDK default)"}`);
+      lines.push(`permissionMode      = ${card.permissionMode ?? "(default)"}`);
       lines.push(
-        `maxTurns            = ${card.maxTurns != null ? card.maxTurns : "(illimité)"}`,
+        `maxTurns            = ${card.maxTurns != null ? card.maxTurns : "(unlimited)"}`,
       );
       const dirs = card.additionalDirectories
         ? card.additionalDirectories.split("\n").filter(Boolean)
         : [];
       lines.push(
-        `additionalDirs      = ${dirs.length === 0 ? "(aucun)" : dirs.join(", ")}`,
+        `additionalDirs      = ${dirs.length === 0 ? "(none)" : dirs.join(", ")}`,
       );
       lines.push(
         `systemPromptAppend  = ${
@@ -275,10 +275,10 @@ export const SLASH_COMMANDS: SlashCommand[] = [
             ? card.systemPromptAppend.length > 80
               ? `${card.systemPromptAppend.slice(0, 80)}…`
               : card.systemPromptAppend
-            : "(vide)"
+            : "(empty)"
         }`,
       );
-      pushFeedback(card.id, `Config carte :\n${lines.join("\n")}`);
+      pushFeedback(card.id, `Card config:\n${lines.join("\n")}`);
     },
   },
 ];

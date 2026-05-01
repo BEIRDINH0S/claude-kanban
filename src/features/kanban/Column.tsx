@@ -37,7 +37,7 @@ export function Column({ def, cards }: Props) {
         type="button"
         ref={setNodeRef}
         onClick={toggleDoneCollapsed}
-        title={`Déplier la colonne ${def.label}`}
+        title={`Expand the ${def.label} column`}
         className={[
           "group flex h-full w-10 shrink-0 cursor-pointer flex-col items-center justify-start gap-2 rounded-2xl px-1.5 py-3 transition-all duration-150",
           dragging ? "ring-1 ring-[var(--glass-stroke)]" : "",
@@ -86,8 +86,8 @@ export function Column({ def, cards }: Props) {
           <button
             type="button"
             onClick={toggleDoneCollapsed}
-            title="Replier"
-            aria-label="Replier la colonne Done"
+            title="Collapse"
+            aria-label="Collapse the Done column"
             className="rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
           >
             <ChevronRight className="size-3.5" strokeWidth={1.75} />
@@ -126,7 +126,7 @@ export function Column({ def, cards }: Props) {
                 : "",
             ].join(" ")}
           >
-            {cards.length === 0 && (dragging ? "déposer ici" : "empty")}
+            {cards.length === 0 && (dragging ? "drop here" : "empty")}
           </div>
         </div>
       </SortableContext>

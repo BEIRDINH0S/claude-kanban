@@ -21,24 +21,24 @@ export interface PromptTemplate {
 const DEFAULT_TEMPLATES: PromptTemplate[] = [
   {
     id: "seed-implement",
-    name: "Implémenter une feature",
+    name: "Implement a feature",
     body:
-      "Lis le code concerné, propose un plan court (3–5 étapes), puis " +
-      "implémente. Ne commit pas avant que je valide.",
+      "Read the relevant code, propose a short plan (3–5 steps), then " +
+      "implement it. Do not commit until I approve.",
   },
   {
     id: "seed-review",
-    name: "Review du diff",
+    name: "Review the diff",
     body:
-      "Fais une review du diff actuel : qualité, edge cases, risques. " +
-      "Pointe les fichiers / lignes précises. Pas de fix automatique.",
+      "Review the current diff: quality, edge cases, risks. Point at " +
+      "specific files / lines. No automatic fixes.",
   },
   {
     id: "seed-tests",
-    name: "Écrire des tests",
+    name: "Write tests",
     body:
-      "Ajoute des tests pour la dernière modif. Couvre le happy path + au " +
-      "moins 2 cas limites. Lance la suite et corrige ce qui casse.",
+      "Add tests for the last change. Cover the happy path plus at least " +
+      "2 edge cases. Run the suite and fix anything that breaks.",
   },
 ];
 

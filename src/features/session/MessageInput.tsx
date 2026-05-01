@@ -220,7 +220,7 @@ export function MessageInput({ onSend, disabled, placeholder, cardId }: Props) {
         : undefined;
       if (!card) {
         pushToast({
-          message: "Impossible d'exécuter la commande — carte introuvable.",
+          message: "Can't run the command — card not found.",
         });
         return;
       }
@@ -236,7 +236,7 @@ export function MessageInput({ onSend, disabled, placeholder, cardId }: Props) {
         }
       } catch (e) {
         pushToast({
-          message: `Commande échouée — ${String(e).slice(0, 200)}`,
+          message: `Command failed — ${String(e).slice(0, 200)}`,
           ttlMs: 6000,
         });
       }
@@ -312,7 +312,7 @@ export function MessageInput({ onSend, disabled, placeholder, cardId }: Props) {
     if (!card) return;
     void Promise.resolve(cmd.run("", card)).catch((e) => {
       pushToast({
-        message: `Commande échouée — ${String(e).slice(0, 200)}`,
+        message: `Command failed — ${String(e).slice(0, 200)}`,
         ttlMs: 6000,
       });
     });
@@ -345,7 +345,7 @@ export function MessageInput({ onSend, disabled, placeholder, cardId }: Props) {
     historyDraft.current = "";
     void Promise.resolve(onSend(cmd.body)).catch((e) => {
       pushToast({
-        message: `Commande Claude Code échouée — ${String(e).slice(0, 200)}`,
+        message: `Claude Code command failed — ${String(e).slice(0, 200)}`,
         ttlMs: 6000,
       });
     });
@@ -523,7 +523,7 @@ export function MessageInput({ onSend, disabled, placeholder, cardId }: Props) {
                 void submit();
               }
             }}
-            placeholder={placeholder ?? "Réponds à Claude…"}
+            placeholder={placeholder ?? "Reply to Claude…"}
             disabled={disabled}
             rows={1}
             className="block w-full resize-none bg-transparent font-mono text-[13px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"

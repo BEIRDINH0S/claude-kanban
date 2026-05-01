@@ -84,8 +84,8 @@ function CompactView({
       onClick={onClick}
       title={
         stale
-          ? "Synchro Anthropic en cours · valeurs précédentes — clique pour ouvrir Usage"
-          : "Pourcentage de tes fenêtres d'abonnement — clique pour ouvrir Usage"
+          ? "Anthropic sync in progress · last known values — click to open Usage"
+          : "Subscription window utilization — click to open Usage"
       }
       className="flex items-center gap-2 rounded-lg border border-[var(--glass-stroke)] px-2 py-1 hover:border-[var(--color-accent-ring)]"
     >
@@ -93,7 +93,7 @@ function CompactView({
         <CompactBar label="5h" pct={fiveHour} stale={stale} />
       )}
       {sevenDay != null && (
-        <CompactBar label="7j" pct={sevenDay} stale={stale} />
+        <CompactBar label="7d" pct={sevenDay} stale={stale} />
       )}
     </button>
   );
@@ -152,13 +152,13 @@ function FullView({
       <header className="flex items-baseline justify-between gap-3">
         <div>
           <p className="text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-            Abonnement Claude
+            Claude subscription
           </p>
           <h2 className="mt-1 text-[14px] font-semibold text-[var(--text-primary)]">
             {data?.planName ?? "—"}
             {data?.planName && stale && (
               <span className="ml-2 font-mono text-[10.5px] text-amber-700 dark:text-amber-300/80">
-                synchro…
+                syncing…
               </span>
             )}
           </h2>
@@ -167,9 +167,9 @@ function FullView({
           type="button"
           onClick={() => void refresh(true)}
           disabled={isLoading}
-          aria-label="Rafraîchir"
+          aria-label="Refresh"
           className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/5"
-          title="Forcer un rafraîchissement (ignore le cache 5 min)"
+          title="Force a refresh (ignores the 5-minute cache)"
         >
           <RefreshCw
             className={`size-3.5 ${isLoading ? "animate-spin" : ""}`}
@@ -180,24 +180,24 @@ function FullView({
 
       {data == null ? (
         <p className="mt-3 font-mono text-[11px] text-[var(--text-muted)]">
-          Chargement…
+          Loading…
         </p>
       ) : data.apiUnavailable && !stale ? (
         <p className="mt-3 font-mono text-[11px] text-amber-700 dark:text-amber-300/80">
-          {errorHint ?? "Indisponible"}
+          {errorHint ?? "Unavailable"}
         </p>
       ) : (
         <div className="mt-3 flex flex-col gap-3">
           <BigBar
-            label="Fenêtre 5h"
-            sublabel="rolling — comme la limite de session Claude Code"
+            label="5h window"
+            sublabel="rolling — same as the Claude Code session limit"
             pct={data.fiveHour}
             resetIso={data.fiveHourResetAt}
             stale={stale}
           />
           <BigBar
-            label="Fenêtre 7 jours"
-            sublabel="weekly — limite hebdo de l'abonnement"
+            label="7-day window"
+            sublabel="weekly — the subscription's weekly cap"
             pct={data.sevenDay}
             resetIso={data.sevenDayResetAt}
             stale={stale}

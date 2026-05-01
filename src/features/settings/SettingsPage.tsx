@@ -86,21 +86,21 @@ export function SettingsPage() {
       <div className="mx-auto w-full max-w-[640px] px-6 py-6">
         <header>
           <p className="text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-            Paramètres
+            Settings
           </p>
           <h1 className="mt-1 text-[15px] font-semibold text-[var(--text-primary)]">
-            Préférences et données
+            Preferences and data
           </h1>
         </header>
 
         {/*
          * Sections grouped by concern. Each `Category` block is a logical
-         * theme (Notifications, Permissions, Claude, Données, Usage); the
+         * theme (Notifications, Permissions, Claude, Data, Usage); the
          * cards inside are individual settings. Keep the order roughly
          * "user-facing toggles → data ops → diagnostics".
          */}
 
-        <Category title="Compte Claude">
+        <Category title="Claude account">
           <AccountSection />
         </Category>
 
@@ -112,7 +112,7 @@ export function SettingsPage() {
           <PermissionRulesSection />
         </Category>
 
-        <Category title="Raccourcis clavier">
+        <Category title="Keyboard shortcuts">
           <ShortcutsSection />
         </Category>
 
@@ -120,7 +120,7 @@ export function SettingsPage() {
           <PromptTemplatesSection />
         </Category>
 
-        <Category title="Cartes">
+        <Category title="Cards">
           <DefaultWorktreeSection />
         </Category>
 
@@ -133,7 +133,7 @@ export function SettingsPage() {
           </Category>
         )}
 
-        <Category title="Données">
+        <Category title="Data">
           <ProjectDataSection />
         </Category>
 
@@ -253,13 +253,13 @@ function NotificationsSection() {
           strokeWidth={1.75}
         />
       }
-      title="Notifier à la fin d'un tour"
-      subtitle="Notification système quand Claude termine un tour, sauf si la carte est ouverte en zoom. Permet de lancer plusieurs sessions et d'aller faire autre chose."
+      title="Notify when a turn ends"
+      subtitle="System notification when Claude finishes a turn, unless the card is open in zoom view. Lets you fire several sessions and go do something else."
       trailing={
         <Toggle
           enabled={enabled}
           onToggle={toggle}
-          ariaLabel={enabled ? "Désactiver" : "Activer"}
+          ariaLabel={enabled ? "Disable" : "Enable"}
         />
       }
     />
@@ -267,15 +267,15 @@ function NotificationsSection() {
 }
 
 // -----------------------------------------------------------------------------
-// Compte Claude — drives `claude login` through a PTY, paste flow handled in-app
+// Claude account — drives `claude login` through a PTY, paste flow handled in-app
 // -----------------------------------------------------------------------------
 
 /**
  * Account state. Three visual modes:
  *   1. Loading — first read from disk (very fast)
- *   2. Logged out — single "Se connecter" CTA that opens the modal which
+ *   2. Logged out — single "Sign in" CTA that opens the modal which
  *      runs `claude login` for the user (no terminal, just an URL + paste box)
- *   3. Logged in — email + plan badge + "Se déconnecter"
+ *   3. Logged in — email + plan badge + "Sign out"
  *
  * The Rust side emits `auth-changed` whenever ~/.claude/.credentials.json
  * is created / modified / deleted (the credentials watcher), so the UI
@@ -354,9 +354,9 @@ function AccountSection() {
             strokeWidth={1.75}
           />
         }
-        title="Compte Claude"
+        title="Claude account"
         subtitle={
-          <span className="font-mono text-[10.5px]">chargement…</span>
+          <span className="font-mono text-[10.5px]">loading…</span>
         }
       />
     );
@@ -377,8 +377,8 @@ function AccountSection() {
               strokeWidth={1.75}
             />
           }
-          title="Binaire Claude introuvable"
-          subtitle="Le binaire `claude` bundlé avec l'app est manquant ou inaccessible (antivirus, install corrompu...). Réinstalle l'app, ou installe Claude Code en global puis relance."
+          title="Claude binary not found"
+          subtitle="The `claude` binary bundled with the app is missing or unreachable (antivirus, corrupted install…). Reinstall the app, or install Claude Code globally and relaunch."
           trailing={
             <button
               type="button"
@@ -390,7 +390,7 @@ function AccountSection() {
               className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)]"
             >
               <ExternalLink className="size-3.5" strokeWidth={1.75} />
-              Doc d'install
+              Install docs
             </button>
           }
         />
@@ -406,8 +406,8 @@ function AccountSection() {
               strokeWidth={1.75}
             />
           }
-          title="Pas connecté"
-          subtitle="Connecte-toi à Claude Code. On lance `claude login` officiel — zéro impersonation, ton compte ne risque rien."
+          title="Not signed in"
+          subtitle="Sign in to Claude Code. We run the official `claude login` — zero impersonation, your account is safe."
           trailing={
             <button
               type="button"
@@ -415,7 +415,7 @@ function AccountSection() {
               className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)]"
             >
               <LogIn className="size-3.5" strokeWidth={1.75} />
-              Se connecter
+              Sign in
             </button>
           }
         >
@@ -448,7 +448,7 @@ function AccountSection() {
           strokeWidth={1.75}
         />
       }
-      title={status.email ?? "Connecté"}
+      title={status.email ?? "Signed in"}
       subtitle={
         <div className="flex flex-col gap-0.5">
           {status.planName && (
@@ -471,8 +471,8 @@ function AccountSection() {
               }`}
             >
               {status.expired
-                ? `Token expiré — Claude Code va le rafraîchir tout seul à la prochaine session`
-                : `Token valide jusqu'au ${expiresHuman}`}
+                ? `Token expired — Claude Code will refresh it on the next session`
+                : `Token valid until ${expiresHuman}`}
             </span>
           )}
         </div>
@@ -485,7 +485,7 @@ function AccountSection() {
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-red-400 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <LogOut className="size-3.5" strokeWidth={1.75} />
-          {logoutBusy ? "…" : "Se déconnecter"}
+          {logoutBusy ? "…" : "Sign out"}
         </button>
       }
     >
@@ -654,10 +654,10 @@ function CliLoginModal({
         <header className="flex items-start justify-between">
           <div>
             <p className="text-[11px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-              Connexion
+              Sign in
             </p>
             <h2 className="mt-1 text-lg font-semibold text-[var(--text-primary)]">
-              Se connecter à Claude Code
+              Sign in to Claude Code
             </h2>
           </div>
           <button
@@ -665,7 +665,7 @@ function CliLoginModal({
             onClick={onClose}
             disabled={phase === "submitting"}
             className="-mt-1 -mr-1 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/5"
-            aria-label="Fermer"
+            aria-label="Close"
           >
             <X className="size-4" strokeWidth={1.5} />
           </button>
@@ -673,7 +673,7 @@ function CliLoginModal({
 
         {phase === "starting" && (
           <p className="mt-5 font-mono text-[12px] text-[var(--text-muted)]">
-            Lancement de <span className="text-[var(--text-secondary)]">claude login</span>…
+            Starting <span className="text-[var(--text-secondary)]">claude login</span>…
           </p>
         )}
 
@@ -681,8 +681,8 @@ function CliLoginModal({
           <div className="mt-5 flex flex-col gap-4">
             <Step
               num={1}
-              title="Autorise l'accès dans le navigateur"
-              detail="On a ouvert la page d'autorisation Anthropic. Si elle ne s'est pas ouverte, copie l'URL ci-dessous."
+              title="Authorize access in your browser"
+              detail="We opened Anthropic's authorization page. If it didn't open, copy the URL below."
             >
               <div className="mt-2 flex items-center gap-2">
                 <code className="flex-1 truncate rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2 py-1.5 font-mono text-[10.5px] text-[var(--text-secondary)] dark:bg-white/5">
@@ -693,7 +693,7 @@ function CliLoginModal({
                   onClick={() => void handleCopyUrl()}
                   className="rounded-lg border border-[var(--glass-stroke)] px-2 py-1.5 text-[11px] text-[var(--text-secondary)] hover:border-[var(--color-accent-ring)]"
                 >
-                  {copyHint === "copied" ? "Copié ✓" : "Copier"}
+                  {copyHint === "copied" ? "Copied ✓" : "Copy"}
                 </button>
                 <button
                   type="button"
@@ -701,15 +701,15 @@ function CliLoginModal({
                   className="flex items-center gap-1 rounded-lg border border-[var(--glass-stroke)] px-2 py-1.5 text-[11px] text-[var(--text-secondary)] hover:border-[var(--color-accent-ring)]"
                 >
                   <ExternalLink className="size-3" strokeWidth={1.75} />
-                  Ouvrir
+                  Open
                 </button>
               </div>
             </Step>
 
             <Step
               num={2}
-              title="Colle le code reçu"
-              detail="Anthropic affiche un code après l'autorisation. Copie-le et colle-le ici."
+              title="Paste the code you received"
+              detail="Anthropic shows a code after authorization. Copy it and paste it here."
             >
               <textarea
                 ref={codeRef}
@@ -737,7 +737,7 @@ function CliLoginModal({
                   onClick={onClose}
                   className="rounded-lg px-3 py-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 >
-                  Annuler
+                  Cancel
                 </button>
                 <button
                   type="button"
@@ -745,7 +745,7 @@ function CliLoginModal({
                   disabled={!code.trim()}
                   className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                 >
-                  Valider
+                  Submit
                 </button>
               </div>
             </Step>
@@ -760,7 +760,7 @@ function CliLoginModal({
 
         {phase === "submitting" && (
           <p className="mt-5 font-mono text-[12px] text-[var(--text-muted)]">
-            Échange du code en cours…
+            Exchanging code…
           </p>
         )}
 
@@ -770,7 +770,7 @@ function CliLoginModal({
               ✓
             </span>
             <p className="text-[13px] text-[var(--text-primary)]">
-              Connecté. La fenêtre se ferme…
+              Signed in. Closing…
             </p>
           </div>
         )}
@@ -778,7 +778,7 @@ function CliLoginModal({
         {phase === "failed" && (
           <div className="mt-5 flex flex-col gap-3">
             <p className="font-mono text-[11.5px] break-words text-red-700 dark:text-red-400">
-              {error ?? "Connexion échouée."}
+              {error ?? "Sign-in failed."}
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
@@ -786,14 +786,14 @@ function CliLoginModal({
                 onClick={onClose}
                 className="rounded-lg px-3 py-1.5 text-[12px] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               >
-                Fermer
+                Close
               </button>
               <button
                 type="button"
                 onClick={handleRetry}
                 className="rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)]"
               >
-                Réessayer
+                Retry
               </button>
             </div>
           </div>
@@ -873,19 +873,19 @@ function DefaultWorktreeSection() {
           strokeWidth={1.75}
         />
       }
-      title="Par défaut, créer un git worktree"
-      subtitle="Si activé, la case « Créer un git worktree dédié » de la modale de création de carte est cochée par défaut. Pratique quand tu lances 5 cartes par jour sur le même repo et veux toujours l'isolement."
+      title="Create a git worktree by default"
+      subtitle='If enabled, the "Create a dedicated git worktree" checkbox in the new-card modal is ticked by default. Handy when you run 5 cards a day on the same repo and always want isolation.'
       trailing={
         <Toggle
           enabled={enabled}
           onToggle={() => void toggle()}
-          ariaLabel={enabled ? "Désactiver" : "Activer"}
+          ariaLabel={enabled ? "Disable" : "Enable"}
         />
       }
     >
       {!hydrated && (
         <p className="mt-2 font-mono text-[10.5px] text-[var(--text-muted)]">
-          chargement…
+          loading…
         </p>
       )}
     </Card>
@@ -934,18 +934,16 @@ function PermissionRulesSection() {
           strokeWidth={1.75}
         />
       }
-      title="Permissions auto-approuvées"
+      title="Auto-approved permissions"
       subtitle={
         <>
-          Règles qui laissent passer un tool sans demander confirmation.
-          Format :{" "}
+          Rules that let a tool through without asking. Format:{" "}
           <code className="font-mono text-[11px]">Read</code>,{" "}
           <code className="font-mono text-[11px]">Bash(npm *)</code>,{" "}
           <code className="font-mono text-[11px]">
             Edit(/Users/erwan/code/**)
           </code>{" "}
-          — <code className="font-mono text-[11px]">*</code> matche n'importe
-          quoi.
+          — <code className="font-mono text-[11px]">*</code> matches anything.
         </>
       }
     >
@@ -967,7 +965,7 @@ function PermissionRulesSection() {
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus className="size-3.5" strokeWidth={1.75} />
-          Ajouter
+          Add
         </button>
       </div>
 
@@ -980,7 +978,7 @@ function PermissionRulesSection() {
       <ul className="mt-3 flex flex-col gap-1">
         {rules.length === 0 && (
           <li className="font-mono text-[11px] text-[var(--text-muted)]">
-            Aucune règle — chaque tool demande confirmation.
+            No rules — every tool asks for confirmation.
           </li>
         )}
         {rules.map((r) => (
@@ -994,7 +992,7 @@ function PermissionRulesSection() {
             <button
               type="button"
               onClick={() => void remove(r.id)}
-              aria-label="Supprimer la règle"
+              aria-label="Remove rule"
               className="rounded-md p-1 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-black/5 hover:text-red-400 group-hover:opacity-100 dark:hover:bg-white/5"
             >
               <Trash2 className="size-3" strokeWidth={1.75} />
@@ -1030,19 +1028,19 @@ const RUNTIME_OPTIONS: {
     value: "auto",
     label: "Auto",
     hint:
-      "Utilise le claude natif s'il est trouvé, sinon retombe sur WSL (Windows).",
+      "Use the native claude if found, otherwise fall back to WSL (Windows).",
   },
   {
     value: "native",
-    label: "Natif",
+    label: "Native",
     hint:
-      "Force le binaire claude livré avec le SDK ou installé sur le système hôte.",
+      "Force the claude binary shipped with the SDK or installed on the host system.",
   },
   {
     value: "wsl",
     label: "WSL",
     hint:
-      "Force l'utilisation du claude installé dans WSL. Le sidecar génère un shim wsl claude %* à la volée — plus besoin du claude.bat manuel.",
+      "Force the claude installed inside WSL. The sidecar generates a `wsl claude %*` shim on the fly — no manual `claude.bat` needed.",
   },
 ];
 
@@ -1100,8 +1098,8 @@ function ClaudeRuntimeSection() {
           strokeWidth={1.75}
         />
       }
-      title="Runtime Claude"
-      subtitle="Choisis quel binaire claude le sidecar doit utiliser. Pertinent surtout sur Windows quand ton install vit dans WSL (auth, MCP servers, ~/.claude config tous côté Linux)."
+      title="Claude runtime"
+      subtitle="Pick which claude binary the sidecar should use. Mainly relevant on Windows when your install lives inside WSL (auth, MCP servers, ~/.claude config all on the Linux side)."
     >
       <div className="mt-3 flex flex-col gap-1.5">
         {RUNTIME_OPTIONS.map((opt) => {
@@ -1147,7 +1145,7 @@ function ClaudeRuntimeSection() {
       {/* Status line — what the sidecar actually resolved at boot. */}
       <div className="mt-3 rounded-lg bg-black/5 px-3 py-2 dark:bg-white/5">
         <p className="font-mono text-[11px] text-[var(--text-muted)]">
-          État au boot ·{" "}
+          Boot state ·{" "}
           <span className="text-[var(--text-secondary)]">
             runtime = {effectiveRuntime ?? "?"}
           </span>{" "}
@@ -1163,7 +1161,7 @@ function ClaudeRuntimeSection() {
         </p>
         {showRestartHint && (
           <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300/90">
-            Redémarre l'app pour appliquer le nouveau runtime ({pref}).
+            Restart the app to apply the new runtime ({pref}).
           </p>
         )}
       </div>
@@ -1178,7 +1176,7 @@ function ClaudeRuntimeSection() {
 }
 
 // -----------------------------------------------------------------------------
-// Données — export / import projet
+// Data — project export / import
 // -----------------------------------------------------------------------------
 
 function ProjectDataSection() {
@@ -1207,7 +1205,7 @@ function ProjectDataSection() {
         .replace(/^-+|-+$/g, "")
         .toLowerCase();
       const path = await save({
-        defaultPath: `${safeName || "projet"}.kanban.json`,
+        defaultPath: `${safeName || "project"}.kanban.json`,
         filters: [{ name: "JSON", extensions: ["json"] }],
       });
       if (typeof path !== "string") {
@@ -1215,7 +1213,7 @@ function ProjectDataSection() {
         return;
       }
       await exportProjectToFile(activeProject.id, path);
-      setMessage({ kind: "ok", text: `Exporté vers ${path}` });
+      setMessage({ kind: "ok", text: `Exported to ${path}` });
     } catch (e) {
       setMessage({ kind: "err", text: String(e) });
     } finally {
@@ -1241,7 +1239,7 @@ function ProjectDataSection() {
       setActiveProjectId(project.id);
       setMessage({
         kind: "ok",
-        text: `Importé : ${project.name} (lecture seule)`,
+        text: `Imported: ${project.name} (read only)`,
       });
     } catch (e) {
       setMessage({ kind: "err", text: String(e) });
@@ -1259,11 +1257,11 @@ function ProjectDataSection() {
             strokeWidth={1.75}
           />
         }
-        title="Exporter le projet courant"
+        title="Export the current project"
         subtitle={
           activeProject
-            ? `« ${activeProject.name} » → fichier JSON. Les sessions Claude live ne sont pas exportées (elles vivent en mémoire).`
-            : "Sélectionne un projet dans la sidebar pour pouvoir l'exporter."
+            ? `"${activeProject.name}" → JSON file. Live Claude sessions are not exported (they live in memory).`
+            : "Pick a project in the sidebar to enable export."
         }
         trailing={
           <button
@@ -1273,7 +1271,7 @@ function ProjectDataSection() {
             className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
             <Download className="size-3.5" strokeWidth={1.75} />
-            {busy === "export" ? "…" : "Exporter"}
+            {busy === "export" ? "…" : "Export"}
           </button>
         }
       />
@@ -1285,8 +1283,8 @@ function ProjectDataSection() {
             strokeWidth={1.75}
           />
         }
-        title="Importer un dump"
-        subtitle="Charge un projet depuis un JSON. Le projet importé est marqué en lecture seule (snapshot d'inspection — pas de drag, pas de nouvelles cartes, pas de session Claude)."
+        title="Import a dump"
+        subtitle="Load a project from a JSON file. The imported project is marked read only (inspection snapshot — no drag, no new cards, no Claude session)."
         trailing={
           <button
             type="button"
@@ -1295,7 +1293,7 @@ function ProjectDataSection() {
             className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Upload className="size-3.5" strokeWidth={1.75} />
-            {busy === "import" ? "…" : "Importer…"}
+            {busy === "import" ? "…" : "Import…"}
           </button>
         }
       />
@@ -1367,12 +1365,13 @@ function PromptTemplatesSection() {
           strokeWidth={1.75}
         />
       }
-      title="Templates de prompt"
+      title="Prompt templates"
       subtitle={
         <>
-          Snippets réutilisables, accessibles depuis l'input d'une carte en
-          tapant <code className="font-mono text-[11px]">/</code>. Le menu
-          se filtre sur le nom à mesure que tu tapes ; <kbd className="font-mono text-[11px]">Entrée</kbd> ou <kbd className="font-mono text-[11px]">Tab</kbd> insère.
+          Reusable snippets, accessible from a card's input by typing{" "}
+          <code className="font-mono text-[11px]">/</code>. The menu filters
+          by name as you type; <kbd className="font-mono text-[11px]">Enter</kbd> or{" "}
+          <kbd className="font-mono text-[11px]">Tab</kbd> inserts.
         </>
       }
     >
@@ -1383,14 +1382,14 @@ function PromptTemplatesSection() {
           type="text"
           value={draftName}
           onChange={(e) => setDraftName(e.target.value)}
-          placeholder="Nom (ex. Implémenter une feature)"
+          placeholder="Name (e.g. Implement a feature)"
           className="rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 text-[12px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-accent-ring)] dark:bg-white/5"
         />
         <textarea
           value={draftBody}
           onChange={(e) => setDraftBody(e.target.value)}
           rows={3}
-          placeholder="Contenu du prompt envoyé à Claude…"
+          placeholder="Prompt body sent to Claude…"
           className="resize-y rounded-lg border border-[var(--glass-stroke)] bg-black/5 px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--color-accent-ring)] dark:bg-white/5"
         />
         <div className="flex justify-end">
@@ -1401,7 +1400,7 @@ function PromptTemplatesSection() {
             className="flex items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[12px] font-medium text-[var(--text-primary)] hover:border-[var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus className="size-3.5" strokeWidth={1.75} />
-            Ajouter
+            Add
           </button>
         </div>
       </div>
@@ -1415,7 +1414,7 @@ function PromptTemplatesSection() {
       <ul className="mt-3 flex flex-col gap-1.5">
         {templates.length === 0 && loaded && (
           <li className="font-mono text-[11px] text-[var(--text-muted)]">
-            Aucun template — ajoute-en pour les voir apparaître dans le menu /.
+            No templates — add some to see them appear in the / menu.
           </li>
         )}
         {templates.map((t) => (
@@ -1514,7 +1513,7 @@ function PromptTemplateRow({
             disabled={busy}
             className="rounded-md px-2.5 py-1 text-[11.5px] text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] disabled:opacity-40 dark:hover:bg-white/5"
           >
-            Annuler
+            Cancel
           </button>
           <button
             type="button"
@@ -1522,7 +1521,7 @@ function PromptTemplateRow({
             disabled={busy || !name.trim() || !body.trim()}
             className="rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-[11.5px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
-            Enregistrer
+            Save
           </button>
         </div>
       </li>
@@ -1536,14 +1535,14 @@ function PromptTemplateRow({
           {template.name}
         </p>
         <p className="mt-0.5 truncate font-mono text-[10.5px] text-[var(--text-muted)]">
-          {template.body.replace(/\s+/g, " ").trim() || "(vide)"}
+          {template.body.replace(/\s+/g, " ").trim() || "(empty)"}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           type="button"
           onClick={() => setEditing(true)}
-          aria-label="Modifier le template"
+          aria-label="Edit template"
           className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
         >
           <Pencil className="size-3" strokeWidth={1.75} />
@@ -1552,7 +1551,7 @@ function PromptTemplateRow({
           type="button"
           onClick={() => void handleDelete()}
           disabled={busy}
-          aria-label="Supprimer le template"
+          aria-label="Delete template"
           className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 disabled:opacity-40 dark:hover:bg-white/5"
         >
           <Trash2 className="size-3" strokeWidth={1.75} />
@@ -1582,13 +1581,13 @@ function UsageSection() {
             strokeWidth={1.75}
           />
         }
-        title="Limites Claude en cours"
-        subtitle="Pourcentage exact rapporté par le SDK Anthropic à chaque tour. Sparse — ne s'affiche qu'à partir d'un seuil franchi (50/80/95 %)."
+        title="Live Claude limits"
+        subtitle="Exact percentage reported by the Anthropic SDK on every turn. Sparse — only shows up after a threshold is crossed (50/80/95 %)."
       >
         <div className="mt-3 flex flex-col gap-2">
           {!hasUsage && (
             <p className="font-mono text-[11px] text-[var(--text-muted)]">
-              Aucune donnée — déclenche une session pour récupérer l'usage.
+              No data — start a session to populate usage.
             </p>
           )}
           {session && <RateLimitMeter label="session" info={session} />}
@@ -1596,9 +1595,9 @@ function UsageSection() {
         </div>
       </Card>
 
-      {/* Pointer vers la vraie page Usage : tokens précis, breakdown par
-          modèle/projet/carte, fenêtres glissantes 5h/7j calculées depuis
-          le JSONL local. */}
+      {/* Pointer to the real Usage page: exact tokens, breakdown by
+          model/project/card, rolling 5h/7d windows computed from the local
+          JSONL. */}
       <Card
         icon={
           <TrendingUp
@@ -1606,15 +1605,15 @@ function UsageSection() {
             strokeWidth={1.75}
           />
         }
-        title="Page Usage complète"
-        subtitle="Tokens (input/output/cache), coût USD, breakdown par modèle, projet et carte. Indexé localement depuis ~/.claude/projects."
+        title="Full Usage page"
+        subtitle="Tokens (input/output/cache), USD cost, breakdown by model, project and card. Indexed locally from ~/.claude/projects."
         trailing={
           <button
             type="button"
             onClick={() => setView("usage")}
             className="flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)]"
           >
-            Ouvrir
+            Open
             <ArrowRight className="size-3.5" strokeWidth={1.75} />
           </button>
         }
@@ -1624,7 +1623,7 @@ function UsageSection() {
 }
 
 // -----------------------------------------------------------------------------
-// Raccourcis clavier — view + rebind. The capture flow uses captureBinding()
+// Keyboard shortcuts — view + rebind. The capture flow uses captureBinding()
 // which installs a one-shot capture-phase listener so it intercepts the user's
 // next keystroke before App.tsx / Board.tsx can act on it.
 // -----------------------------------------------------------------------------
@@ -1668,7 +1667,7 @@ function ShortcutsSection() {
           // the same combo also fires another action. They can clear it
           // from the conflicting row if they want.
           setConflictMsg(
-            `« ${formatBinding(binding)} » est aussi utilisé pour : ${
+            `"${formatBinding(binding)}" is also bound to: ${
               SHORTCUT_BY_ID[conflict].label
             }.`,
           );
@@ -1700,8 +1699,8 @@ function ShortcutsSection() {
           strokeWidth={1.75}
         />
       }
-      title="Raccourcis clavier"
-      subtitle="Clique sur une touche pour la remplacer (appuie ensuite sur la combinaison voulue, Échap pour annuler). « + » ajoute une touche supplémentaire qui déclenche la même action."
+      title="Keyboard shortcuts"
+      subtitle='Click a chip to rebind it (then press the new combo, Esc to cancel). "+" adds an extra key that triggers the same action.'
     >
       <ShortcutGroup label="Global">
         {globals.map((def) => (
@@ -1754,7 +1753,7 @@ function ShortcutsSection() {
           className="flex items-center gap-1.5 rounded-lg border border-[var(--glass-stroke)] px-3 py-1.5 text-[11.5px] font-medium text-[var(--text-secondary)] hover:border-[var(--color-accent-ring)] hover:text-[var(--text-primary)]"
         >
           <RotateCcw className="size-3" strokeWidth={1.75} />
-          Tout réinitialiser
+          Reset all
         </button>
       </div>
     </Card>
@@ -1811,7 +1810,7 @@ function ShortcutRow({
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         {bindings.length === 0 && !isCapturing(id, -1) && (
           <span className="font-mono text-[10.5px] text-[var(--text-muted)] italic">
-            désactivé
+            disabled
           </span>
         )}
 
@@ -1837,8 +1836,8 @@ function ShortcutRow({
         <button
           type="button"
           onClick={() => onStartCapture({ id, index: -1 })}
-          aria-label="Ajouter un raccourci"
-          title="Ajouter un raccourci"
+          aria-label="Add a binding"
+          title="Add a binding"
           className="grid size-6 place-items-center rounded-md border border-dashed border-[var(--glass-stroke)] text-[var(--text-muted)] hover:border-[var(--color-accent-ring)] hover:text-[var(--text-primary)]"
         >
           <Plus className="size-3" strokeWidth={1.75} />
@@ -1847,8 +1846,8 @@ function ShortcutRow({
         <button
           type="button"
           onClick={onReset}
-          aria-label="Réinitialiser ce raccourci"
-          title="Réinitialiser"
+          aria-label="Reset this shortcut"
+          title="Reset"
           className="grid size-6 place-items-center rounded-md text-[var(--text-muted)] opacity-0 transition-opacity hover:text-[var(--text-primary)] group-hover:opacity-100"
         >
           <RotateCcw className="size-3" strokeWidth={1.75} />

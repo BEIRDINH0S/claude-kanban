@@ -8,7 +8,7 @@
 //! same User-Agent, same headers, same flow. The CLI writes
 //! `~/.claude/.credentials.json` (and the macOS Keychain entry) as usual; the
 //! credentials watcher (`super::credentials_watch`) picks it up and the
-//! Settings UI flips to "Connecté" without us doing anything else.
+//! Settings UI flips to "Signed in" without us doing anything else.
 //!
 //! UX-wise we don't want users to see a terminal. `claude login` is
 //! interactive (Inquirer-style prompts) so we attach it to a real PTY via
@@ -82,11 +82,11 @@ pub enum CliLoginEvent {
     AuthUrl { url: String },
     /// CLI exited cleanly AND credentials were written. Front closes the
     /// modal; the credentials watcher re-fires `auth-changed` so the
-    /// Settings card flips to "Connecté".
+    /// Settings card flips to "Signed in".
     Completed,
     /// Anything that prevents the flow from finishing — `claude` not on PATH,
-    /// non-zero exit, kill from the cancel button. `message` is FR-ready
-    /// for direct rendering.
+    /// non-zero exit, kill from the cancel button. `message` is ready
+    /// for direct rendering in the UI.
     Failed { message: String },
 }
 
@@ -219,7 +219,7 @@ fn resolve_claude(app: &AppHandle) -> Option<PathBuf> {
 pub struct CliInstallStatus {
     pub installed: bool,
     /// Resolved absolute path of the binary we'd spawn. Useful for the
-    /// "trouvée à <path>" hint in the UI when debugging.
+    /// "found at <path>" hint in the UI when debugging.
     pub path: Option<String>,
     /// `"bundled"` when the binary comes from the SDK npm sub-package
     /// shipped with the app, `"path"` when it's the user's own install,
@@ -264,16 +264,16 @@ pub fn auth_cli_login_start(app: AppHandle) -> Result<(), String> {
     {
         let guard = SESSION.lock().unwrap();
         if guard.is_some() {
-            return Err("Une connexion est déjà en cours.".into());
+            return Err("A sign-in is already in progress.".into());
         }
     }
 
     // Resolve the binary we'll spawn. Prefers the SDK-bundled one (always
     // present in a sane install), falls back to PATH for users with their
-    // own global `claude`. The "Claude Code introuvable" case is therefore
+    // own global `claude`. The "Claude Code not found" case is therefore
     // genuinely "the bundle is broken" — not "you forgot to npm install".
     let claude_path = resolve_claude(&app).ok_or_else(|| {
-        "`claude` introuvable. Le binaire bundlé avec l'app est manquant — réinstalle l'app, ou installe Claude Code globalement (https://docs.anthropic.com/claude/docs/install).".to_string()
+        "`claude` not found. The binary bundled with the app is missing — reinstall the app, or install Claude Code globally (https://docs.anthropic.com/claude/docs/install).".to_string()
     })?;
 
     // Spawn the PTY + child. We do this synchronously since it only forks
@@ -415,7 +415,7 @@ fn run_reader_thread(
                 &app,
                 CliLoginEvent::Failed {
                     message: format!(
-                        "`claude login` a échoué (code {}). Ré-essaie ou lance la commande dans un terminal pour voir le détail.",
+                        "`claude login` failed (code {}). Retry or run the command in a terminal to see the details.",
                         status.exit_code()
                     ),
                 },
@@ -425,7 +425,7 @@ fn run_reader_thread(
             emit(
                 &app,
                 CliLoginEvent::Failed {
-                    message: "`claude login` ne s'est pas terminé proprement.".to_string(),
+                    message: "`claude login` did not finish cleanly.".to_string(),
                 },
             );
         }
@@ -462,18 +462,18 @@ fn wait_with_timeout(
 pub fn auth_cli_login_submit_code(code: String) -> Result<(), String> {
     let trimmed = code.trim();
     if trimmed.is_empty() {
-        return Err("Code vide.".into());
+        return Err("Empty code.".into());
     }
-    let session = current_session().ok_or_else(|| "Aucune connexion en cours.".to_string())?;
+    let session = current_session().ok_or_else(|| "No sign-in in progress.".to_string())?;
     let mut writer_slot = session.writer.lock().unwrap();
     let writer = writer_slot
         .as_mut()
-        .ok_or_else(|| "Le code a déjà été envoyé.".to_string())?;
+        .ok_or_else(|| "The code has already been sent.".to_string())?;
     writer
         .write_all(trimmed.as_bytes())
         .and_then(|_| writer.write_all(b"\n"))
         .and_then(|_| writer.flush())
-        .map_err(|e| format!("écriture stdin du CLI: {e}"))?;
+        .map_err(|e| format!("writing CLI stdin: {e}"))?;
     // Don't close the writer — `claude login` may print a final "Logged in"
     // line or wait for one more "press enter" depending on version. EOF on
     // stdin is sent when the writer drops at session-clear time.
@@ -574,25 +574,24 @@ fn strip_ansi(input: &str) -> String {
 /// hand: substring match for any of the known authorize endpoints, then
 /// scan to the first whitespace / control char.
 ///
-/// Why several needles: Anthropic a déjà migré ce domaine deux fois
-/// (claude.ai → claude.com/cai → platform.claude.com). On garde tous les
-/// préfixes connus pour rester compatible avec n'importe quelle version
-/// du binaire bundlé. Si `claude` bouge encore le domaine, ajoute le
-/// nouveau préfixe ici — c'est exactement ce qui a cassé l'écran de
-/// login en silence avant ce fix.
+/// Why several needles: Anthropic has already migrated this domain twice
+/// (claude.ai → claude.com/cai → platform.claude.com). We keep every known
+/// prefix so we stay compatible with any version of the bundled binary.
+/// If `claude` moves the domain again, add the new prefix here — that's
+/// exactly what silently broke the login screen before this fix.
 fn make_url_matcher() -> impl Fn(&str) -> Option<String> {
     const NEEDLES: &[&str] = &[
         "https://claude.com/cai/oauth/authorize",
         "https://platform.claude.com/oauth/authorize",
-        // Legacy — versions pré-2.x du CLI. Conservé pour qu'un user qui
-        // pointe vers un vieux binaire global sur PATH continue à marcher.
+        // Legacy — pre-2.x versions of the CLI. Kept so a user pointing at
+        // an older global binary on PATH keeps working.
         "https://claude.ai/oauth/authorize",
     ];
     |buf: &str| {
-        // On veut la PREMIÈRE occurrence dans le buffer — pas la première
-        // needle qui matche. Sinon, si le CLI imprime d'abord du texte qui
-        // contient un préfixe legacy puis l'URL réelle plus loin, on
-        // capturerait la mauvaise position.
+        // We want the EARLIEST occurrence in the buffer — not the first
+        // needle that matches. Otherwise, if the CLI first prints text
+        // containing a legacy prefix and then the real URL further down,
+        // we would capture the wrong position.
         let start = NEEDLES.iter().filter_map(|n| buf.find(n)).min()?;
         let tail = &buf[start..];
         let end = tail
@@ -646,7 +645,7 @@ mod tests {
 
     #[test]
     fn url_matcher_extracts_claude_com_cai() {
-        // Domain de claude login >= 2.x
+        // claude login domain on >= 2.x
         let m = make_url_matcher();
         let buf = "Browse to: https://claude.com/cai/oauth/authorize?client_id=abc&state=42 to continue";
         assert_eq!(
@@ -657,7 +656,7 @@ mod tests {
 
     #[test]
     fn url_matcher_extracts_platform_claude() {
-        // Variante platform.claude.com (présente aussi dans le binaire 2.1.x)
+        // platform.claude.com variant (also present in the 2.1.x binary)
         let m = make_url_matcher();
         let buf = "Visit https://platform.claude.com/oauth/authorize?response_type=code\n";
         assert_eq!(
@@ -668,8 +667,8 @@ mod tests {
 
     #[test]
     fn url_matcher_picks_earliest_occurrence() {
-        // Si plusieurs préfixes apparaissent, on prend la première position
-        // dans le buffer — pas la première needle de la liste.
+        // If several prefixes appear, we take the earliest position in the
+        // buffer — not the first needle in the list.
         let m = make_url_matcher();
         let buf = "first: https://claude.com/cai/oauth/authorize?a=1 then https://claude.ai/oauth/authorize?b=2";
         assert_eq!(

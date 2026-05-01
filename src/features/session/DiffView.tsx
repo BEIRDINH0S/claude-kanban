@@ -97,7 +97,7 @@ export function DiffView({ cardId }: Props) {
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
-                  title="Choisir une autre base de comparaison"
+                  title="Pick a different comparison base"
                   className="group flex items-center gap-1 rounded px-1 py-0.5 -mx-1 text-[var(--text-secondary)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
                 >
                   <span>vs {data.base || "?"}</span>
@@ -111,8 +111,8 @@ export function DiffView({ cardId }: Props) {
                 <button
                   type="button"
                   onClick={resetBase}
-                  title="Revenir à la base auto-détectée"
-                  aria-label="Revenir à la base par défaut"
+                  title="Reset to the auto-detected base"
+                  aria-label="Reset to default base"
                   className="rounded p-0.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
                 >
                   <X className="size-3" strokeWidth={2} />
@@ -124,7 +124,7 @@ export function DiffView({ cardId }: Props) {
                 </span>
               )}
               {data.truncated && (
-                <span className="text-amber-700 dark:text-amber-300/90">· tronqué</span>
+                <span className="text-amber-700 dark:text-amber-300/90">· truncated</span>
               )}
             </>
           ) : (
@@ -135,8 +135,8 @@ export function DiffView({ cardId }: Props) {
           type="button"
           onClick={() => void fetch(customBase)}
           disabled={loading}
-          title="Recalculer le diff"
-          aria-label="Recalculer"
+          title="Recompute diff"
+          aria-label="Recompute"
           className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] disabled:opacity-40 dark:hover:bg-white/5"
         >
           <RefreshCw className="size-3.5" strokeWidth={1.75} />
@@ -155,8 +155,8 @@ export function DiffView({ cardId }: Props) {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {!loading && data && data.diff.trim().length === 0 && !error && (
           <p className="font-mono text-[11.5px] text-[var(--text-muted)]">
-            Aucun changement vs {data.base || "la base"} — Claude n'a encore
-            rien commit ni modifié dans ce worktree.
+            No change vs {data.base || "base"} — Claude hasn't committed or
+            modified anything in this worktree yet.
           </p>
         )}
         {data && data.diff.trim().length > 0 && <DiffBody text={data.diff} />}

@@ -40,9 +40,9 @@ function buildSegments(oldText: string, newText: string): DiffSegment[] {
   if (prefixLen > CONTEXT_LINES) {
     segs.push({
       kind: "elided",
-      text: `${prefixLen - CONTEXT_LINES} ligne${
+      text: `${prefixLen - CONTEXT_LINES} unchanged line${
         prefixLen - CONTEXT_LINES > 1 ? "s" : ""
-      } inchangée${prefixLen - CONTEXT_LINES > 1 ? "s" : ""}`,
+      }`,
     });
     for (let i = prefixLen - CONTEXT_LINES; i < prefixLen; i++) {
       segs.push({ kind: "context", text: oldLines[i] });
@@ -69,9 +69,9 @@ function buildSegments(oldText: string, newText: string): DiffSegment[] {
     }
     segs.push({
       kind: "elided",
-      text: `${suffixLen - CONTEXT_LINES} ligne${
+      text: `${suffixLen - CONTEXT_LINES} unchanged line${
         suffixLen - CONTEXT_LINES > 1 ? "s" : ""
-      } inchangée${suffixLen - CONTEXT_LINES > 1 ? "s" : ""}`,
+      }`,
     });
   } else if (suffixLen > 0) {
     for (let i = oldLines.length - suffixLen; i < oldLines.length; i++) {
@@ -92,7 +92,7 @@ export function DiffBlock({ oldText, newText }: DiffBlockProps) {
   if (segs.length === 0) {
     return (
       <p className="px-3 py-2 font-mono text-[11px] text-[var(--text-muted)]">
-        (rien à afficher)
+        (nothing to display)
       </p>
     );
   }

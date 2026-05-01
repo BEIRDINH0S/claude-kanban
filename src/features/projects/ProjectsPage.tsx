@@ -47,7 +47,7 @@ export function ProjectsPage() {
 
   const handleDelete = async (project: Project) => {
     const ok = window.confirm(
-      `Supprimer le projet "${project.name}" et toutes ses cartes ?`,
+      `Delete project "${project.name}" and all of its cards?`,
     );
     if (!ok) return;
     try {
@@ -58,7 +58,7 @@ export function ProjectsPage() {
       }
       await reload();
     } catch (e) {
-      window.alert(`Suppression impossible : ${e}`);
+      window.alert(`Deletion failed: ${e}`);
     }
   };
 
@@ -67,10 +67,10 @@ export function ProjectsPage() {
       <div className="mx-auto w-full max-w-[700px] px-6 py-6">
         <header>
           <p className="text-[10.5px] font-medium tracking-[0.18em] text-[var(--text-muted)] uppercase">
-            Projets
+            Projects
           </p>
           <h1 className="mt-1 text-[15px] font-semibold text-[var(--text-primary)]">
-            Tous tes projets
+            All your projects
           </h1>
         </header>
 
@@ -84,7 +84,7 @@ export function ProjectsPage() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Nom du nouveau projet"
+            placeholder="Name of the new project"
             className="flex-1 bg-transparent text-[13px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)]"
           />
           <button
@@ -92,7 +92,7 @@ export function ProjectsPage() {
             disabled={!name.trim() || busy}
             className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_0_16px_var(--color-accent-ring)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
-            {busy ? "…" : "Créer"}
+            {busy ? "…" : "Create"}
           </button>
         </form>
         {error && <p className="mt-2 text-[11.5px] text-red-400">{error}</p>}
@@ -100,7 +100,7 @@ export function ProjectsPage() {
         <ul className="mt-5 flex flex-col gap-1.5">
           {projects.length === 0 && (
             <p className="px-2 py-3 text-[11.5px] text-[var(--text-muted)]">
-              Aucun projet pour l'instant.
+              No projects yet.
             </p>
           )}
           {projects.map((p) => (
@@ -213,9 +213,9 @@ function ProjectCard({
             )}
           </div>
           <p className="mt-0.5 font-mono text-[10.5px] text-[var(--text-muted)] tabular-nums">
-            {project.archived ? "lecture seule · " : ""}
-            {cardsCount !== null ? `${cardsCount} cartes` : "—"} ·{" "}
-            créé le {new Date(project.createdAt).toLocaleDateString("fr-FR")}
+            {project.archived ? "read only · " : ""}
+            {cardsCount !== null ? `${cardsCount} cards` : "—"} ·{" "}
+            created {new Date(project.createdAt).toLocaleDateString("en-US")}
           </p>
         </div>
 
@@ -226,14 +226,14 @@ function ProjectCard({
               onClick={() => setEditing(true)}
               className="rounded-md px-2 py-1 text-[11px] text-[var(--text-secondary)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
             >
-              Renommer
+              Rename
             </button>
           )}
           <button
             type="button"
             onClick={onDelete}
             className="rounded-md p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 dark:hover:bg-white/5"
-            aria-label="Supprimer"
+            aria-label="Delete"
           >
             <Trash2 className="size-3.5" strokeWidth={1.75} />
           </button>
@@ -242,7 +242,7 @@ function ProjectCard({
             onClick={onOpen}
             className="flex items-center gap-1 rounded-md bg-[var(--color-accent)] px-2.5 py-1 text-[11.5px] font-medium text-white shadow-[0_0_12px_var(--color-accent-ring)]"
           >
-            Ouvrir
+            Open
             <ArrowRight className="size-3" strokeWidth={1.75} />
           </button>
         </div>

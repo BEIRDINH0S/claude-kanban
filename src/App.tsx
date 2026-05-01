@@ -197,14 +197,14 @@ function App() {
               .getState()
               .cards.find((c) => c.id === cardId);
             const title = card
-              ? `Claude a fini · ${card.title}`
-              : "Claude a fini";
+              ? `Claude is done · ${card.title}`
+              : "Claude is done";
             const body =
               typeof cost === "number" && cost > 0
-                ? `Tour terminé · $${cost.toFixed(4)}`
-                : "Tour terminé.";
+                ? `Turn ended · $${cost.toFixed(4)}`
+                : "Turn ended.";
             void ensureNotifPermission().then((ok) => {
-              if (ok) sendNotification({ title, body });
+              if (ok) sendNotification({ title, body, icon: "icons/128x128.png" });
             });
           }
         }
@@ -250,10 +250,15 @@ function App() {
           .getState()
           .cards.find((c) => c.id === cardId);
         const title = card
-          ? `Claude attend une permission · ${card.title}`
-          : "Claude attend une permission";
+          ? `Claude is waiting on a permission · ${card.title}`
+          : "Claude is waiting on a permission";
         void ensureNotifPermission().then((ok) => {
-          if (ok) sendNotification({ title, body: `Outil : ${toolName}` });
+          if (ok)
+            sendNotification({
+              title,
+              body: `Tool: ${toolName}`,
+              icon: "icons/128x128.png",
+            });
         });
       },
     );

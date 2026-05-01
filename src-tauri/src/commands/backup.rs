@@ -150,7 +150,7 @@ pub fn import_project_from_file(
 
     let now = now_ms();
     let new_project_id = uuid::Uuid::new_v4().to_string();
-    let imported_name = format!("{} (importé)", dump.project.name);
+    let imported_name = format!("{} (imported)", dump.project.name);
 
     // Append to the end of the sidebar so existing user ordering survives.
     let next_pos: i64 = tx

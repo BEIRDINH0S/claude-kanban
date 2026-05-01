@@ -232,7 +232,7 @@ export function Board() {
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Bus event from the command palette ("Nouvelle tâche") — opens the same
+  // Bus event from the command palette ("New task") — opens the same
   // modal the BoardHeader button does, so all entry points converge.
   useEffect(() => {
     const onOpen = () => setCreateOpen(true);
