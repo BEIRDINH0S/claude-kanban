@@ -93,6 +93,15 @@ pub enum CliLoginEvent {
     /// The set of prompts is hard-coded (see `PROMPT_DEFS`). When Anthropic
     /// adds a new one, the modal's stall detector kicks in after 15 s and
     /// the user can cancel + retry — no silent hang.
+    ///
+    /// `rename_all = "camelCase"` on the variant: the enum-level
+    /// `rename_all = "kebab-case"` only affects variant *names* (so the
+    /// `kind` tag is `prompt-choice`), not field names. Without this
+    /// override, `default_index` shipped to the front as `default_index`
+    /// while the TypeScript side reads `defaultIndex` — silently undefined,
+    /// which manifested as the modal staying on "Starting claude login…"
+    /// because the React state never settled.
+    #[serde(rename_all = "camelCase")]
     PromptChoice {
         id: String,
         question: String,
