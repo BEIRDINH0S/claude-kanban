@@ -571,12 +571,29 @@ fn strip_ansi(input: &str) -> String {
 
 /// Builds a closure that finds the OAuth authorize URL in a buffer. We
 /// avoid `regex` as a dep because the pattern is small enough to do by
-/// hand: substring match for `https://claude.ai/oauth/authorize?` then
+/// hand: substring match for any of the known authorize endpoints, then
 /// scan to the first whitespace / control char.
+///
+/// Why several needles: Anthropic a déjà migré ce domaine deux fois
+/// (claude.ai → claude.com/cai → platform.claude.com). On garde tous les
+/// préfixes connus pour rester compatible avec n'importe quelle version
+/// du binaire bundlé. Si `claude` bouge encore le domaine, ajoute le
+/// nouveau préfixe ici — c'est exactement ce qui a cassé l'écran de
+/// login en silence avant ce fix.
 fn make_url_matcher() -> impl Fn(&str) -> Option<String> {
+    const NEEDLES: &[&str] = &[
+        "https://claude.com/cai/oauth/authorize",
+        "https://platform.claude.com/oauth/authorize",
+        // Legacy — versions pré-2.x du CLI. Conservé pour qu'un user qui
+        // pointe vers un vieux binaire global sur PATH continue à marcher.
+        "https://claude.ai/oauth/authorize",
+    ];
     |buf: &str| {
-        const NEEDLE: &str = "https://claude.ai/oauth/authorize?";
-        let start = buf.find(NEEDLE)?;
+        // On veut la PREMIÈRE occurrence dans le buffer — pas la première
+        // needle qui matche. Sinon, si le CLI imprime d'abord du texte qui
+        // contient un préfixe legacy puis l'URL réelle plus loin, on
+        // capturerait la mauvaise position.
+        let start = NEEDLES.iter().filter_map(|n| buf.find(n)).min()?;
         let tail = &buf[start..];
         let end = tail
             .find(|c: char| c.is_whitespace() || c.is_control())
@@ -625,5 +642,39 @@ mod tests {
     fn url_matcher_returns_none_when_absent() {
         let m = make_url_matcher();
         assert!(m("nothing here").is_none());
+    }
+
+    #[test]
+    fn url_matcher_extracts_claude_com_cai() {
+        // Domain de claude login >= 2.x
+        let m = make_url_matcher();
+        let buf = "Browse to: https://claude.com/cai/oauth/authorize?client_id=abc&state=42 to continue";
+        assert_eq!(
+            m(buf).as_deref(),
+            Some("https://claude.com/cai/oauth/authorize?client_id=abc&state=42")
+        );
+    }
+
+    #[test]
+    fn url_matcher_extracts_platform_claude() {
+        // Variante platform.claude.com (présente aussi dans le binaire 2.1.x)
+        let m = make_url_matcher();
+        let buf = "Visit https://platform.claude.com/oauth/authorize?response_type=code\n";
+        assert_eq!(
+            m(buf).as_deref(),
+            Some("https://platform.claude.com/oauth/authorize?response_type=code")
+        );
+    }
+
+    #[test]
+    fn url_matcher_picks_earliest_occurrence() {
+        // Si plusieurs préfixes apparaissent, on prend la première position
+        // dans le buffer — pas la première needle de la liste.
+        let m = make_url_matcher();
+        let buf = "first: https://claude.com/cai/oauth/authorize?a=1 then https://claude.ai/oauth/authorize?b=2";
+        assert_eq!(
+            m(buf).as_deref(),
+            Some("https://claude.com/cai/oauth/authorize?a=1")
+        );
     }
 }
