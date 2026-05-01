@@ -1,7 +1,7 @@
 import { LoaderCircle, Pencil, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { gitCardDiff, type DiffResult } from "../../ipc/git";
+import { gitCardDiff, type DiffResult } from "../../../ipc/git";
 
 interface Props {
   cardId: string;

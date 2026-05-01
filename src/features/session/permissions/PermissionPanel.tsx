@@ -1,6 +1,6 @@
 import { Check, ShieldAlert, ShieldCheck, TriangleAlert, X } from "lucide-react";
 
-import { formatToolUse } from "./format";
+import { formatToolUse } from "../format";
 import { usePermissionActions } from "./usePermissionActions";
 
 interface Props {

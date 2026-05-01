@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { asBlocks } from "../features/session/format";
+import { asBlocks } from "../lib/sdkBlocks";
 import type { DisplayItem, SdkEvent } from "../types/chat";
 
 interface MessagesState {

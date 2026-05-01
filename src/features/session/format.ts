@@ -1,4 +1,16 @@
 /**
+ * Presentation helpers for SDK transcript content. Pure formatting functions
+ * — the session feature uses these to render tool-use blocks as one-line
+ * summaries in MessageList, PermissionPanel, and the markdown export.
+ *
+ * The SDK-shape decoder (`asBlocks`) lives in `lib/sdkBlocks.ts` because
+ * both the messages store and the session feature need it; everything in
+ * this file is presentation and stays inside the feature.
+ */
+export { asBlocks } from "../../lib/sdkBlocks";
+export type { Block, TextBlock, ToolUseBlock } from "../../lib/sdkBlocks";
+
+/**
  * Best-effort one-line summary of a tool_use block. The shape of `input`
  * varies by tool; we recognise the common ones and fall back to JSON for the rest.
  */
@@ -42,14 +54,4 @@ export function formatToolUse(name: string, input: unknown): string {
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return s.slice(0, max - 1) + "…";
-}
-
-interface TextBlock { type: "text"; text: string }
-interface ToolUseBlock { type: "tool_use"; id: string; name: string; input: unknown }
-type Block = TextBlock | ToolUseBlock | { type: string; [k: string]: unknown };
-
-export function asBlocks(content: unknown): Block[] {
-  if (typeof content === "string") return [{ type: "text", text: content }];
-  if (Array.isArray(content)) return content as Block[];
-  return [];
 }

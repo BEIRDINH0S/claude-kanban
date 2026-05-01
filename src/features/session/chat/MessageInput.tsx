@@ -1,17 +1,17 @@
 import { ArrowUp } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useCardsStore } from "../../stores/cardsStore";
-import { useMessagesStore } from "../../stores/messagesStore";
-import { useTemplatesStore } from "../../stores/templatesStore";
-import { useToastsStore } from "../../stores/toastsStore";
-import { useUiStore } from "../../stores/uiStore";
+import { useCardsStore } from "../../../stores/cardsStore";
+import { useMessagesStore } from "../../../stores/messagesStore";
+import { useTemplatesStore } from "../../../stores/templatesStore";
+import { useToastsStore } from "../../../stores/toastsStore";
+import { useUiStore } from "../../../stores/uiStore";
 import {
   filterUserCommands,
   substituteArguments,
   useUserCommandsStore,
   type UserCommand,
-} from "../../stores/userCommandsStore";
+} from "../../../stores/userCommandsStore";
 import {
   filterTemplates,
   PromptTemplateMenu,

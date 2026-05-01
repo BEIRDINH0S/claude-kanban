@@ -1,14 +1,24 @@
+/**
+ * Pure card component. Knows nothing about projects, sessions, permissions,
+ * git status, or the message store — all "extra information" surfaces are
+ * rendered through caller-provided slots:
+ *
+ *   - `renderBadges(card)`   → top-right, next to the title (live dot,
+ *                              spinner, working-state).
+ *   - `renderRowBadges(card)`→ inline with the tag pills (git status pill).
+ *   - `renderActions(card)`  → bottom of the card (e.g. inline permission
+ *                              approve/deny buttons).
+ *   - `errorRing`            → boolean: amber/red ring without coupling to
+ *                              an errors store.
+ *
+ * The rest is just data: title, tags, archived flag, selection state, and
+ * a few callbacks (`onOpen`, `onDelete`, `onDuplicate`).
+ */
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Copy, GitBranch, LoaderCircle, Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 
-import { PermissionCardActions } from "../session/PermissionCardActions";
-import { useCardsStore } from "../../stores/cardsStore";
-import { useErrorsStore } from "../../stores/errorsStore";
-import { useGitStatusStore } from "../../stores/gitStatusStore";
-import { usePermissionsStore } from "../../stores/permissionsStore";
-import { useProjectsStore } from "../../stores/projectsStore";
-import { useUiStore } from "../../stores/uiStore";
 import { parseTags, type Card } from "../../types/card";
 
 /**
@@ -38,50 +48,41 @@ interface Props {
   card: Card;
   /** Rendered inside DragOverlay — skips the sortable wiring. */
   overlay?: boolean;
+  /** Read-only cards (e.g. archived projects) can't be dragged or deleted. */
+  readOnly?: boolean;
+  /** Keyboard-cursor highlight. */
+  selected?: boolean;
+  /** A non-empty error / warning ring. The colour is decided by the caller
+   *  through `ringTone` so the kanban stays unaware of the underlying
+   *  meaning ("amber = pending permission", "red = error", …). */
+  ringTone?: "accent" | "amber" | "red" | null;
+
+  onClick?: (card: Card) => void;
+  onDelete?: (card: Card) => void;
+  onDuplicate?: (card: Card) => void;
+
+  /** Top-right slot, next to the title. Typically: live dot + spinner. */
+  renderBadges?: (card: Card) => ReactNode;
+  /** Inline with the tag pills, BEFORE them. Typically: git status pill. */
+  renderRowBadges?: (card: Card) => ReactNode;
+  /** Bottom of the card, full width. Typically: pending permission row. */
+  renderActions?: (card: Card) => ReactNode;
 }
 
-export function CardItem({ card, overlay }: Props) {
-  const starting = useCardsStore((s) => s.startingCardIds.has(card.id));
-  const remove = useCardsStore((s) => s.remove);
-  const duplicate = useCardsStore((s) => s.duplicate);
-  const openZoom = useUiStore((s) => s.openZoom);
-  const error = useErrorsStore((s) => s.byCard[card.id]);
-  // A card inherits its project's archived flag — drag and delete are
-  // neutered for read-only snapshots. Click still opens the zoom (read-only).
-  const archived = useProjectsStore((s) =>
-    s.projects.find((p) => p.id === card.projectId)?.archived ?? false,
-  );
-  // "Live" = the SDK query is still alive in the sidecar (vs. column =
-  // in_progress which can survive a sidecar crash and stay stale until
-  // the boot-time repair). Surfacing it on the card lets users distinguish
-  // "Claude is actively thinking" from "this card is parked in In Progress".
-  const isLive = useUiStore((s) =>
-    !!card.sessionId && s.liveSessionIds.has(card.sessionId),
-  );
-  // Keyboard-nav cursor — set by Board's hjkl handler. We render a brighter
-  // ring than the error one so it's clearly "where you are" vs. a problem.
-  const isSelected = useUiStore((s) => s.selectedCardId === card.id);
-
-  // Pending permission for this card — when present we render the inline
-  // approve/deny buttons at the bottom of the card so the user doesn't have
-  // to open the zoom view to unblock Claude. The amber ring also doubles as
-  // a "needs your attention" cue when scanning the board with many agents.
-  // Selector returns the boolean directly so this card only re-renders on
-  // a true → false transition, not on every keystroke into pending.input.
-  const hasPendingPermission = usePermissionsStore(
-    (s) => !!s.byCard[card.id],
-  );
-
+export function CardItem({
+  card,
+  overlay,
+  readOnly,
+  selected,
+  ringTone,
+  onClick,
+  onDelete,
+  onDuplicate,
+  renderBadges,
+  renderRowBadges,
+  renderActions,
+}: Props) {
   const tags = parseTags(card.tags);
-
-  // Git status badge — only shown when the card has a worktree AND the
-  // store has a snapshot (polled every 12s + on session-turn-complete).
-  // Renders nothing for "clean & at base" so the badge means something.
-  const gitStatus = useGitStatusStore((s) => s.byCard[card.id]);
-  const showGitBadge =
-    !!card.worktreePath &&
-    gitStatus &&
-    (gitStatus.ahead > 0 || gitStatus.behind > 0 || gitStatus.dirty);
 
   const {
     attributes,
@@ -90,7 +91,7 @@ export function CardItem({ card, overlay }: Props) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: card.id, disabled: overlay || archived });
+  } = useSortable({ id: card.id, disabled: overlay || readOnly });
 
   const style: React.CSSProperties = overlay
     ? { cursor: "grabbing" }
@@ -99,29 +100,34 @@ export function CardItem({ card, overlay }: Props) {
         transition: transition ?? "transform 200ms ease-out",
         opacity: isDragging
           ? 0.35
-          : archived
+          : readOnly
           ? 0.7
           : card.column === "idle"
           ? 0.85
           : 1,
       };
 
-  const setSelectedCardId = useUiStore((s) => s.setSelectedCardId);
   const handleClick = () => {
     if (overlay || isDragging) return;
-    // Click always opens the zoom view. The session start, if needed, is
-    // kicked off from inside the zoom (clearer UX than implicit-on-click).
-    // We also park the keyboard cursor here so closing the zoom leaves
-    // hjkl navigation centered on the just-clicked card.
-    setSelectedCardId(card.id);
-    openZoom(card.id);
+    onClick?.(card);
   };
 
-  // Spinner stays on as long as Claude is actively working — that means
-  // either we're waiting for the start IPC to come back, or the card is
-  // sitting in In Progress (the SDK is between init and `result`).
-  const isWorking = starting || card.column === "in_progress";
+  // Ring class table — kanban stays agnostic to what each tone means; the
+  // caller maps semantics ("permission pending" → amber, "error" → red) to
+  // a tone and we pick the styles. Selection always wins visually.
+  const ringClass = selected
+    ? "ring-2 ring-[var(--color-accent-ring)]"
+    : ringTone === "amber"
+    ? "ring-1 ring-amber-400/50"
+    : ringTone === "red"
+    ? "ring-1 ring-red-400/40"
+    : ringTone === "accent"
+    ? "ring-1 ring-[var(--color-accent-ring)]"
+    : "";
 
+  const rowExtras = renderRowBadges?.(card);
+  const actions = renderActions?.(card);
+  const badges = renderBadges?.(card);
 
   return (
     <div
@@ -134,99 +140,55 @@ export function CardItem({ card, overlay }: Props) {
         "group glass relative select-none rounded-xl p-3.5",
         overlay
           ? "cursor-grabbing shadow-2xl"
-          : archived
+          : readOnly
           ? "cursor-default"
           : "cursor-grab active:cursor-grabbing",
-        // Selection ring trumps the error/permission rings visually — all
-        // can apply but in practice you'd want to fix the error from the
-        // keyboard. Pending-permission gets an amber ring so it stands out
-        // in a dense board even before you read the inline buttons.
-        isSelected
-          ? "ring-2 ring-[var(--color-accent-ring)]"
-          : hasPendingPermission
-          ? "ring-1 ring-amber-400/50"
-          : error
-          ? "ring-1 ring-red-400/40"
-          : "",
+        ringClass,
       ].join(" ")}
     >
       <div className="flex items-start gap-2">
         <h3 className="flex-1 text-[13.5px] font-medium leading-snug text-[var(--text-primary)]">
           {card.title}
         </h3>
-        {/* Live dot: SDK query alive in the sidecar. Sits next to the
-            spinner so users can tell apart "thinking" (spinner) vs
-            "alive but idle" (just the dot). The pulse animation comes
-            from Tailwind's built-in `animate-pulse`. */}
-        {isLive && !isWorking && (
-          <span
-            className="mt-1 size-2 shrink-0 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_6px_rgb(16,185,129,0.7)] dark:bg-emerald-400 dark:shadow-[0_0_6px_rgb(74,222,128,0.6)]"
-            title="Session active dans le sidecar"
-            aria-label="Session active"
-          />
-        )}
-        {isWorking && (
-          <LoaderCircle
-            className="mt-0.5 size-3.5 shrink-0 animate-spin text-[var(--color-accent)]"
-            strokeWidth={2}
-          />
-        )}
-        {!overlay && !isWorking && !archived && (
+        {badges}
+        {!overlay && !readOnly && (onDuplicate || onDelete) && (
           <div className="-mt-1 -mr-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                void duplicate(card.id);
-              }}
-              title="Duplicate (clone title + path, fresh session)"
-              className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-              aria-label="Duplicate card"
-            >
-              <Copy className="size-3.5" strokeWidth={1.5} />
-            </button>
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                void remove(card.id);
-              }}
-              title="Delete (undoable via toast)"
-              className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 dark:hover:bg-white/5"
-              aria-label="Delete card"
-            >
-              <Trash2 className="size-3.5" strokeWidth={1.5} />
-            </button>
+            {onDuplicate && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDuplicate(card);
+                }}
+                title="Duplicate (clone title + path, fresh session)"
+                className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+                aria-label="Duplicate card"
+              >
+                <Copy className="size-3.5" strokeWidth={1.5} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(card);
+                }}
+                title="Delete (undoable via toast)"
+                className="rounded-md p-1 text-[var(--text-muted)] hover:bg-black/5 hover:text-red-400 dark:hover:bg-white/5"
+                aria-label="Delete card"
+              >
+                <Trash2 className="size-3.5" strokeWidth={1.5} />
+              </button>
+            )}
           </div>
         )}
       </div>
-      {(tags.length > 0 || showGitBadge) && (
+      {(tags.length > 0 || rowExtras) && (
         <div className="mt-2 flex flex-wrap items-center gap-1">
-          {showGitBadge && gitStatus && (
-            <span
-              className="flex items-center gap-1 rounded-md border border-[var(--glass-stroke)] bg-black/5 px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-secondary)] tabular-nums dark:bg-white/5"
-              title={`${gitStatus.branch} · ${gitStatus.ahead}↑ ${gitStatus.behind}↓ vs ${gitStatus.base}${gitStatus.dirty ? " · dirty" : ""}`}
-            >
-              <GitBranch
-                className="size-2.5 shrink-0 text-[var(--text-muted)]"
-                strokeWidth={2}
-              />
-              {gitStatus.ahead > 0 && (
-                <span className="text-emerald-700 dark:text-emerald-300/90">↑{gitStatus.ahead}</span>
-              )}
-              {gitStatus.behind > 0 && (
-                <span className="text-rose-700 dark:text-rose-300/90">↓{gitStatus.behind}</span>
-              )}
-              {gitStatus.dirty && (
-                <span
-                  className="size-1.5 rounded-full bg-amber-500 dark:bg-amber-400"
-                  aria-label="Uncommitted changes"
-                />
-              )}
-            </span>
-          )}
+          {rowExtras}
           {tags.map((t) => (
             <span
               key={t}
@@ -240,13 +202,9 @@ export function CardItem({ card, overlay }: Props) {
           ))}
         </div>
       )}
-      {/* Inline permission actions — skipping this in the drag overlay
-          avoids rendering interactive buttons on a dragging-clone. The real
-          card behind the overlay still has them, so the user just drops and
-          clicks once the card lands. */}
-      {!overlay && hasPendingPermission && (
-        <PermissionCardActions cardId={card.id} />
-      )}
+      {/* Caller-supplied actions (e.g. inline permission buttons). Rendered
+          only off-overlay so the dragging clone stays inert. */}
+      {!overlay && actions}
     </div>
   );
 }

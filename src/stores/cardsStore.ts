@@ -18,17 +18,16 @@
  *     returned row, since the optimistic gain is negligible compared to
  *     the rollback complexity.
  *
- * Cross-store side effects:
- *   - `remove()` clears the card's transcript from `messagesStore`.
+ * Cross-store contract:
+ *   - This store reaches OUT to other infrastructure stores
+ *     (`messagesStore`, `toastsStore`, `uiStore`) but never INTO any
+ *     `features/**`. That's the rule that keeps features replaceable: a
+ *     feature can be rewritten or removed without touching the data layer.
+ *   - `remove()` clears the card's transcript from `messagesStore` and
+ *     pushes an undo toast through `toastsStore`.
+ *   - `move()` pushes a "moved to X" undo toast for cross-column moves.
  *   - `resumeSession()` reads the JSONL history via IPC and seeds
- *     `messagesStore` before the SDK emits its first event, so the chat
- *     is never empty during the resume gap.
- *   - Toast notifications go through `toastsStore`; UI navigation (e.g.
- *     opening the new card in zoom) goes through `useUiStore`.
- *
- * The `selectByColumn(column)` helper is the canonical way the kanban
- * view reads — sorted by position, filtered by column. Don't iterate
- * `state.cards` directly in components.
+ *     `messagesStore` before the SDK emits its first event.
  */
 import { create } from "zustand";
 
@@ -357,9 +356,3 @@ useUiStore.subscribe((state, prev) => {
   }
   void useCardsStore.getState().load(state.activeProjectId);
 });
-
-export function selectByColumn(cards: Card[], column: CardColumn): Card[] {
-  return cards
-    .filter((c) => c.column === column)
-    .sort((a, b) => a.position - b.position);
-}

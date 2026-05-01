@@ -1,10 +1,10 @@
-import type { Card, PermissionMode } from "../../types/card";
-import { useCardsStore } from "../../stores/cardsStore";
-import { useMessagesStore } from "../../stores/messagesStore";
-import { useUiStore } from "../../stores/uiStore";
-import { useToastsStore } from "../../stores/toastsStore";
-import { stopSession as ipcStopSession } from "../../ipc/sessions";
-import type { SdkEvent } from "../../types/chat";
+import { stopSession as ipcStopSession } from "../../../ipc/sessions";
+import { useCardsStore } from "../../../stores/cardsStore";
+import { useMessagesStore } from "../../../stores/messagesStore";
+import { useToastsStore } from "../../../stores/toastsStore";
+import { useUiStore } from "../../../stores/uiStore";
+import type { Card, PermissionMode } from "../../../types/card";
+import type { SdkEvent } from "../../../types/chat";
 
 /**
  * Built-in slash commands surfaced in the message input. Mirrors a subset
