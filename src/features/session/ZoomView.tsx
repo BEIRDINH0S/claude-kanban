@@ -9,7 +9,6 @@ import {
   LoaderCircle,
   Pencil,
   RotateCw,
-  Trash,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -78,7 +77,6 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   const update = useCardsStore((s) => s.update);
   const move = useCardsStore((s) => s.move);
   const stopSession = useCardsStore((s) => s.stopSession);
-  const dropWorktree = useCardsStore((s) => s.dropWorktree);
   const closeZoom = useUiStore((s) => s.closeZoom);
   const liveSessionIds = useUiStore((s) => s.liveSessionIds);
   const isLive = !!card.sessionId && liveSessionIds.has(card.sessionId);
@@ -95,19 +93,10 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
   });
   const pushToastHeader = useToastsStore((s) => s.push);
 
-  const handleDropWorktree = () => {
-    if (!card.worktreePath) return;
-    // Confirm via window.confirm — destructive (the working dir is wiped),
-    // but the branch persists so it's recoverable if the user remembers
-    // its name. The status line shows the branch right above this button.
-    const ok = window.confirm(
-      `Supprimer le worktree ?\n\n${card.worktreePath}\n\nLe dossier de travail est supprimé. La branche git est conservée (tu peux la retrouver via git branch).`,
-    );
-    if (!ok) return;
-    void dropWorktree(card.id).then(() => {
-      pushToastHeader({ message: "Worktree supprimé. Branche conservée." });
-    });
-  };
+  // Worktrees are now managed automatically by the Rust GC (per-card
+  // worktree dir is wiped + branch deleted once the branch is fully
+  // merged into origin/<base>, after a 7-day grace on the Done column;
+  // see git_fetch.rs). No manual drop affordance is exposed any more.
 
   const [pushing, setPushing] = useState(false);
   const handlePush = async () => {
@@ -215,8 +204,6 @@ function Header({ card, onClose }: { card: Card; onClose: () => void }) {
             cardId={card.id}
             worktreePath={card.worktreePath}
             projectPath={card.projectPath}
-            archived={archived}
-            onDrop={handleDropWorktree}
           />
         )}
         <EditableTags
@@ -438,22 +425,23 @@ function EditablePath({ value, disabled, onCommit, onOpen }: EditablePathProps) 
 
 /**
  * Worktree-aware status line under the project path. Shows the active
- * branch + ahead/behind/dirty counts, with affordances to open the worktree
- * in the OS file explorer and to drop it (cleanup). Refreshes once on
- * mount and re-renders live via the heartbeat-driven gitStatusStore.
+ * branch + ahead/behind/dirty counts and a Finder-open shortcut. The
+ * underlying worktree is created on card-create and reaped automatically
+ * by the Rust background GC once the branch is merged into origin/<base>;
+ * no manual drop affordance is exposed (cf. git_fetch.rs).
+ *
+ * Refreshes once on mount and re-renders live via two channels:
+ *   - the 12s gitStatusStore heartbeat in App.tsx
+ *   - the `git-status-changed` Tauri event (auto-fetcher / GC sweeps)
  */
 function WorktreeStatusLine({
   cardId,
   worktreePath,
   projectPath,
-  archived,
-  onDrop,
 }: {
   cardId: string;
   worktreePath: string;
   projectPath: string;
-  archived: boolean;
-  onDrop: () => void;
 }) {
   const status = useGitStatusStore((s) => s.byCard[cardId]);
 
@@ -477,7 +465,7 @@ function WorktreeStatusLine({
 
   return (
     <div
-      className="group/wt mt-0.5 flex items-center gap-2 truncate font-mono text-[10.5px]"
+      className="mt-0.5 flex items-center gap-2 truncate font-mono text-[10.5px]"
       title={tooltip}
     >
       <button
@@ -508,17 +496,6 @@ function WorktreeStatusLine({
             </span>
           )}
         </span>
-      )}
-      {!archived && (
-        <button
-          type="button"
-          onClick={onDrop}
-          title="Supprimer le worktree (la branche git est conservée)"
-          aria-label="Supprimer le worktree"
-          className="ml-auto shrink-0 rounded p-0.5 text-[var(--text-muted)] opacity-0 transition-opacity hover:bg-rose-400/10 hover:text-rose-300 group-hover/wt:opacity-100"
-        >
-          <Trash className="size-3" strokeWidth={1.75} />
-        </button>
       )}
     </div>
   );

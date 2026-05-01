@@ -91,10 +91,15 @@ fn repo_toplevel(path: &Path) -> Option<PathBuf> {
     Some(cur)
 }
 
-/// Create a fresh worktree for a card. Branch is checked out from the
-/// current HEAD of the repo. Returns the absolute worktree path and the
-/// branch name we created. Errors are surfaced as String so they can flow
-/// back through Tauri commands.
+/// Create a fresh worktree for a card. Strategy:
+///   1. Best-effort `git fetch origin` so we know the latest remote tip.
+///   2. Branch off `origin/<base>` (the up-to-date remote default branch)
+///      so cards never start from a stale local `main`.
+///   3. If the remote ref isn't usable (offline, no remote, fresh repo) we
+///      fall back to the local HEAD — same behaviour as before this fix.
+///
+/// Returns the absolute worktree path and the branch name we created.
+/// Errors are surfaced as String so they can flow back through Tauri commands.
 pub fn create_for_card(project_path: &str, card_id: &str) -> Result<WorktreeInfo, String> {
     let project = Path::new(project_path);
     if !is_git_repo(project) {
@@ -130,21 +135,37 @@ pub fn create_for_card(project_path: &str, card_id: &str) -> Result<WorktreeInfo
         ));
     }
 
-    // Try with -b first (creates branch). If the branch already exists from
-    // a previous run we fallback to attaching to it without -b.
-    let with_new_branch = Command::new("git")
-        .arg("-C")
+    // Best-effort fetch so the next step branches off something fresh. We
+    // ignore failures here: offline / auth-prompted / no-remote shouldn't
+    // block card creation. Worst case we fall back to local HEAD below.
+    let _ = fetch_remote(&toplevel);
+
+    // Resolve the start point: prefer the remote-tracked default branch
+    // (`origin/main` or whatever `origin/HEAD` resolves to) so the card
+    // starts from the freshest known commit. Fallback chain:
+    //   origin/<detected base>  →  detected base (local)  →  HEAD
+    let start_point = pick_start_point(&toplevel);
+
+    // Try with -b + start point first (creates branch from origin/<base>).
+    // If the branch already exists from a previous run we fallback to
+    // attaching to it without -b.
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(&toplevel)
         .arg("worktree")
         .arg("add")
         .arg("-b")
         .arg(&branch)
-        .arg(&wt_path)
+        .arg(&wt_path);
+    if let Some(sp) = start_point.as_deref() {
+        cmd.arg(sp);
+    }
+    let with_new_branch = cmd
         .output()
         .map_err(|e| format!("git worktree add: {e}"))?;
     if !with_new_branch.status.success() {
         let stderr = String::from_utf8_lossy(&with_new_branch.stderr).to_string();
-        // Fall back to attaching the existing branch (skips -b).
+        // Fall back to attaching the existing branch (skips -b, no start point).
         let attach = Command::new("git")
             .arg("-C")
             .arg(&toplevel)
@@ -383,9 +404,9 @@ pub fn push_card(worktree_path: &str) -> Result<String, String> {
     Ok(format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string())
 }
 
-/// Best-effort cleanup. Called from the Tauri `drop_card_worktree` command.
-/// We never call this implicitly from delete_card — the branch may have
-/// unmerged commits the user wants to keep around.
+/// Best-effort cleanup. Called from `delete_card` and the periodic GC
+/// worker. The git BRANCH is left intact — `delete_branch` is a separate
+/// step the GC only runs when it has verified the branch is fully merged.
 pub fn remove(project_path: &str, worktree_path: &str) -> Result<(), String> {
     let project = Path::new(project_path);
     let toplevel =
@@ -401,6 +422,131 @@ pub fn remove(project_path: &str, worktree_path: &str) -> Result<(), String> {
         .map_err(|e| format!("git worktree remove: {e}"))?;
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).to_string());
+    }
+    Ok(())
+}
+
+/// `git fetch --all --prune`. Used by the periodic auto-fetcher AND once
+/// at card creation time so the new branch starts from the freshest base.
+///
+/// Network-bound; the OS / git's own timers cap the wall clock if the
+/// remote is unreachable — we don't add a hard timeout to avoid killing
+/// long but legitimate fetches over slow links. Callers who care should
+/// run this on a worker thread.
+///
+/// Pruning is on by default so deleted-on-remote branches don't pile up
+/// in `refs/remotes/origin/*` — keeps `git worktree prune` and the GC's
+/// "is the base ahead?" checks accurate over time.
+pub fn fetch_remote(repo: &Path) -> Result<(), String> {
+    let toplevel = repo_toplevel(repo).ok_or_else(|| "not a git repo".to_string())?;
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(&toplevel)
+        .arg("fetch")
+        .arg("--all")
+        .arg("--prune")
+        // Quiet to keep stderr small — we only inspect status.
+        .arg("--quiet")
+        .output()
+        .map_err(|e| format!("git fetch: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+/// `git worktree prune` — drops admin entries for worktrees whose dirs
+/// have been deleted on disk. Called by the GC after we wipe a worktree
+/// so the bookkeeping stays clean. Best-effort.
+pub fn prune_worktrees(repo: &Path) -> Result<(), String> {
+    let toplevel = repo_toplevel(repo).ok_or_else(|| "not a git repo".to_string())?;
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(&toplevel)
+        .arg("worktree")
+        .arg("prune")
+        .output()
+        .map_err(|e| format!("git worktree prune: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+/// Resolve the start point we want to branch off when creating a new
+/// worktree. We prefer the remote-tracked default branch (`origin/main`,
+/// `origin/master`, …) so the card starts on the freshest commit the
+/// remote knows about. Falls back to the local base, then to `None` —
+/// `None` lets `git worktree add -b` use the repo's HEAD (legacy behaviour).
+fn pick_start_point(toplevel: &Path) -> Option<String> {
+    // 1. `origin/HEAD` symbolic ref → e.g. "origin/main".
+    if let Ok(out) = git_capture(toplevel, &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) {
+        let trimmed = out.trim();
+        if !trimmed.is_empty()
+            && git_capture(toplevel, &["rev-parse", "--verify", "--quiet", trimmed]).is_ok()
+        {
+            return Some(trimmed.to_string());
+        }
+    }
+    // 2. Try common remote-tracked names directly.
+    for candidate in ["origin/main", "origin/master"] {
+        if git_capture(toplevel, &["rev-parse", "--verify", "--quiet", candidate]).is_ok() {
+            return Some(candidate.into());
+        }
+    }
+    // 3. Fall back to local base branch (worse — may be stale, but better
+    //    than failing card creation entirely on offline/no-remote setups).
+    for candidate in ["main", "master"] {
+        if git_capture(toplevel, &["rev-parse", "--verify", "--quiet", candidate]).is_ok() {
+            return Some(candidate.into());
+        }
+    }
+    // 4. Nothing usable → let git default to HEAD.
+    None
+}
+
+/// Reconstruct the conventional branch name from a card id. Stays in sync
+/// with `create_for_card`'s naming scheme (which is intentionally derived
+/// from the id rather than stored, so it's identical across runs).
+pub fn branch_for_card(card_id: &str) -> String {
+    let short = card_id.split('-').next().unwrap_or(card_id);
+    format!("claude-kanban/card-{short}")
+}
+
+/// True iff every commit on `branch` is reachable from `base`. Used by the
+/// GC to decide whether a Done card's worktree (and branch) is safe to
+/// drop. Wraps `git merge-base --is-ancestor <branch> <base>` whose exit
+/// code is the answer (0 = ancestor, 1 = not, anything else = error → safer
+/// to treat as not-merged).
+pub fn is_branch_merged(repo: &Path, branch: &str, base: &str) -> bool {
+    let Some(toplevel) = repo_toplevel(repo) else {
+        return false;
+    };
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(&toplevel)
+        .arg("merge-base")
+        .arg("--is-ancestor")
+        .arg(branch)
+        .arg(base)
+        .output();
+    matches!(out, Ok(o) if o.status.success())
+}
+
+/// `git branch -D <branch>` from the main repo. Used by the GC after the
+/// worktree has been removed AND the branch confirmed merged.
+pub fn delete_branch(repo: &Path, branch: &str) -> Result<(), String> {
+    let toplevel = repo_toplevel(repo).ok_or_else(|| "not a git repo".to_string())?;
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(&toplevel)
+        .arg("branch")
+        .arg("-D")
+        .arg(branch)
+        .output()
+        .map_err(|e| format!("git branch -D: {e}"))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }
     Ok(())
 }
