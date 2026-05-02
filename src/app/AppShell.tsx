@@ -31,6 +31,7 @@ import { useErrorsStore } from "../stores/errorsStore";
 import { useGitStatusStore } from "../stores/gitStatusStore";
 import { usePermissionsStore } from "../stores/permissionsStore";
 import { useProjectsStore } from "../stores/projectsStore";
+import { useTutorialAnchor } from "../stores/tutorialStore";
 import { useUiStore } from "../stores/uiStore";
 import type { Card, CardColumn } from "../types/card";
 
@@ -126,6 +127,13 @@ function BoardPane() {
   const [createOpen, setCreateOpen] = useState(false);
   const onCreate = useCallback(() => setCreateOpen(true), []);
 
+  // Tutorial anchor — points step 2 ("Create your first task") at the
+  // header's New-task button. Stays attached even when the button is
+  // disabled (no project selected): the tutorial overlay just highlights
+  // it. If the user is on Settings / Projects the anchor unmounts and
+  // the tour auto-skips this step.
+  const newTaskAnchor = useTutorialAnchor("header.newTask");
+
   const onDelete = useCallback(
     (card: Card) => {
       void remove(card.id);
@@ -201,6 +209,7 @@ function BoardPane() {
       </span>
     ) : (
       <button
+        ref={newTaskAnchor}
         type="button"
         onClick={() => setCreateOpen(true)}
         disabled={!project}

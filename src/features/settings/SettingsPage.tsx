@@ -18,6 +18,7 @@ import {
 import { ProjectDataSection } from "./data";
 import { Category } from "./layout";
 import { NotificationsSection } from "./notifications";
+import { ReplayTutorialSection } from "./onboarding";
 import { PermissionRulesSection } from "./permissions-rules";
 import { ShortcutsSection } from "./shortcuts";
 import { PromptTemplatesSection } from "./templates";
@@ -49,6 +50,10 @@ export function SettingsPage() {
 
         <Category title="Keyboard shortcuts">
           <ShortcutsSection />
+        </Category>
+
+        <Category title="Help">
+          <ReplayTutorialSection />
         </Category>
 
         <Category title="Prompts">

@@ -9,6 +9,7 @@
  */
 import type { UnlistenFn } from "@tauri-apps/api/event";
 
+import { listenAuthChanged } from "./auth";
 import { listenBinaryStatus } from "./binary";
 import {
   listenCardsChanged,
@@ -38,6 +39,7 @@ export function wireGlobalEvents(): () => void {
   // Tauri's `listen()` is async — we capture the promises and resolve
   // them in the cleanup so we don't drop early-resolved unlisten fns.
   const unlistens: Array<Promise<UnlistenFn>> = [
+    listenAuthChanged(),
     listenCardsChanged(),
     listenSessionStream(),
     listenPermissionAutoApproved(),
