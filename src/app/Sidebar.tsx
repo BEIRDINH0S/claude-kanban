@@ -26,6 +26,7 @@ import type { ReactNode } from "react";
 
 import { ProjectList } from "../features/projects";
 import { useThemeStore } from "../stores/themeStore";
+import { useTutorialAnchor } from "../stores/tutorialStore";
 import { useUiStore } from "../stores/uiStore";
 
 export function Sidebar() {
@@ -33,6 +34,12 @@ export function Sidebar() {
   const setView = useUiStore((s) => s.setView);
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+
+  // Tutorial anchors — wrap the project list (step 1: "Start with a
+  // project") and the Settings nav row (step 3: "Tune permissions").
+  // Refs are silently ignored when the tutorial isn't running.
+  const projectsAnchor = useTutorialAnchor("sidebar.projects");
+  const settingsAnchor = useTutorialAnchor("sidebar.settings");
 
   return (
     <aside
@@ -59,12 +66,18 @@ export function Sidebar() {
         </button>
       </div>
 
-      <ProjectList
-        collapsed={collapsed}
-        boardActive={view === "board"}
-        manageActive={view === "projects"}
-        onManage={() => setView(view === "projects" ? "board" : "projects")}
-      />
+      {/* Wrapper div carries the tutorial anchor — ProjectList is a feature
+          public surface and we don't want to thread a ref prop through it
+          just for the tour. The wrapper is layout-transparent (`contents`
+          would also work but breaks dnd-kit's auto-scroll detection). */}
+      <div ref={projectsAnchor} className="flex min-h-0 flex-1 flex-col">
+        <ProjectList
+          collapsed={collapsed}
+          boardActive={view === "board"}
+          manageActive={view === "projects"}
+          onManage={() => setView(view === "projects" ? "board" : "projects")}
+        />
+      </div>
 
       {/* Bottom nav: app-level destinations and small actions, separated by
           a hairline so they're clearly distinct from the project list. New
@@ -83,6 +96,7 @@ export function Sidebar() {
               onClick={() =>
                 setView(view === "settings" ? "board" : "settings")
               }
+              anchorRef={settingsAnchor}
             />
           </li>
         </ul>
@@ -115,22 +129,30 @@ function ThemeRow({ collapsed }: { collapsed: boolean }) {
 }
 
 /** Generic bottom-nav entry. Same row pattern as ProjectRow so the sidebar
- * reads as one unified list of destinations. */
+ * reads as one unified list of destinations.
+ *
+ * `anchorRef` is an optional callback ref forwarded to the underlying
+ * `<button>`. Used by the tutorial overlay to anchor a step on a specific
+ * row (e.g. Settings) without leaking knowledge of the tutorial out of
+ * `app/`. Pass `useTutorialAnchor("...")` directly. */
 function NavRow({
   collapsed,
   icon,
   label,
   active,
   onClick,
+  anchorRef,
 }: {
   collapsed: boolean;
   icon: ReactNode;
   label: string;
   active: boolean;
   onClick: () => void;
+  anchorRef?: (el: HTMLElement | null) => void;
 }) {
   return (
     <button
+      ref={anchorRef}
       type="button"
       onClick={onClick}
       aria-pressed={active}

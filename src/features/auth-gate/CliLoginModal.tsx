@@ -16,6 +16,13 @@
  *
  * Closing the modal at any point cancels the in-flight CLI.
  *
+ * Lives in `features/auth-gate/` rather than `features/settings/account/`
+ * because the Settings page can't reach into another feature — the gate
+ * itself, however, hosts a single instance of this modal and any caller
+ * (gate's own "Sign in" button, Settings re-sign-in flow) opens it via the
+ * `claude-kanban:request-login` window event. Same pattern as the
+ * `claude-kanban:new-task` bus that bridges palette → BoardPane.
+ *
  * `BusyPhase` and `Step` are tiny private helpers used only here, so they
  * live in this file rather than getting their own modules.
  */
@@ -30,7 +37,7 @@ import {
   startCliLogin,
   submitCliLoginChoice,
   submitCliLoginCode,
-} from "../../../ipc/auth";
+} from "../../ipc/auth";
 
 /** State machine for the modal — drives which UI block is visible. */
 type LoginPhase =
