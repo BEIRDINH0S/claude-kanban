@@ -30,6 +30,54 @@ afterEach(() => {
   cleanup();
 });
 
+// --- localStorage polyfill -------------------------------------------------
+//
+// Node 22+ ships an experimental `localStorage` global that wins over jsdom's
+// implementation when both are present. Without `--localstorage-file`, Node's
+// version is a stub: the object exists but `getItem` / `setItem` / etc. are
+// all undefined, which breaks every store that touches localStorage. Replace
+// it with a deterministic in-memory Storage so tests don't depend on Node's
+// flag matrix.
+class MemoryStorage {
+  private store = new Map<string, string>();
+  get length(): number {
+    return this.store.size;
+  }
+  key(index: number): string | null {
+    return Array.from(this.store.keys())[index] ?? null;
+  }
+  getItem(key: string): string | null {
+    return this.store.get(key) ?? null;
+  }
+  setItem(key: string, value: string): void {
+    this.store.set(key, String(value));
+  }
+  removeItem(key: string): void {
+    this.store.delete(key);
+  }
+  clear(): void {
+    this.store.clear();
+  }
+}
+const memoryLocalStorage = new MemoryStorage();
+Object.defineProperty(globalThis, "localStorage", {
+  value: memoryLocalStorage,
+  writable: true,
+  configurable: true,
+});
+if (typeof window !== "undefined") {
+  Object.defineProperty(window, "localStorage", {
+    value: memoryLocalStorage,
+    writable: true,
+    configurable: true,
+  });
+}
+// Wipe between tests so persistence asserts don't see leftovers from earlier
+// suites — same intent as the RTL cleanup above.
+afterEach(() => {
+  memoryLocalStorage.clear();
+});
+
 // --- Tauri IPC stubs -------------------------------------------------------
 
 vi.mock("@tauri-apps/api/core", () => ({
