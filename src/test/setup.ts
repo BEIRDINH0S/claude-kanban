@@ -78,6 +78,30 @@ afterEach(() => {
   memoryLocalStorage.clear();
 });
 
+// --- matchMedia polyfill ---------------------------------------------------
+//
+// jsdom doesn't ship `window.matchMedia`. The themeStore reads it at module
+// load to seed the initial theme from the OS preference; without this stub,
+// importing anything that transitively touches the theme blows up. We
+// always report "light" — tests don't care about the OS theme, and storing
+// any explicit theme via the store overrides the default anyway.
+if (typeof window !== "undefined" && !window.matchMedia) {
+  Object.defineProperty(window, "matchMedia", {
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {}, // legacy
+      removeListener: () => {}, // legacy
+      dispatchEvent: () => false,
+    }),
+    writable: true,
+    configurable: true,
+  });
+}
+
 // --- Tauri IPC stubs -------------------------------------------------------
 
 vi.mock("@tauri-apps/api/core", () => ({
