@@ -1,6 +1,6 @@
 /**
- * Per-card session badges rendered by the kanban via its `renderCardBadges`
- * slot. The kanban itself doesn't know what a session is — this component
+ * Per-card session badges rendered by the swarm via its `renderRowBadges`
+ * slot. The swarm itself doesn't know what a session is — this component
  * encapsulates the visual mapping:
  *
  *   - "Working" (spinner)  → an SDK call is in flight (just kicked off) OR

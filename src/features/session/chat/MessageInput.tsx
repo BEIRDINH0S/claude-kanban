@@ -178,7 +178,6 @@ export function MessageInput({ onSend, disabled, placeholder, cardId }: Props) {
   const historyDraft = useRef<string>("");
 
   const setView = useUiStore((s) => s.setView);
-  const closeZoom = useUiStore((s) => s.closeZoom);
 
   // Autofocus on mount and after each successful send. We defer with rAF so
   // the focus call lands AFTER the parent's `animate-zoom-in` first paint —
@@ -387,7 +386,6 @@ export function MessageInput({ onSend, disabled, placeholder, cardId }: Props) {
   };
 
   const handleOpenSettings = () => {
-    closeZoom();
     setView("settings");
   };
 

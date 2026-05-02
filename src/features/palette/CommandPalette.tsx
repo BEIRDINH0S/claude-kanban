@@ -29,7 +29,7 @@ export function CommandPalette() {
   const setOpen = useUiStore((s) => s.setPaletteOpen);
   const setView = useUiStore((s) => s.setView);
   const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
-  const openZoom = useUiStore((s) => s.openZoom);
+  const selectAgent = useUiStore((s) => s.selectAgent);
   const projects = useProjectsStore((s) => s.projects);
   const cards = useCardsStore((s) => s.cards);
   const theme = useThemeStore((s) => s.theme);
@@ -46,14 +46,16 @@ export function CommandPalette() {
     const out: CommandItem[] = [];
     out.push({
       id: "new-task",
-      label: "New task",
+      label: "Spawn agent",
       icon: <Plus className="size-3.5" strokeWidth={1.75} />,
       hint: "Action",
+      keywords: ["new", "task", "spawn", "create"],
       run: () => {
-        setView("board");
-        // Tiny side-channel: the BoardHeader's create button is the only
-        // owner of the modal. We dispatch a custom DOM event it can listen
-        // for. Cleaner than threading another store flag through.
+        // Bounce to Swarm if we're on Settings / Projects so the modal
+        // opens with the swarm visible underneath.
+        if (useUiStore.getState().view !== "swarm") setView("swarm");
+        // Tiny side-channel: SwarmPane owns the modal and listens for this
+        // event. Cleaner than threading another store flag through.
         window.dispatchEvent(new CustomEvent("claude-kanban:new-task"));
       },
     });
@@ -100,9 +102,12 @@ export function CommandPalette() {
         id: `card-${c.id}`,
         label: c.title,
         icon: <IdCard className="size-3.5" strokeWidth={1.75} />,
-        hint: "Card",
+        hint: "Agent",
         keywords: [c.column, c.projectPath],
-        run: () => openZoom(c.id),
+        // selectAgent also bounces to Swarm view if we're on Settings /
+        // Projects, so a palette click is "go look at this agent" in one
+        // shot. See `uiStore.selectAgent`.
+        run: () => selectAgent(c.id),
       });
     }
     return out;
@@ -112,7 +117,7 @@ export function CommandPalette() {
     theme,
     setView,
     setActiveProjectId,
-    openZoom,
+    selectAgent,
     toggleTheme,
   ]);
 

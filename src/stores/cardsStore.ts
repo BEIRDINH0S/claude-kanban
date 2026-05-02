@@ -1,8 +1,13 @@
 /**
  * The `cards` Zustand slice — the **single** source of truth on the front
- * for what's on the board. Every Tauri command that mutates a card row
- * round-trips through here so optimistic updates and rollbacks have one
- * place to live.
+ * for every agent / card known to the app, across all projects. Every Tauri
+ * command that mutates a card row round-trips through here so optimistic
+ * updates and rollbacks have one place to live.
+ *
+ * Project scoping: the store is **global**, not per-project. The Swarm
+ * view renders the whole list across every project. We don't reload on
+ * project switch — `activeProjectId` is just metadata used by the
+ * create-card modal as the spawn default.
  *
  * Concurrency model:
  *   - `move()` is **optimistic**: we apply the move locally via
@@ -34,7 +39,7 @@ import { create } from "zustand";
 import {
   createCard,
   deleteCard,
-  listCards,
+  listAllCards,
   moveCard,
   restoreCard,
   setCardSessionConfig,
@@ -60,9 +65,6 @@ const COLUMN_LABEL: Record<CardColumn, string> = {
   done: "Done",
 };
 
-// Stable empty array for the case where no project is active yet.
-const NO_CARDS: readonly Card[] = [];
-
 interface CardsState {
   cards: Card[];
   loading: boolean;
@@ -70,7 +72,11 @@ interface CardsState {
   /** Cards that have a `start_session` IPC call in flight. */
   startingCardIds: ReadonlySet<string>;
 
-  load: (projectId: string) => Promise<void>;
+  /** Reload every card across every project. We could split into two stores
+   *  but it's wasteful — the cards table is small (typically < 1000 rows
+   *  even on heavy boards) and a single source of truth keeps mutations
+   *  cheap. */
+  load: () => Promise<void>;
   create: (
     title: string,
     projectPath: string,
@@ -157,10 +163,10 @@ export const useCardsStore = create<CardsState>((set, get) => ({
   error: null,
   startingCardIds: new Set<string>(),
 
-  load: async (projectId) => {
+  load: async () => {
     set({ loading: true, error: null });
     try {
-      const cards = await listCards(projectId);
+      const cards = await listAllCards();
       set({ cards, loading: false });
     } catch (e) {
       set({ error: String(e), loading: false });
@@ -228,11 +234,11 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     set({ cards: previous.filter((c) => c.id !== id) });
     try {
       await deleteCard(id);
-      // Free the in-memory chat history and close the zoom view if the
-      // deleted card was the one open.
+      // Free the in-memory chat history and clear the selection if the
+      // deleted card was the one currently focused.
       useMessagesStore.getState().clear(id);
       const ui = useUiStore.getState();
-      if (ui.zoomedCardId === id) ui.closeZoom();
+      if (ui.selectedAgentId === id) ui.selectAgent(null);
       // Toast undo — calls back into the new restore_card command with the
       // full snapshot, re-inserting the original id/column/position so the
       // card pops back roughly where it was. The session is gone (sidecar
@@ -317,8 +323,7 @@ export const useCardsStore = create<CardsState>((set, get) => ({
     } catch (e) {
       set({ error: String(e) });
       // Refresh against the active project so optimistic moves revert.
-      const pid = useUiStore.getState().activeProjectId;
-      if (pid) void get().load(pid);
+      void get().load();
     } finally {
       set((s) => {
         const next = new Set(s.startingCardIds);
@@ -338,8 +343,7 @@ export const useCardsStore = create<CardsState>((set, get) => ({
       await invokeResumeSession(cardId, prompt);
     } catch (e) {
       set({ error: String(e) });
-      const pid = useUiStore.getState().activeProjectId;
-      if (pid) void get().load(pid);
+      void get().load();
     } finally {
       set((s) => {
         const next = new Set(s.startingCardIds);
@@ -350,14 +354,8 @@ export const useCardsStore = create<CardsState>((set, get) => ({
   },
 }));
 
-// Reload cards every time the active project changes. Subscribing here keeps
-// the cards <-> project link in one place and avoids duplicating the boot
-// logic in App.tsx.
-useUiStore.subscribe((state, prev) => {
-  if (state.activeProjectId === prev.activeProjectId) return;
-  if (!state.activeProjectId) {
-    useCardsStore.setState({ cards: NO_CARDS as Card[] });
-    return;
-  }
-  void useCardsStore.getState().load(state.activeProjectId);
-});
+// We used to reload cards on `activeProjectId` change, when the kanban was
+// scoped to one project. The store now always holds the full set across all
+// projects, so the project switch is a no-op for the data layer — kept the
+// comment as a breadcrumb in case anyone wonders why the subscription is
+// gone.

@@ -21,7 +21,7 @@
  * itself, however, hosts a single instance of this modal and any caller
  * (gate's own "Sign in" button, Settings re-sign-in flow) opens it via the
  * `claude-kanban:request-login` window event. Same pattern as the
- * `claude-kanban:new-task` bus that bridges palette → BoardPane.
+ * `claude-kanban:new-task` bus that bridges palette → SwarmPane.
  *
  * `BusyPhase` and `Step` are tiny private helpers used only here, so they
  * live in this file rather than getting their own modules.

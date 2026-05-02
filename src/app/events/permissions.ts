@@ -8,10 +8,11 @@
  *                                   through (no buttons; it's already done).
  *   - `permission-request`       — SDK is asking permission for a tool.
  *                                   We park it under the owning card; the
- *                                   zoom view + the inline kanban-card
- *                                   actions both pick it up from the store.
- *                                   Also fires an OS notification when the
- *                                   user isn't currently on this card.
+ *                                   inline chat panel + the inline swarm
+ *                                   row actions both pick it up from the
+ *                                   store. Also fires an OS notification
+ *                                   when the user isn't currently looking
+ *                                   at this card.
  */
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
@@ -62,7 +63,8 @@ export async function listenPermissionRequest(): Promise<UnlistenFn> {
     });
     // Skip the notification when the user is already looking at this
     // card — they don't need to be told about something on screen.
-    if (useUiStore.getState().zoomedCardId === cardId) return;
+    const ui = useUiStore.getState();
+    if (ui.view === "swarm" && ui.selectedAgentId === cardId) return;
     const card = useCardsStore
       .getState()
       .cards.find((c) => c.id === cardId);

@@ -1,15 +1,15 @@
 /**
- * Chat tab inside the zoom view. Owns the JSONL hydration on first open,
+ * Chat tab inside the session panel. Owns the JSONL hydration on first open,
  * the "fresh / resume / live" send-mode resolution, and the layout of
  * MessageList + Footer + permission slot + MessageInput.
  *
  * What this tab does NOT know:
- *   - it doesn't know about the diff or config tabs (the ZoomView is the
+ *   - it doesn't know about the diff or config tabs (SessionPanel is the
  *     tab router)
  *   - it doesn't know about permissions internally — the permission row
  *     between Footer and MessageInput is a slot the parent fills with
- *     `<PermissionPanel cardId={card.id} />`. Same pattern the kanban uses
- *     for its slots.
+ *     `<PermissionPanel cardId={card.id} />`. Same pattern the swarm uses
+ *     for its row slots.
  *
  * Hydration: on first zoom of a card with a session_id and no in-memory
  * transcript, we read the JSONL from disk and seed `messagesStore`. Errors
@@ -38,8 +38,8 @@ const EMPTY_ITEMS: never[] = [];
 
 interface Props {
   card: Card;
-  /** Slot for an inline permission row above the input. ZoomView fills it
-   *  with `<PermissionPanel cardId={card.id} />`. */
+  /** Slot for an inline permission row above the input. SessionPanel fills
+   *  it with `<PermissionPanel cardId={card.id} />`. */
   permissionSlot?: ReactNode;
 }
 

@@ -46,9 +46,9 @@ export function LoginScreen() {
           Sign in to start using Claude Kanban
         </h1>
         <p className="mt-3 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
-          Claude Kanban runs your Claude Code sessions inside a kanban
-          board. To create cards and talk to Claude, sign in once with your
-          Anthropic account — we drive the official{" "}
+          Claude Kanban is a cockpit for your parallel Claude Code
+          sessions — spawn agents, watch them work, jump between them.
+          Sign in once with your Anthropic account; we drive the official{" "}
           <code className="font-mono text-[11.5px] text-[var(--text-primary)]">
             claude login
           </code>

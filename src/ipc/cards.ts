@@ -5,6 +5,16 @@ export function listCards(projectId: string): Promise<Card[]> {
   return invoke<Card[]>("list_cards", { projectId });
 }
 
+/**
+ * List every card across every project — used by the Swarm view, which
+ * shows all agents regardless of project. `listCards(projectId)` is kept
+ * for callers that genuinely want a per-project subset (currently none —
+ * the front loads all and filters at the UI layer when needed).
+ */
+export function listAllCards(): Promise<Card[]> {
+  return invoke<Card[]>("list_all_cards");
+}
+
 export function createCard(
   title: string,
   projectPath: string,

@@ -1,7 +1,7 @@
 /**
  * Render a session transcript (the same DisplayItem[] the chat panel shows)
  * to a self-contained Markdown document. Used by the per-session export
- * action in ZoomView.
+ * action in the session header toolbar.
  *
  * Design choices:
  * - One "Tour N" header per `result` event so long sessions are scannable.

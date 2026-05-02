@@ -4,7 +4,7 @@
  * the slash menu, the slash command registry, the inline diff for tool_use
  * blocks) is private and consumed only inside this directory.
  *
- * The chat tab takes a `permissionSlot` so the parent (ZoomView) can inject
- * the cross-sub-feature permission row without ChatTab importing it.
+ * The chat tab takes a `permissionSlot` so the parent (SessionPanel) can
+ * inject the cross-sub-feature permission row without ChatTab importing it.
  */
 export { ChatTab } from "./ChatTab";

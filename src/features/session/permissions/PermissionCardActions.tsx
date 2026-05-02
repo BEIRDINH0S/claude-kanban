@@ -7,10 +7,10 @@ interface Props {
 }
 
 /**
- * Inline permission row rendered on a kanban card. The full PermissionPanel
- * (zoom view) shows tool name + input preview + an explanatory header; here
- * space is tight and the user is scanning many cards at once, so we collapse
- * to: amber shield + tool summary + Refuse / Always / Approve buttons.
+ * Inline permission row rendered on a swarm agent row. The full PermissionPanel
+ * (session panel) shows tool name + input preview + an explanatory header;
+ * here space is tight and the user is scanning many rows at once, so we
+ * collapse to: amber shield + tool summary + Refuse / Always / Approve.
  *
  * All click handlers stop propagation so a button press does NOT also open
  * the zoom view — that's the whole point: skip the second click.

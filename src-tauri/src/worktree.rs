@@ -27,7 +27,7 @@ pub struct WorktreeInfo {
 }
 
 /// Snapshot of a worktree's git state. Polled by the front to render
-/// per-card badges (ahead count, dirty dot) and to label the ZoomView
+/// per-card badges (ahead count, dirty dot) and to label the session
 /// header. All counts are vs. the auto-detected base branch.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

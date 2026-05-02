@@ -34,17 +34,18 @@ import { create } from "zustand";
 
 import { setPref } from "../ipc/prefs";
 
-/** Pref key tracking whether the user has seen the v1 tutorial. Bump the
- *  suffix when the tutorial materially changes. */
-export const PREF_TUTORIAL_COMPLETED = "tutorial_v1_completed";
+/** Pref key tracking whether the user has seen the tutorial. Bumped the
+ *  suffix to `v2` after the Sidebar → TopBar rewrite — anchors moved, so
+ *  the old "see sidebar projects" step no longer makes sense. Existing
+ *  users will see the refreshed v2 tour once. */
+export const PREF_TUTORIAL_COMPLETED = "tutorial_v2_completed";
 
 /** Stable identifiers for every UI element a tutorial step can point at.
  *  Keep in sync with `features/tutorial/steps.ts` — every step references
  *  exactly one of these. Adding a new id here is a compile error in any
  *  consumer using a typo, which is the whole point. */
 export type TutorialAnchorId =
-  | "sidebar.projects"
-  | "sidebar.settings"
+  | "topbar.settings"
   | "header.newTask";
 
 export type TutorialStatus = "idle" | "active";

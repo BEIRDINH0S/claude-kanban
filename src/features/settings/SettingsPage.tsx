@@ -20,6 +20,7 @@ import { Category } from "./layout";
 import { NotificationsSection } from "./notifications";
 import { ReplayTutorialSection } from "./onboarding";
 import { PermissionRulesSection } from "./permissions-rules";
+import { ProjectsSection } from "./projects";
 import { ShortcutsSection } from "./shortcuts";
 import { PromptTemplatesSection } from "./templates";
 
@@ -38,6 +39,10 @@ export function SettingsPage() {
 
         <Category title="Claude account">
           <AccountSection />
+        </Category>
+
+        <Category title="Projects">
+          <ProjectsSection />
         </Category>
 
         <Category title="Notifications">

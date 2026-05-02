@@ -106,6 +106,27 @@ pub fn list_cards(
     fetch_all(&conn, &project_id).map_err(|e| e.to_string())
 }
 
+/// List every card across every project, ordered for stable rendering. The
+/// swarm view (the default UI) shows all agents regardless of which project
+/// they belong to — projects became metadata after the kanban demotion, so a
+/// per-project filter would defeat the point. The Board view (legacy kanban)
+/// still uses `list_cards` because it stays scoped to one project at a time.
+#[tauri::command]
+pub fn list_all_cards(state: State<DbState>) -> Result<Vec<Card>, String> {
+    let conn = state.conn.lock().map_err(|e| e.to_string())?;
+    let sql = format!(
+        r#"SELECT {CARD_COLUMNS}
+             FROM cards
+            ORDER BY project_id, "column", position, id"#
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], map_card)
+        .map_err(|e| e.to_string())?;
+    rows.collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| e.to_string())
+}
+
 /// `create_worktree`: when true and `project_path` is a git repo, create a
 /// fresh worktree + branch (`claude-kanban/card-<short>`) and store its
 /// absolute path on the card. The session will then run in the worktree,

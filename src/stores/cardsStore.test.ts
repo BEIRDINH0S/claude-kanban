@@ -36,7 +36,8 @@ function card(id: string, column: CardColumn, position: number): Card {
   };
 }
 
-/** Re-group by column and sort by position — what the kanban actually renders. */
+/** Re-group by column and sort by position — exercises the renumberer the
+ *  same way a UI would when reading the store after a move. */
 function layout(cards: Card[]): Record<CardColumn, string[]> {
   const out: Record<CardColumn, string[]> = {
     todo: [],

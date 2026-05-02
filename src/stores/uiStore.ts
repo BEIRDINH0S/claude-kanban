@@ -1,23 +1,24 @@
 /**
  * App-shell UI state. Strictly cross-feature concerns only — anything the
  * shell, the routing, or multiple features need to agree on. Per-feature UI
- * state lives in that feature's own store (e.g. `features/kanban/state.ts`
- * for the board's search box / selection / done-collapsed).
+ * state lives in that feature's own store (e.g. `features/swarm/state.ts`
+ * for the agent list's search / section collapse).
  *
  * What stays here:
  *  - `activeProjectId`     — every feature derives from "the active project".
- *  - `view`                — the central pane router (board / settings / projects).
- *  - `sidebarCollapsed`    — global navigation chrome.
+ *                            Used by the create-card modal as the default
+ *                            spawn target. May be revisited if the spawn
+ *                            flow ever drops the project concept.
+ *  - `view`                — the central pane router (swarm / settings /
+ *                            projects). Persisted; default = swarm.
+ *  - `selectedAgentId`     — which agent's session panel is visible in the
+ *                            Swarm view's right pane. Cross-feature because
+ *                            the palette also writes it (clicking a card
+ *                            jumps to it). The Swarm reads it for its
+ *                            detail slot.
  *  - `paletteOpen`         — global Cmd+K palette.
- *  - `zoomedCardId`        — the session/zoom feature uses this to mount
- *                            its modal; the kanban also reads it to decide
- *                            whether its keyboard handler should fire.
  *  - `liveSessionIds`      — sidecar session lifecycle, surfaced to several
- *                            features (kanban dot, zoom resume button).
- *
- * Anything kanban-specific (search, selection, done-collapsed) used to live
- * here and was migrated to `features/kanban/state.ts` when we split the
- * kanban into a self-contained feature.
+ *                            features (Swarm row badges, chat send-mode).
  */
 import { create } from "zustand";
 
@@ -40,64 +41,86 @@ function writeActiveProject(id: string | null) {
   }
 }
 
-export type CentralView = "board" | "settings" | "projects";
+export type CentralView = "swarm" | "settings" | "projects";
 
-const SIDEBAR_COLLAPSED_KEY = "claude-kanban-sidebar-collapsed";
-function readSidebarCollapsed(): boolean {
+const VIEW_KEY = "claude-kanban-view";
+function readView(): CentralView {
+  // Persisted so a user landing on Settings or Projects via deep-link goes
+  // back to wherever they last were on next launch. New users get Swarm.
   try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (raw === "swarm" || raw === "settings" || raw === "projects") {
+      return raw;
+    }
   } catch {
-    return false;
+    // ignore
   }
+  return "swarm";
 }
-function writeSidebarCollapsed(v: boolean) {
+function writeView(v: CentralView) {
   try {
-    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, v ? "1" : "0");
+    // Don't persist transient destinations (settings / projects) — those are
+    // navigation hops, not the user's preferred home. Reloading on Settings
+    // and landing back on it would feel like a stale tab.
+    if (v === "swarm") {
+      localStorage.setItem(VIEW_KEY, v);
+    }
   } catch {
     // ignore
   }
 }
 
 interface UiState {
-  zoomedCardId: string | null;
+  /** Which agent the Swarm view's detail pane is showing. Lives here (and
+   *  not in `features/swarm/state.ts`) because other features need to
+   *  navigate to a specific agent — the command palette is the obvious
+   *  one ("jump to card foo") — and cross-feature reach is what the shared
+   *  store layer is for. */
+  selectedAgentId: string | null;
   /** Session ids whose SDK query is currently alive in the sidecar process.
    *  Tracked via session-started / session-ended Tauri events. We use this to
    *  decide whether a `send_message` will hit a live query or whether the
    *  user needs to Resume first. */
   liveSessionIds: ReadonlySet<string>;
-  /** Currently selected project. The board, the create-card modal and
-   *  cardsStore.load all key off this. Persisted in localStorage. */
+  /** Currently selected project. The create-card modal keys off this for
+   *  the default spawn target. Persisted in localStorage. */
   activeProjectId: string | null;
-  /** What the central pane is showing. The sidebar stays the same in both
-   *  states; only the right side toggles between the kanban and the
-   *  settings panel. */
+  /** What the central pane is showing. The TopBar stays the same across
+   *  views; only the central pane content swaps. Persisted in localStorage
+   *  via `readView()` / `writeView()` (see top of file). */
   view: CentralView;
-  /** Sidebar collapsed = icon-only. Persisted in localStorage. */
-  sidebarCollapsed: boolean;
   /** Cmd+K palette open state. Not persisted. */
   paletteOpen: boolean;
 
-  openZoom: (cardId: string) => void;
-  closeZoom: () => void;
+  /** Pick an agent to focus in the Swarm detail pane. Also bounces to
+   *  swarm view if the user is currently on Settings / Projects, so a
+   *  palette click is "go look at this agent" in one shot. Pass `null`
+   *  to clear the selection. */
+  selectAgent: (cardId: string | null) => void;
   markSessionLive: (sessionId: string) => void;
   markSessionDead: (sessionId: string) => void;
   setActiveProjectId: (id: string | null) => void;
   setView: (view: CentralView) => void;
-  toggleSidebar: () => void;
   setPaletteOpen: (open: boolean) => void;
   togglePalette: () => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  zoomedCardId: null,
+  selectedAgentId: null,
   liveSessionIds: new Set<string>(),
   activeProjectId: readActiveProject(),
-  view: "board",
-  sidebarCollapsed: readSidebarCollapsed(),
+  view: readView(),
   paletteOpen: false,
 
-  openZoom: (cardId) => set({ zoomedCardId: cardId }),
-  closeZoom: () => set({ zoomedCardId: null }),
+  selectAgent: (cardId) =>
+    set((s) => {
+      // Bounce to Swarm if we're on a non-card view — clicking an agent in
+      // the palette while sitting on Settings should put the user *on* the
+      // agent, not just remember the selection silently.
+      const view: CentralView = s.view === "swarm" ? s.view : "swarm";
+      writeView(view);
+      return { selectedAgentId: cardId, view };
+    }),
 
   markSessionLive: (sessionId) =>
     set((s) => {
@@ -116,19 +139,17 @@ export const useUiStore = create<UiState>((set) => ({
 
   setActiveProjectId: (id) => {
     writeActiveProject(id);
-    // Switching projects always means "go look at this project's board",
-    // never "open settings, then have a side-effect on the kanban".
-    set({ activeProjectId: id, zoomedCardId: null, view: "board" });
+    // Switching projects also drops the current selection — the previously
+    // selected agent might belong to the previous project, and showing it
+    // mixed in with another project's agents is confusing. Routes back to
+    // Swarm so the user lands somewhere meaningful.
+    set({ activeProjectId: id, selectedAgentId: null, view: "swarm" });
   },
 
-  setView: (view) => set({ view }),
-
-  toggleSidebar: () =>
-    set((s) => {
-      const next = !s.sidebarCollapsed;
-      writeSidebarCollapsed(next);
-      return { sidebarCollapsed: next };
-    }),
+  setView: (view) => {
+    writeView(view);
+    set({ view });
+  },
 
   setPaletteOpen: (open) => set({ paletteOpen: open }),
   togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen })),

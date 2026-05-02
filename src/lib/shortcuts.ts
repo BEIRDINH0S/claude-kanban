@@ -3,10 +3,12 @@
  *
  * Two scopes:
  *  - "global": fire from anywhere (palette, search, …). They typically use
- *    a modifier (⌘/Ctrl) so they don't collide with text input.
- *  - "board": only fire on the kanban board view, and only when the user
- *    isn't typing in an input (unless the binding uses a modifier — then
- *    we assume they meant the shortcut).
+ *    a modifier so they don't collide with text input.
+ *  - "board": fire on the swarm view only, when the user isn't typing in a
+ *    text input (unless the binding uses a modifier — then we assume they
+ *    meant the shortcut). The "board" name is a legacy of the kanban era;
+ *    we keep it on the shortcut ids for backward compatibility with
+ *    persisted user customisations.
  *
  * Each shortcut is a list of bindings: any one matching triggers the
  * action. Defaults ship with two bindings for movement (vim + arrows).
@@ -15,7 +17,6 @@
  * file is intentionally pure (no React, no zustand) so handlers can call
  * `match()` straight from `useEffect` listeners without re-renders.
  */
-
 export type ShortcutScope = "global" | "board";
 
 export interface Binding {

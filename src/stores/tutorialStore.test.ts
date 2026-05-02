@@ -74,10 +74,10 @@ describe("tutorialStore", () => {
   it("register() adds the element + creates a new Map ref (Zustand notice)", () => {
     const before = useTutorialStore.getState().anchors;
     const el = document.createElement("div");
-    useTutorialStore.getState().register("sidebar.projects", el);
+    useTutorialStore.getState().register("topbar.settings", el);
     const after = useTutorialStore.getState().anchors;
     expect(after).not.toBe(before); // new reference
-    expect(after.get("sidebar.projects")).toBe(el);
+    expect(after.get("topbar.settings")).toBe(el);
   });
 
   it("unregister() drops the element + creates a new Map ref", () => {
@@ -92,7 +92,7 @@ describe("tutorialStore", () => {
 
   it("unregister() of an unknown id returns early (no spurious re-render)", () => {
     const before = useTutorialStore.getState().anchors;
-    useTutorialStore.getState().unregister("sidebar.settings");
+    useTutorialStore.getState().unregister("topbar.settings");
     const after = useTutorialStore.getState().anchors;
     // Same reference: the early-return path doesn't trigger a new Map alloc.
     expect(after).toBe(before);

@@ -3,8 +3,8 @@
  * dashed "+ tags" button (only when not read-only). Otherwise the parsed
  * tags render as colored pills with an inline edit affordance on hover.
  *
- * The colour palette is duplicated from the kanban CardItem on purpose —
- * keeping it in two small palettes avoids dragging the kanban into the
+ * The colour palette is duplicated from the swarm AgentRow on purpose —
+ * keeping it in two small palettes avoids dragging the swarm into the
  * session feature just for visual continuity. If a third surface needs the
  * same colours we'll lift to a shared `lib/tagColor.ts`.
  */

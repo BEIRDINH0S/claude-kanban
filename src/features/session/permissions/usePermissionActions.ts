@@ -23,7 +23,7 @@ export type PermissionBusy = "allow" | "always" | "deny" | null;
 
 /**
  * Shared decision logic for a card's pending permission. Both the full
- * PermissionPanel (zoom view) and the inline buttons on the kanban card
+ * PermissionPanel (session panel) and the inline buttons on the swarm row
  * route through this hook — same IPC, same rule-add, same store cleanup —
  * so a click in either place behaves identically and ends in the same
  * state regardless of where it was triggered.
