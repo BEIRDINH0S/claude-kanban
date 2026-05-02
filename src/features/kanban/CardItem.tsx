@@ -3,6 +3,11 @@
  * git status, or the message store — all "extra information" surfaces are
  * rendered through caller-provided slots:
  *
+ *   - `renderEdge(card)`     → left edge of the card (absolute), typically
+ *                              an ambient status bar that signals session
+ *                              lifecycle (live / working / idle). The slot
+ *                              owns its own positioning against the card's
+ *                              `relative` wrapper.
  *   - `renderBadges(card)`   → top-right, next to the title (live dot,
  *                              spinner, working-state).
  *   - `renderRowBadges(card)`→ inline with the tag pills (git status pill).
@@ -61,6 +66,9 @@ interface Props {
   onDelete?: (card: Card) => void;
   onDuplicate?: (card: Card) => void;
 
+  /** Left edge slot (absolute over the card). Typically: ambient session
+   *  status bar (live / working / idle). The slot owns its own positioning. */
+  renderEdge?: (card: Card) => ReactNode;
   /** Top-right slot, next to the title. Typically: live dot + spinner. */
   renderBadges?: (card: Card) => ReactNode;
   /** Inline with the tag pills, BEFORE them. Typically: git status pill. */
@@ -78,6 +86,7 @@ export function CardItem({
   onClick,
   onDelete,
   onDuplicate,
+  renderEdge,
   renderBadges,
   renderRowBadges,
   renderActions,
@@ -128,6 +137,7 @@ export function CardItem({
   const rowExtras = renderRowBadges?.(card);
   const actions = renderActions?.(card);
   const badges = renderBadges?.(card);
+  const edge = renderEdge?.(card);
 
   return (
     <div
@@ -146,6 +156,7 @@ export function CardItem({
         ringClass,
       ].join(" ")}
     >
+      {edge}
       <div className="flex items-start gap-2">
         <h3 className="flex-1 text-[13.5px] font-medium leading-snug text-[var(--text-primary)]">
           {card.title}

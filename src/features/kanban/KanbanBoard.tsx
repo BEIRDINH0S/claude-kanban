@@ -69,6 +69,8 @@ export interface KanbanBoardProps {
   onDuplicate: (card: Card) => void;
 
   // ---- slots --------------------------------------------------------------
+  /** Left edge of a card (absolute). Ambient status bar (live/working/idle). */
+  renderCardEdge?: (card: Card) => ReactNode;
   /** Top-right of a card, next to the title. Live dot, working spinner, … */
   renderCardBadges?: (card: Card) => ReactNode;
   /** Inline with the tag pills. Git status pill, etc. */
@@ -101,6 +103,7 @@ export function KanbanBoard({
   onCreate,
   onDelete,
   onDuplicate,
+  renderCardEdge,
   renderCardBadges,
   renderCardRowBadges,
   renderCardActions,
@@ -356,6 +359,7 @@ export function KanbanBoard({
       }}
       onDelete={onDelete}
       onDuplicate={onDuplicate}
+      renderEdge={renderCardEdge}
       renderBadges={renderCardBadges}
       renderRowBadges={renderCardRowBadges}
       renderActions={renderCardActions}
@@ -385,7 +389,13 @@ export function KanbanBoard({
       </div>
 
       <DragOverlay dropAnimation={null}>
-        {activeCard ? <CardItem card={activeCard} overlay /> : null}
+        {activeCard ? (
+          <CardItem
+            card={activeCard}
+            overlay
+            renderEdge={renderCardEdge}
+          />
+        ) : null}
       </DragOverlay>
     </DndContext>
   );

@@ -14,11 +14,11 @@
  *   ├── diff/                     → <DiffTab />
  *   └── config/                   → <ConfigTab />
  *
- * The outside world only sees three entry points: the modal itself
- * (`<ZoomView />`) and the two slots the kanban consumes (`<CardBadges />`,
- * `<PermissionCardActions />`). Anything else is internal to the feature
- * and consumed only inside this directory.
+ * The outside world only sees four entry points: the modal itself
+ * (`<ZoomView />`) and the three slots the kanban consumes (`<CardBadges />`,
+ * `<CardEdge />`, `<PermissionCardActions />`). Anything else is internal
+ * to the feature and consumed only inside this directory.
  */
 export { ZoomView } from "./ZoomView";
-export { CardBadges } from "./badges";
+export { CardBadges, CardEdge } from "./badges";
 export { PermissionCardActions } from "./permissions";
