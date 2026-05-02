@@ -3,7 +3,7 @@
  * as small chips; clicking a chip captures the next keystroke and replaces
  * the binding. The capture flow lives in `lib/shortcuts::captureBinding`,
  * which installs a one-shot capture-phase listener so it intercepts the
- * user's next keystroke before App.tsx / KanbanBoard can act on it.
+ * user's next keystroke before App.tsx / SwarmView can act on it.
  *
  * The four small components below (`ShortcutGroup`, `ShortcutRow`,
  * `BindingChip`, `RecordingChip`) are kept inline because they're only

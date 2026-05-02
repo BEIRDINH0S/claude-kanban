@@ -1,10 +1,13 @@
 /**
- * Session badges sub-feature. Exposes kanban-renderable components that
- * encapsulate the visual rules for session lifecycle:
+ * Session badges sub-feature. Exposes one component used by the swarm view's
+ * `renderRowBadges` slot:
  *
- *   - <CardBadges /> — top-right slot: live-dot + working-spinner.
- *   - <CardEdge />   — left-edge slot: ambient status bar (live, working,
- *                      idle), glanceable across a busy board.
+ *   - <CardBadges /> — top-right of an agent row: live-dot when the
+ *                      session is alive in the sidecar, spinner when an
+ *                      SDK call is currently in flight.
+ *
+ * Pre-Phase-2 there was also a `<CardEdge />` (vertical accent bar on the
+ * left edge of a kanban card). The kanban view is gone, so the edge bar
+ * went with it.
  */
 export { CardBadges } from "./CardBadges";
-export { CardEdge } from "./CardEdge";

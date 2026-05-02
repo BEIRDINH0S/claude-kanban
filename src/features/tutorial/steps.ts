@@ -29,21 +29,15 @@ export interface TutorialStep {
 
 export const STEPS: readonly TutorialStep[] = [
   {
-    anchor: "sidebar.projects",
-    title: "Start with a project",
-    body:
-      "A project points at one of your local git repos. The kanban you'll see lives inside the project — switch between projects from this sidebar.",
-  },
-  {
     anchor: "header.newTask",
-    title: "Create your first task",
+    title: "Spawn your first agent",
     body:
-      "Each task is a kanban card backed by its own git worktree. Claude operates inside that worktree, so two tasks can run in parallel without stepping on each other.",
+      "Each agent is a Claude session backed by its own git worktree. Spawn one from here — they all run in parallel without stepping on each other, and you'll see them line up on the left as they work.",
   },
   {
-    anchor: "sidebar.settings",
+    anchor: "topbar.settings",
     title: "Tune Claude's permissions",
     body:
-      "By default Claude asks before running tools. In Settings you can auto-approve safe ones (file reads, git status…) so a session doesn't pause every few seconds.",
+      "By default Claude asks before running tools. In Settings you can auto-approve safe ones (file reads, git status…) so a session doesn't pause every few seconds. Project management lives there too.",
   },
 ];

@@ -20,7 +20,6 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import { useCardsStore } from "../../stores/cardsStore";
 import { useGitStatusStore } from "../../stores/gitStatusStore";
-import { useUiStore } from "../../stores/uiStore";
 
 const HEARTBEAT_MS = 12_000;
 
@@ -37,11 +36,9 @@ export function startGitStatusHeartbeat(): () => void {
 export async function listenGitStatusChanged(): Promise<UnlistenFn> {
   return listen("git-status-changed", () => {
     void useGitStatusStore.getState().refreshAll();
-    // GC may have NULLed worktree_path on some cards — reload the
-    // active project's cards so the UI catches up without waiting
-    // for the next cards-changed trigger (which won't fire from a
-    // background sweep).
-    const pid = useUiStore.getState().activeProjectId;
-    if (pid) void useCardsStore.getState().load(pid);
+    // GC may have NULLed worktree_path on some cards — reload the full
+    // card set so the UI catches up without waiting for the next
+    // cards-changed trigger (which won't fire from a background sweep).
+    void useCardsStore.getState().load();
   });
 }

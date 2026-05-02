@@ -25,13 +25,13 @@
 //! `resume_session` is the warm path: instead of starting from scratch, the
 //! sidecar passes `resume: <id>` to the SDK so the conversation continues
 //! from the on-disk JSONL. We pre-set `card.column = in_progress` here so
-//! the kanban flips immediately — handle_outbound takes over once the SDK
-//! emits init.
+//! the swarm row flips immediately — handle_outbound takes over once the
+//! SDK emits init.
 //!
-//! `read_session_history` is the read-side helper used by `ZoomView` to
+//! `read_session_history` is the read-side helper used by `SessionPanel` to
 //! hydrate the chat from `~/.claude/projects/**/*.jsonl` when the user
-//! opens a card whose session is idle. No sidecar round-trip — pure file
-//! I/O.
+//! opens an agent whose session is idle. No sidecar round-trip — pure
+//! file I/O.
 //!
 //! Per-card SDK options (model, permission_mode, system_prompt_append,
 //! max_turns, additionalDirectories) live on the cards row. They're loaded

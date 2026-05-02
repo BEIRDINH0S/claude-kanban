@@ -8,9 +8,9 @@
  *                        unless the user is already looking at the card.
  *   - `session-started` / `session-ended` — track which sessions are
  *                        alive in the sidecar. Drives "show Resume vs
- *                        active input" in the zoom view.
+ *                        active input" in the chat panel.
  *   - `session-error`  — sidecar surfaced an error. Map it back to the
- *                        owning card so the kanban can ring it red.
+ *                        owning card so the swarm row can ring it red.
  */
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
@@ -50,11 +50,12 @@ export async function listenSessionStream(): Promise<UnlistenFn> {
       // counts move without waiting for the heartbeat.
       void useGitStatusStore.getState().refresh(cardId);
       // Tell the user a turn finished — but only if they're not already
-      // looking at this card, and they haven't opted out.
-      if (
-        useUiStore.getState().zoomedCardId !== cardId &&
-        readNotifyOnTurnEnd()
-      ) {
+      // looking at this card (selected in Swarm and on the Swarm view),
+      // and they haven't opted out.
+      const ui = useUiStore.getState();
+      const isLookingAt =
+        ui.view === "swarm" && ui.selectedAgentId === cardId;
+      if (!isLookingAt && readNotifyOnTurnEnd()) {
         const card = useCardsStore
           .getState()
           .cards.find((c) => c.id === cardId);

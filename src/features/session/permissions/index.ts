@@ -2,7 +2,7 @@
  * Permissions sub-feature. Surfaces:
  *
  *   - `<PermissionPanel cardId />`        — full row inside the chat tab.
- *   - `<PermissionCardActions cardId />`  — inline approve/deny on a kanban card.
+ *   - `<PermissionCardActions cardId />`  — inline approve/deny on a swarm row.
  *   - `usePermissionActions`              — shared hook used by both UIs so
  *                                            allow/deny/always behave identically
  *                                            wherever they're triggered.

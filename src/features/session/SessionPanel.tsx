@@ -1,28 +1,28 @@
 /**
- * Zoom view orchestrator. Owns three things and three things only:
+ * Embeddable session panel — header + tab bar + tab body. The orchestrator
+ * for the session feature: composes the sub-features (header, chat, diff,
+ * config, permissions) into the surface that fills the swarm view's right
+ * pane.
  *
- *   1. The modal frame + the Esc-to-close handler.
- *   2. The active-tab state (chat / diff / config) + the small badge that
- *      decorates the Config tab when the card has any non-default option.
- *   3. The composition: ZoomHeader + TabBar + the right tab body, with the
- *      cross-sub-feature plumbing (chat tab gets a permission slot we fill
- *      with `<PermissionPanel>`).
+ * Lives at the feature root (alongside `format.ts` / `markdownExport.ts`)
+ * because it composes several sub-features and would violate isolation if
+ * placed inside any one of them.
  *
- * Each tab body is a self-contained sub-feature that doesn't know about the
- * others. The sub-features that this orchestrator is aware of:
- *   - `header/`        — top bar (always rendered)
- *   - `chat/`          — chat tab; we hand it the permission slot
- *   - `permissions/`   — fills the chat tab's slot
- *   - `diff/`          — diff tab (only when a worktree exists)
- *   - `config/`        — config tab
+ *   SwarmView.renderDetail
+ *      └── SessionPanel (header + tabs + body)         ← this file
+ *             ├── ZoomHeader (sub-feature: header)
+ *             ├── ChatTab    (sub-feature: chat) + permissionSlot
+ *             ├── DiffTab    (sub-feature: diff)
+ *             └── ConfigTab  (sub-feature: config)
  *
- * If you add a tab, this is the only file in the session feature you need
- * to touch. Every other sub-feature ignores its existence.
+ * The ChatTab's permission slot is filled here with `<PermissionPanel />`
+ * — it's a sub-feature → sub-feature bridge that has to live in the
+ * orchestrator. The `onClose` prop is vestigial from the pre-Phase-2 modal
+ * wrapper (`ZoomView`) and currently unused; kept on the type so a future
+ * "expand to fullscreen" affordance can wire it without a public-API change.
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { useCardsStore } from "../../stores/cardsStore";
-import { useUiStore } from "../../stores/uiStore";
 import type { Card } from "../../types/card";
 import { ChatTab } from "./chat";
 import { ConfigTab } from "./config";
@@ -30,47 +30,31 @@ import { DiffTab } from "./diff";
 import { ZoomHeader } from "./header";
 import { PermissionPanel } from "./permissions";
 
-export function ZoomView() {
-  const zoomedCardId = useUiStore((s) => s.zoomedCardId);
-  const closeZoom = useUiStore((s) => s.closeZoom);
-  const card = useCardsStore((s) =>
-    s.cards.find((c) => c.id === zoomedCardId),
-  );
+interface Props {
+  card: Card;
+  /** Forwarded to the header — when set, a X button appears on the far
+   *  right of the toolbar. Currently unused (the panel is always inline);
+   *  kept on the type as the future hook for an "expand to fullscreen"
+   *  affordance. */
+  onClose?: () => void;
+}
 
-  // Esc closes; mounted only when open.
-  useEffect(() => {
-    if (!zoomedCardId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeZoom();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [zoomedCardId, closeZoom]);
-
-  if (!zoomedCardId || !card) return null;
-
+export function SessionPanel({ card, onClose }: Props) {
   return (
-    <div
-      className="animate-overlay-in fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-6 backdrop-blur-md"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) closeZoom();
-      }}
-    >
-      <div className="animate-zoom-in glass-strong flex h-[85vh] w-full max-w-[900px] flex-col overflow-hidden rounded-2xl shadow-2xl">
-        <ZoomHeader card={card} onClose={closeZoom} />
-        <Body card={card} />
-      </div>
+    <div className="flex h-full min-h-0 flex-col">
+      <ZoomHeader card={card} onClose={onClose} />
+      <Body card={card} />
     </div>
   );
 }
 
-type ZoomTab = "chat" | "diff" | "config";
+type SessionTab = "chat" | "diff" | "config";
 
 function Body({ card }: { card: Card }) {
   // Tab switcher between the chat transcript, the worktree diff, and the
   // per-card session config. Diff is hidden entirely for cards without a
   // worktree (nothing to show). Config is always visible. Default = chat.
-  const [tab, setTab] = useState<ZoomTab>("chat");
+  const [tab, setTab] = useState<SessionTab>("chat");
   const showDiffTab = !!card.worktreePath;
 
   // Surface a small badge next to the tab when the card has any non-default
@@ -118,12 +102,12 @@ function TabBar({
   showDiff,
   configBadge,
 }: {
-  value: ZoomTab;
-  onChange: (v: ZoomTab) => void;
+  value: SessionTab;
+  onChange: (v: SessionTab) => void;
   showDiff: boolean;
   configBadge: boolean;
 }) {
-  const tabs: { id: ZoomTab; label: string; badge?: boolean }[] = [
+  const tabs: { id: SessionTab; label: string; badge?: boolean }[] = [
     { id: "chat", label: "Chat" },
     ...(showDiff ? [{ id: "diff" as const, label: "Diff" }] : []),
     { id: "config", label: "Config", badge: configBadge },

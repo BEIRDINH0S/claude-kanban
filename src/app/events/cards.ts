@@ -3,8 +3,10 @@
  *
  *   - `cards-changed`         — Rust touched the cards table (session
  *                                lifecycle, errors, background state moves).
- *                                We refetch the active project so the
- *                                kanban reflects the new state.
+ *                                We refetch the full set so both Swarm and
+ *                                Board reflect the new state. Cheap — the
+ *                                cards table is small and cardsStore holds
+ *                                a single global list.
  *   - `external-jsonl-update` — A CLI session (or another app) appended
  *                                to a JSONL file matching one of our cards'
  *                                session_id. Refresh that card's transcript
@@ -22,8 +24,7 @@ import { useUiStore } from "../../stores/uiStore";
 
 export async function listenCardsChanged(): Promise<UnlistenFn> {
   return listen("cards-changed", () => {
-    const pid = useUiStore.getState().activeProjectId;
-    if (pid) void useCardsStore.getState().load(pid);
+    void useCardsStore.getState().load();
   });
 }
 

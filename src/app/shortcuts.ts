@@ -1,5 +1,5 @@
 /**
- * Global window-level shortcuts: the command palette (Cmd+K), the board
+ * Global window-level shortcuts: the command palette (Cmd+K), the agent
  * search (Cmd+F), and the contextual Esc that closes the search bar.
  *
  * Shortcut bindings are user-customisable via `shortcutsStore` — we read
@@ -13,9 +13,9 @@
  */
 import { useEffect } from "react";
 
-import { useKanbanStore } from "../features/kanban";
 import { matchShortcut } from "../stores/shortcutsStore";
 import { useUiStore } from "../stores/uiStore";
+import { useSwarmStore } from "../features/swarm";
 
 export function useGlobalShortcuts(): void {
   useEffect(() => {
@@ -26,20 +26,19 @@ export function useGlobalShortcuts(): void {
         return;
       }
       if (matchShortcut("global.search", e)) {
-        // Only useful when the board is showing — settings/projects pages
+        // Only useful when the swarm is showing — settings/projects pages
         // don't have anything to filter.
-        if (useUiStore.getState().view !== "board") return;
+        if (useUiStore.getState().view !== "swarm") return;
         e.preventDefault();
-        useKanbanStore.getState().setSearchOpen(true);
+        useSwarmStore.getState().setSearchOpen(true);
         return;
       }
-      if (e.key === "Escape" && useKanbanStore.getState().searchOpen) {
-        // Don't steal Esc from the zoom view — it has its own handler
-        // mounted only when zoom is open. Same for the palette.
-        const ui = useUiStore.getState();
-        if (ui.zoomedCardId || ui.paletteOpen) return;
+      if (e.key === "Escape" && useSwarmStore.getState().searchOpen) {
+        // Don't steal Esc from the palette — it has its own handler
+        // mounted only when open.
+        if (useUiStore.getState().paletteOpen) return;
         e.preventDefault();
-        useKanbanStore.getState().setSearchOpen(false);
+        useSwarmStore.getState().setSearchOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);

@@ -83,6 +83,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::system::db_health,
             commands::cards::list_cards,
+            commands::cards::list_all_cards,
             commands::cards::create_card,
             commands::cards::delete_card,
             commands::cards::restore_card,

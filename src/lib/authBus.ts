@@ -6,7 +6,7 @@
  * The gate listens on `claude-kanban:request-login`; any caller dispatches.
  *
  * Same pattern as `claude-kanban:new-task` (see `app/AppShell.tsx`'s
- * `BoardPane`) — both bridge a "please open the modal X" request from one
+ * `SwarmPane`) — both bridge a "please open the modal X" request from one
  * feature to another via the window event bus.
  *
  * Why a custom DOM event rather than a shared store: the action is

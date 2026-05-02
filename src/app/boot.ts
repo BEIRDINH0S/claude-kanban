@@ -46,12 +46,15 @@ export async function bootSequence(): Promise<void> {
     ui.activeProjectId &&
     projects.some((p) => p.id === ui.activeProjectId);
   if (!stillExists) {
+    // Active project is the default spawn target for the create-card modal.
+    // Pick the first one when stale — the swarm view itself doesn't care
+    // about active project, but spawn needs *something* to put new agents
+    // in.
     ui.setActiveProjectId(projects[0]?.id ?? null);
-  } else if (ui.activeProjectId) {
-    // Same project as last session — kick the initial fetch since the
-    // store subscription only fires on changes.
-    void useCardsStore.getState().load(ui.activeProjectId);
   }
+  // Card data is project-agnostic — load every card once at boot, then let
+  // `cards-changed` / `git-status-changed` events keep us in sync.
+  void useCardsStore.getState().load();
 
   // Fire-and-forget — the tutorial trigger does its own gating and is
   // safe to no-op when conditions aren't met. We don't await it because

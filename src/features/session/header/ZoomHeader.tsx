@@ -49,7 +49,11 @@ import { WorktreeStatusLine } from "./WorktreeStatusLine";
 
 interface Props {
   card: Card;
-  onClose: () => void;
+  /** Optional close handler. When provided, a X button is rendered on the
+   *  far right of the toolbar. Currently no caller wires it (the session
+   *  panel is always inline); kept optional so a future "expand to
+   *  fullscreen" affordance can plug in without a header API change. */
+  onClose?: () => void;
 }
 
 export function ZoomHeader({ card, onClose }: Props) {
@@ -57,7 +61,6 @@ export function ZoomHeader({ card, onClose }: Props) {
   const move = useCardsStore((s) => s.move);
   const stopSession = useCardsStore((s) => s.stopSession);
   const setSessionConfig = useCardsStore((s) => s.setSessionConfig);
-  const closeZoom = useUiStore((s) => s.closeZoom);
   const liveSessionIds = useUiStore((s) => s.liveSessionIds);
   const isLive = !!card.sessionId && liveSessionIds.has(card.sessionId);
   const archived = useProjectsStore((s) =>
@@ -126,10 +129,9 @@ export function ZoomHeader({ card, onClose }: Props) {
   };
 
   const handleArchive = () => {
-    // Close immediately for snappy UX; the store's `move` now stops a live
-    // session itself when target=done, so no fire-and-forget stopSession
-    // is needed here (cf. the same code path used by drag-to-Done).
-    closeZoom();
+    // The store's `move` stops a live session itself when target=done, so
+    // no fire-and-forget stopSession is needed here. The swarm view will
+    // re-categorise the row into its `recent` section automatically.
     void move(card.id, "done", 0);
   };
 
@@ -290,14 +292,16 @@ export function ZoomHeader({ card, onClose }: Props) {
             <Archive className="size-4" strokeWidth={1.75} />
           </button>
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          className="-mt-1 -mr-1 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
-          aria-label="Close"
-        >
-          <X className="size-4" strokeWidth={1.5} />
-        </button>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="-mt-1 -mr-1 rounded-lg p-1.5 text-[var(--text-muted)] hover:bg-black/5 hover:text-[var(--text-primary)] dark:hover:bg-white/5"
+            aria-label="Close"
+          >
+            <X className="size-4" strokeWidth={1.5} />
+          </button>
+        )}
       </div>
     </header>
   );

@@ -25,7 +25,7 @@ describe("<CommandPalette />", () => {
       setPaletteOpen: vi.fn(),
       setView: vi.fn(),
       setActiveProjectId: vi.fn(),
-      openZoom: vi.fn(),
+      selectAgent: vi.fn(),
     } as unknown as never);
     useProjectsStore.setState({
       projects: [
@@ -82,7 +82,7 @@ describe("<CommandPalette />", () => {
 
   it("renders the static actions + projects + cards on open", () => {
     render(<CommandPalette />);
-    expect(screen.getByText("New task")).toBeInTheDocument();
+    expect(screen.getByText("Spawn agent")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByText("Alpha Project")).toBeInTheDocument();
     expect(screen.getByText("Beta")).toBeInTheDocument();

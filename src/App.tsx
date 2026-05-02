@@ -19,6 +19,9 @@
  * but in practice the gate replaces the AppShell entirely and the global
  * shortcut handler keys off the live store anyway. Keeping them outside
  * lets a future "logged-out toast" path work without restructuring.
+ *
+ * Tutorial overlay's anchors live in the AppShell / TopBar; they don't
+ * exist on the login screen, so the overlay auto-skips when on the gate.
  */
 import { useEffect } from "react";
 
@@ -28,7 +31,6 @@ import { wireGlobalEvents } from "./app/events";
 import { useGlobalShortcuts } from "./app/shortcuts";
 import { AuthGate } from "./features/auth-gate";
 import { CommandPalette } from "./features/palette";
-import { ZoomView } from "./features/session";
 import { ToastStack } from "./features/toasts";
 import { TutorialOverlay } from "./features/tutorial";
 
@@ -45,12 +47,10 @@ function App() {
     <main className="h-full w-full">
       <AuthGate>
         <AppShell />
-        <ZoomView />
         <CommandPalette />
         {/* Tutorial overlay sits inside the gate so it can only run for
-            signed-in users — its anchors live in the AppShell / Sidebar
-            and don't exist on the login screen. The overlay renders
-            null when idle, so mounting it unconditionally is cheap. */}
+            signed-in users. The overlay renders null when idle, so
+            mounting it unconditionally is cheap. */}
         <TutorialOverlay />
       </AuthGate>
       <ToastStack />
