@@ -23,7 +23,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CreateCardModal } from "../features/card-create";
 import { COLUMNS, KanbanBoard } from "../features/kanban";
 import { ProjectsPage } from "../features/projects";
-import { CardBadges, PermissionCardActions } from "../features/session";
+import { CardBadges, CardEdge, PermissionCardActions } from "../features/session";
 import { SettingsPage } from "../features/settings";
 import { Sidebar } from "./Sidebar";
 import { useCardsStore } from "../stores/cardsStore";
@@ -81,6 +81,13 @@ function BoardPane() {
   // session / permissions / git-status / errors.
   const renderCardBadges = useCallback(
     (card: Card) => <CardBadges card={card} />,
+    [],
+  );
+
+  // Ambient left-edge status bar — live / working / idle. Subscribes per-card
+  // so a single live session updating doesn't re-render the whole board.
+  const renderCardEdge = useCallback(
+    (card: Card) => <CardEdge card={card} />,
     [],
   );
 
@@ -235,6 +242,7 @@ function BoardPane() {
         onCreate={onCreate}
         onDelete={onDelete}
         onDuplicate={onDuplicate}
+        renderCardEdge={renderCardEdge}
         renderCardBadges={renderCardBadges}
         renderCardRowBadges={renderCardRowBadges}
         renderCardActions={renderCardActions}
