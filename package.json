@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "node scripts/check-feature-isolation.mjs && tsc && vite build",
     "check:isolation": "node scripts/check-feature-isolation.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
     "preview": "vite preview",
     "tauri": "tauri",
     "postinstall": "cd sidecar && npm install --no-audit --no-fund --silent && cd .. && node scripts/fetch-sidecar-bin.mjs"
@@ -31,11 +33,16 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.4",
     "@tauri-apps/cli": "^2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "jsdom": "^29.1.1",
     "tailwindcss": "^4.2.4",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.5"
   }
 }

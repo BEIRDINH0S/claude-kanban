@@ -100,8 +100,13 @@ interface CardsState {
 /**
  * Locally compute the post-move list — same logic as the Rust renumberer,
  * but we only need it for the optimistic preview between drop and IPC roundtrip.
+ *
+ * Exported (rather than kept private) because this is the riskiest piece of
+ * logic in the whole card layer: getting it wrong silently corrupts positions
+ * on the board until the next IPC reconciliation. Tests in
+ * `cardsStore.test.ts` exercise it directly.
  */
-function applyOptimisticMove(
+export function applyOptimisticMove(
   cards: Card[],
   id: string,
   targetColumn: CardColumn,
